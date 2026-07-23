@@ -1,11 +1,10 @@
 """
-Database Manager for @SRHXtra SQLite Memory layer (V5.2 Strict Chronological Epoch Sorting).
-Stores pub_timestamp numeric float and orders all Section 2 news strictly BY pub_timestamp DESC.
+Database Manager for @SRHXtra SQLite Memory layer (V6.0 All-Player Complete News Feed).
+Stores EVERY SINGLE scraped article for all 73 players without topic deduplication.
 """
 
 import os
 import sqlite3
-import re
 from config.roster import MASTER_ROSTER
 from utils.logger import db_logger, error_logger
 
@@ -19,7 +18,7 @@ def get_connection():
     return conn
 
 def init_db():
-    """Initializes database schema, handles schema migrations, and purges legacy non-chronological rows."""
+    """Initializes database schema, handles schema migrations, and purges legacy hardcoded timestamp rows."""
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -34,10 +33,6 @@ def init_db():
         if "pub_timestamp" not in columns:
             cursor.execute("ALTER TABLE news ADD COLUMN pub_timestamp REAL DEFAULT 0.0")
             conn.commit()
-            
-        # Purge legacy rows that lacked pub_timestamp
-        cursor.execute("DELETE FROM news WHERE pub_timestamp IS NULL OR pub_timestamp = 0.0")
-        conn.commit()
 
         # Populate Master Roster of 73 Players
         for team_key, team_info in MASTER_ROSTER.items():
@@ -65,59 +60,23 @@ def get_all_players(franchise_filter=None):
     conn.close()
     return [dict(r) for r in rows]
 
-def extract_topic_keywords(title):
-    """Extracts significant keywords for single-topic deduplication."""
-    words = re.findall(r'\b[a-zA-Z]{4,}\b', title.lower())
-    ignore = {"cricket", "india", "england", "australia", "south", "africa", "first", "second", "third", "match", "series"}
-    return [w for w in words if w not in ignore]
-
-def insert_or_consolidate_news(title, source, summary, link, published_at, player_name, franchise, importance_score, category, pub_timestamp=0.0):
+def insert_news(title, source, summary, link, published_at, player_name, franchise, importance_score, category, pub_timestamp=0.0):
     """
-    Inserts a real live RSS news article with numeric pub_timestamp.
-    If an article about the SAME TOPIC for the same player already exists, consolidates sources and links into ONE single card!
+    Inserts EVERY SINGLE scraped news article for all 73 players (No topic deduplication).
+    Only checks exact URL / exact Title uniqueness so identical URL feeds aren't repeated.
     """
     conn = get_connection()
     cursor = conn.cursor()
     try:
-        # Check exact link or exact title match first
         if link and link.strip() and link != "#":
-            cursor.execute("SELECT id, source, link FROM news WHERE link = ? OR title = ?", (link, title))
-            existing = cursor.fetchone()
-            if existing:
-                conn.close()
-                return None
+            cursor.execute("SELECT id FROM news WHERE link = ? OR title = ?", (link, title))
+        else:
+            cursor.execute("SELECT id FROM news WHERE title = ?", (title,))
+            
+        if cursor.fetchone():
+            conn.close()
+            return None
 
-        # Check single-topic duplicate (Same Player + matching key topic words)
-        cursor.execute("SELECT id, title, source, link, importance_score, pub_timestamp FROM news WHERE player_name = ?", (player_name,))
-        player_news = cursor.fetchall()
-        
-        new_keywords = set(extract_topic_keywords(title))
-        for row in player_news:
-            existing_keywords = set(extract_topic_keywords(row["title"]))
-            overlap = new_keywords.intersection(existing_keywords)
-            # If 2 or more major topic words match for the same player, treat as SAME TOPIC!
-            if len(overlap) >= 2:
-                existing_sources = [s.strip() for s in row["source"].split(",")]
-                existing_links = [l.strip() for l in row["link"].split(",")]
-                
-                if source not in existing_sources and link not in existing_links:
-                    updated_sources = ", ".join(existing_sources + [source])
-                    updated_links = ", ".join(existing_links + [link])
-                    max_score = max(row["importance_score"], importance_score)
-                    latest_ts = max(row["pub_timestamp"], pub_timestamp)
-                    
-                    cursor.execute("""
-                        UPDATE news 
-                        SET source = ?, link = ?, importance_score = ?, pub_timestamp = ?
-                        WHERE id = ?
-                    """, (updated_sources, updated_links, max_score, latest_ts, row["id"]))
-                    conn.commit()
-                    db_logger.info(f"Consolidated new source '{source}' into existing topic for {player_name}.")
-                
-                conn.close()
-                return None
-
-        # Insert as new unique topic card
         cursor.execute("""
             INSERT INTO news (title, source, summary, link, published_at, pub_timestamp, player_name, franchise, importance_score, category)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -125,14 +84,14 @@ def insert_or_consolidate_news(title, source, summary, link, published_at, playe
         conn.commit()
         news_id = cursor.lastrowid
         conn.close()
-        db_logger.info(f"Inserted live RSS article #{news_id} for {player_name} from {source}.")
+        db_logger.info(f"Inserted article #{news_id} for {player_name} from {source}.")
         return news_id
     except Exception as e:
         error_logger.error(f"Database insert error: {e}")
         conn.close()
         return None
 
-def get_recent_news(limit=100):
+def get_recent_news(limit=200):
     """Gets recent scraped live news items ordered strictly BY pub_timestamp DESC (latest published timestamp first)."""
     conn = get_connection()
     cursor = conn.cursor()
