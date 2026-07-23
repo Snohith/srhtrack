@@ -1,6 +1,6 @@
 """
 Master Roster Registry dynamically loaded from squadofsunrisers.xlsx.
-Includes NaN row filtering, regex word boundary matching, and player deduplication.
+Includes strict Regex matching and common surname filtering (Sharma, Kumar, Patel, Singh, Smith).
 """
 
 import os
@@ -74,10 +74,16 @@ MASTER_ROSTER = load_master_roster_from_excel()
 # Blacklisted false-positive phrases
 FALSE_POSITIVE_PHRASES = ["head coach", "head of", "head-to-head", "head coach's", "woodwork"]
 
+# Surnames that MUST require Full Name matching to prevent misattribution
+COMMON_SURNAMES = {
+    "sharma", "kumar", "patel", "singh", "ali", "ahmed", "wilson", 
+    "smith", "baker", "cross", "head", "wood", "king", "reddy", "green", "brown"
+}
+
 def match_player_in_text(text):
     """
-    Finds Sunrisers players mentioned in text using strict regex.
-    Deduplicates results so each player is matched at most once per text snippet.
+    Finds Sunrisers players mentioned in text using strict full-name and unique last-name regex matching.
+    Prevents false positive misattributions for common surnames like Sharma or Kumar.
     """
     matches = []
     matched_names = set()
@@ -93,6 +99,7 @@ def match_player_in_text(text):
             if p_name in matched_names:
                 continue
 
+            # 1. Full Name Matching (Primary & Most Accurate)
             pattern = r'\b' + re.escape(p_name.lower()) + r'\b'
             if re.search(pattern, text_clean):
                 matched_names.add(p_name)
@@ -105,12 +112,12 @@ def match_player_in_text(text):
                     "captain": p.get("captain", False)
                 })
             else:
+                # 2. Unique Last Name Matching (Only if surname is NOT in COMMON_SURNAMES)
                 name_parts = p_name.split()
                 if len(name_parts) >= 2:
-                    last_name = name_parts[-1]
-                    common_words = {"head", "wood", "king", "reddy", "green", "brown", "smith", "baker", "cross"}
-                    if last_name.lower() not in common_words:
-                        last_pattern = r'\b' + re.escape(last_name.lower()) + r'\b'
+                    last_name = name_parts[-1].lower()
+                    if last_name not in COMMON_SURNAMES and len(last_name) >= 4:
+                        last_pattern = r'\b' + re.escape(last_name) + r'\b'
                         if re.search(last_pattern, text_clean):
                             matched_names.add(p_name)
                             matches.append({
