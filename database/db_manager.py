@@ -1,10 +1,11 @@
 """
-Database Manager for @SRHXtra SQLite Memory layer (V4.0 Real-World Live RSS Only).
-Stores ONLY live scraped RSS articles from top global outlets with exact published titles, summaries, and direct original article URLs.
+Database Manager for @SRHXtra SQLite Memory layer (V5.0 Topic Consolidation Engine).
+Ensures 100% real live data, 73-player coverage across 4 squads, and single-topic multi-source deduplication.
 """
 
 import os
 import sqlite3
+import re
 from config.roster import MASTER_ROSTER
 from utils.logger import db_logger, error_logger
 
@@ -18,7 +19,7 @@ def get_connection():
     return conn
 
 def init_db():
-    """Initializes database schema and ensures tables exist. NO mock or synthetic data is seeded."""
+    """Initializes database schema and ensures tables exist."""
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -53,20 +54,58 @@ def get_all_players(franchise_filter=None):
     conn.close()
     return [dict(r) for r in rows]
 
-def insert_news(title, source, summary, link, published_at, player_name, franchise, importance_score, category):
-    """Inserts a real live RSS news article. Deduplicates strictly by link and title."""
+def extract_topic_keywords(title):
+    """Extracts significant keywords for single-topic deduplication."""
+    words = re.findall(r'\b[a-zA-Z]{4,}\b', title.lower())
+    ignore = {"cricket", "india", "england", "australia", "south", "africa", "first", "second", "third", "match", "series"}
+    return [w for w in words if w not in ignore]
+
+def insert_or_consolidate_news(title, source, summary, link, published_at, player_name, franchise, importance_score, category):
+    """
+    Inserts a real live RSS news article.
+    If an article about the SAME TOPIC for the same player already exists, consolidates sources and links into ONE single card!
+    """
     conn = get_connection()
     cursor = conn.cursor()
     try:
+        # Check exact link or exact title match first
         if link and link.strip() and link != "#":
-            cursor.execute("SELECT id FROM news WHERE link = ? OR title = ?", (link, title))
-        else:
-            cursor.execute("SELECT id FROM news WHERE title = ?", (title,))
-            
-        if cursor.fetchone():
-            conn.close()
-            return None
+            cursor.execute("SELECT id, source, link FROM news WHERE link = ? OR title = ?", (link, title))
+            existing = cursor.fetchone()
+            if existing:
+                conn.close()
+                return None
 
+        # Check single-topic duplicate (Same Player + matching key topic words)
+        cursor.execute("SELECT id, title, source, link, importance_score FROM news WHERE player_name = ?", (player_name,))
+        player_news = cursor.fetchall()
+        
+        new_keywords = set(extract_topic_keywords(title))
+        for row in player_news:
+            existing_keywords = set(extract_topic_keywords(row["title"]))
+            overlap = new_keywords.intersection(existing_keywords)
+            # If 2 or more major topic words match for the same player, treat as SAME TOPIC!
+            if len(overlap) >= 2:
+                existing_sources = [s.strip() for s in row["source"].split(",")]
+                existing_links = [l.strip() for l in row["link"].split(",")]
+                
+                if source not in existing_sources and link not in existing_links:
+                    updated_sources = ", ".join(existing_sources + [source])
+                    updated_links = ", ".join(existing_links + [link])
+                    max_score = max(row["importance_score"], importance_score)
+                    
+                    cursor.execute("""
+                        UPDATE news 
+                        SET source = ?, link = ?, importance_score = ?
+                        WHERE id = ?
+                    """, (updated_sources, updated_links, max_score, row["id"]))
+                    conn.commit()
+                    db_logger.info(f"Consolidated new source '{source}' into existing topic for {player_name}.")
+                
+                conn.close()
+                return None
+
+        # Insert as new unique topic card
         cursor.execute("""
             INSERT INTO news (title, source, summary, link, published_at, player_name, franchise, importance_score, category)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -81,7 +120,7 @@ def insert_news(title, source, summary, link, published_at, player_name, franchi
         conn.close()
         return None
 
-def get_recent_news(limit=50):
+def get_recent_news(limit=100):
     """Gets recent scraped live news items ordered strictly by ID DESC (newest scraped articles first)."""
     conn = get_connection()
     cursor = conn.cursor()
@@ -109,23 +148,6 @@ def insert_notification(message, type_str="INFO"):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("INSERT INTO notifications (message, type) VALUES (?, ?)", (message, type_str))
-    conn.commit()
-    conn.close()
-
-def get_unread_notifications():
-    """Gets all unread notifications."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM notifications WHERE is_read = 0 ORDER BY id DESC")
-    rows = cursor.fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-def mark_notifications_read():
-    """Marks all notifications as read."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE notifications SET is_read = 1 WHERE is_read = 0")
     conn.commit()
     conn.close()
 

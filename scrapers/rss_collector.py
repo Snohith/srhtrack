@@ -1,7 +1,7 @@
 """
-Expanded RSS Feed Collector for @SRHXtra V2.8.
+Expanded RSS Feed Collector for @SRHXtra V3.0.
 Features 50 Top-Tier Relevant Global Cricket Data & Media Outlets.
-Clean Ingestion Engine storing deduplicated player reconnaissance updates in 12-Hour AM/PM IST.
+Ingestion Engine storing deduplicated single-topic multi-source player reconnaissance updates in 12-Hour AM/PM IST.
 """
 
 import time
@@ -11,7 +11,7 @@ import bs4
 import html
 from config.roster import match_player_in_text
 from agents.ranker import calculate_importance_score, categorize_news
-from database.db_manager import insert_news, insert_notification
+from database.db_manager import insert_or_consolidate_news, insert_notification
 from utils.logger import rss_logger, error_logger
 from utils.time_utils import format_ist_12hr
 
@@ -98,7 +98,7 @@ def fetch_feed_with_retry(url, retries=2, delay=1):
     return None
 
 def fetch_and_filter_rss():
-    """Polls 50 top global sources, filters Sunrisers players, ranks impact, and stores clean 12hr AM/PM IST entries."""
+    """Polls 50 top global sources, filters Sunrisers players, ranks impact, and stores clean single-topic consolidated entries."""
     total_found = 0
     rss_logger.info(f"Starting Ingestion Cycle across {len(TOP_50_CRICKET_SOURCES)} Reliable Sources...")
     
@@ -119,7 +119,7 @@ def fetch_and_filter_rss():
                     score = calculate_importance_score(title, summary, mp)
                     category = categorize_news(title, summary)
                     
-                    news_id = insert_news(
+                    news_id = insert_or_consolidate_news(
                         title=title,
                         source=feed_info["name"],
                         summary=summary[:300] + "..." if len(summary) > 300 else summary,
