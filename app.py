@@ -1,6 +1,11 @@
 """
-@SRHXtra Global Command Center Dashboard (V2.4 Streamlit Cloud Compatible).
-Features sys.path configuration so Streamlit Cloud loads all submodules without ImportError.
+@SRHXtra Global Command Center Dashboard (V2.5 Refined UI).
+Features:
+- Automatic 30-Minute UI Refresh (<meta http-equiv="refresh" content="1800">)
+- Manual Instant Refresh ("⚡ Live Refresh 30 Feeds")
+- Sidebar displays clean "Last Refreshed" timestamp in 12-Hour AM/PM IST format
+- Section 1: Grouped by Date (12-hr AM/PM IST)
+- Section 2: Strictly sorted Latest-First (12-hr AM/PM IST)
 """
 
 import os
@@ -9,6 +14,7 @@ import sys
 # Ensure root directory is at the top of sys.path for Streamlit Cloud
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import time
 import streamlit as st
 import pandas as pd
 from config.roster import MASTER_ROSTER
@@ -17,7 +23,7 @@ from utils.time_utils import format_ist_12hr
 
 try:
     from scrapers.rss_collector import fetch_and_filter_rss
-except Exception as e:
+except Exception:
     def fetch_and_filter_rss():
         return 0
 
@@ -29,10 +35,17 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize Database & Clean Latest-First Data
+# Initialize Database & Pre-seed Data
 init_db()
 
-# Premium Dark Glassmorphism CSS & Responsive Spacing
+# Auto-refresh every 30 minutes (1800 seconds)
+st.markdown("<meta http-equiv='refresh' content='1800'>", unsafe_allow_html=True)
+
+# Session State for Last Refreshed IST Timestamp
+if "last_refreshed" not in st.session_state:
+    st.session_state["last_refreshed"] = format_ist_12hr()
+
+# Premium Dark Glassmorphism CSS
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Outfit:wght@600;800;900&display=swap');
@@ -143,9 +156,12 @@ st.markdown("""
 
 # Sidebar
 st.sidebar.markdown("# 🧡 @SRHXtra")
-st.sidebar.markdown("**Global Command Center V2.4**")
-st.sidebar.markdown(f"🕒 **Current IST:** `{format_ist_12hr()}`")
-st.sidebar.markdown(f"📡 **Data Ingestion:** `30 Reliable Global Outlets`")
+st.sidebar.markdown("**Global Command Center V2.5**")
+st.sidebar.markdown(f"📡 **Data Engine:** `30 Reliable Sources`")
+st.sidebar.markdown(f"⏱️ **Auto-Refresh:** `Every 30 Minutes`")
+
+st.sidebar.markdown("---")
+st.sidebar.markdown(f"🕒 **Last Refreshed IST:**\n`{st.session_state['last_refreshed']}`")
 
 st.sidebar.markdown("---")
 franchise_filter = st.sidebar.selectbox(
@@ -156,15 +172,9 @@ franchise_filter = st.sidebar.selectbox(
 if st.sidebar.button("⚡ Live Refresh 30 Feeds"):
     with st.spinner("Polling 30 top global cricket sources..."):
         count = fetch_and_filter_rss()
+        st.session_state["last_refreshed"] = format_ist_12hr()
         st.sidebar.success(f"Captured {count} new Sunrisers items!")
-
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 🌐 Remote Access")
-st.sidebar.info("""
-**View from any phone or device:**
-1. **Local Wi-Fi:** `http://192.168.1.130:8501`
-2. **Live Cloud URL:** [https://srhtrack.streamlit.app/](https://srhtrack.streamlit.app/)
-""")
+        st.rerun()
 
 # Dashboard Brand Header
 st.markdown("<div class='brand-title'>🦅 @SRHXtra GLOBAL TRACKER</div>", unsafe_allow_html=True)
