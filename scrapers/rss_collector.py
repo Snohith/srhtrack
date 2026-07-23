@@ -1,7 +1,7 @@
 """
-Expanded RSS Feed Collector for @SRHXtra V3.0.
+Expanded RSS Feed Collector for @SRHXtra V3.5.
 Features 50 Top-Tier Relevant Global Cricket Data & Media Outlets.
-Ingestion Engine storing deduplicated single-topic multi-source player reconnaissance updates in 12-Hour AM/PM IST.
+Stores ORIGINAL article publication timestamps in 12-Hour AM/PM IST and filters out outdated items (>72h).
 """
 
 import time
@@ -13,7 +13,7 @@ from config.roster import match_player_in_text
 from agents.ranker import calculate_importance_score, categorize_news
 from database.db_manager import insert_or_consolidate_news, insert_notification
 from utils.logger import rss_logger, error_logger
-from utils.time_utils import format_ist_12hr
+from utils.time_utils import parse_rss_date_to_ist, format_ist_12hr
 
 # 50 TOP-TIER RELEVANT GLOBAL CRICKET MEDIA OUTLETS
 TOP_50_CRICKET_SOURCES = [
@@ -98,7 +98,7 @@ def fetch_feed_with_retry(url, retries=2, delay=1):
     return None
 
 def fetch_and_filter_rss():
-    """Polls 50 top global sources, filters Sunrisers players, ranks impact, and stores clean single-topic consolidated entries."""
+    """Polls 50 top global sources, parses original article IST publication dates, discards outdated items (>72h), and stores clean consolidated entries."""
     total_found = 0
     rss_logger.info(f"Starting Ingestion Cycle across {len(TOP_50_CRICKET_SOURCES)} Reliable Sources...")
     
@@ -111,8 +111,14 @@ def fetch_and_filter_rss():
             title = clean_text(entry.get("title", ""))
             summary = clean_text(entry.get("summary", "") or entry.get("description", ""))
             link = entry.get("link", "")
-            pub_date = format_ist_12hr()
             
+            # Parse TRUE original article publication date in IST & calculate age
+            pub_date, age_hours, _ = parse_rss_date_to_ist(entry)
+            
+            # Discard outdated articles (>72 hours old) to guarantee fresh news
+            if age_hours > 72.0:
+                continue
+
             matched_players = match_player_in_text(f"{title} {summary}")
             if matched_players:
                 for mp in matched_players:
@@ -139,5 +145,5 @@ def fetch_and_filter_rss():
                                 type_str="PRIORITY"
                             )
     
-    rss_logger.info(f"50-Source Ingestion Cycle Complete. {total_found} new Sunrisers items processed.")
+    rss_logger.info(f"50-Source Ingestion Cycle Complete. {total_found} fresh Sunrisers items processed.")
     return total_found
