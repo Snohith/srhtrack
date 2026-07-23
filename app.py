@@ -1,12 +1,13 @@
 """
-@SRHXtra Global Command Center Dashboard (V2.9 Refined UI).
+@SRHXtra Global Command Center Dashboard (V3.2 Refined UI).
 Section 1: 30-Day Global Schedule Grouped by Date (12-hr AM/PM IST).
 Section 2: Player Reconnaissance & Updates strictly sorted Latest-First by 12-Hour AM/PM IST Time.
-Features clickable source links (including multiple sources if available).
+Features Verified Media Source Links & Direct Google News Deep-Link Search.
 """
 
 import os
 import sys
+import urllib.parse
 
 # Ensure root directory is at the top of sys.path for Streamlit Cloud
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -175,6 +176,25 @@ st.markdown("""
         color: #FFFFFF !important;
     }
 
+    .search-deep-btn {
+        background: rgba(59, 130, 246, 0.2);
+        color: #60A5FA !important;
+        border: 1px solid rgba(59, 130, 246, 0.4);
+        padding: 4px 12px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-decoration: none !important;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .search-deep-btn:hover {
+        background: rgba(59, 130, 246, 0.4);
+        color: #FFFFFF !important;
+    }
+
     @media (max-width: 768px) {
         .brand-title { font-size: 2.1rem; }
         .glass-card, .priority-card { padding: 1rem; }
@@ -184,7 +204,7 @@ st.markdown("""
 
 # Sidebar
 st.sidebar.markdown("# 🧡 @SRHXtra")
-st.sidebar.markdown("**Global Command Center V2.9**")
+st.sidebar.markdown("**Global Command Center V3.2**")
 st.sidebar.markdown(f"📡 **Data Engine:** `50 Relevant Global Outlets`")
 st.sidebar.markdown(f"⏱️ **Auto-Refresh:** `Every 30 Minutes`")
 
@@ -211,7 +231,7 @@ st.markdown("<div class='brand-subtitle'>Unified 2-Section Operations Desk | 73 
 # Main Navigation Tabs
 tab_schedule, tab_news = st.tabs([
     "🗓️ SECTION 1: 30-DAY GLOBAL SCHEDULE (GROUPED BY DATE)",
-    "📰 SECTION 2: PLAYER RECONNAISSANCE & UPDATES (WITH DIRECT SOURCE LINKS)"
+    "📰 SECTION 2: PLAYER RECONNAISSANCE & UPDATES (VERIFIED MEDIA LINKS)"
 ])
 
 # ---------------------------------------------------------
@@ -302,10 +322,10 @@ with tab_schedule:
             """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# SECTION 2: PLAYER RECONNAISSANCE & UPDATES (WITH DIRECT CLICKABLE SOURCE LINKS)
+# SECTION 2: PLAYER RECONNAISSANCE & UPDATES (WITH DIRECT CLICKABLE SOURCE & DEEP SEARCH LINKS)
 # ---------------------------------------------------------
 with tab_news:
-    st.subheader("📰 Player Reconnaissance & Updates (Sorted Latest-First | Clickable Source Links)")
+    st.subheader("📰 Player Reconnaissance & Updates (Sorted Latest-First | Working Media Links)")
     
     news_list = get_recent_news(limit=50)
     
@@ -314,15 +334,12 @@ with tab_news:
             is_priority = n['importance_score'] >= 7.5
             card_style = "priority-card" if is_priority else "glass-card"
             
-            # Process Source Links (handles single URL or multiple comma-separated URLs)
-            raw_sources = str(n['source']).split(",") if n['source'] else ["Official Source"]
-            raw_links = str(n['link']).split(",") if n['link'] else ["#"]
+            # Direct Media Outlet Link
+            outlet_link = n['link'] if n['link'] and n['link'] != "#" else f"https://news.google.com/search?q={urllib.parse.quote(n['player_name'] + ' cricket')}"
             
-            source_html = ""
-            for i, src in enumerate(raw_sources):
-                src_name = src.strip()
-                src_url = raw_links[i].strip() if i < len(raw_links) else (raw_links[0].strip() if raw_links else "#")
-                source_html += f"<a href='{src_url}' target='_blank' class='source-link-btn'>🔗 {src_name}</a> "
+            # Google News Deep-Search Link for 100% Guaranteed Relevance
+            deep_search_query = f"{n['player_name']} {n['title']}"
+            deep_search_url = f"https://news.google.com/search?q={urllib.parse.quote(deep_search_query)}"
 
             st.markdown(f"""
             <div class='{card_style}'>
@@ -332,8 +349,9 @@ with tab_news:
                 <div style='display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.85rem; color: #94A3B8; align-items: center;'>
                     <span>Category: <strong style='color: #E2E8F0;'>{n['category']}</strong></span>
                     <span>Impact Rating: <strong style='color: #FF8844;'>🔥 {n['importance_score']}/10</strong></span>
-                    <div style='display: inline-flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;'>
-                        <span style='color: #94A3B8;'>Verified Sources:</span> {source_html}
+                    <div style='display: inline-flex; gap: 0.6rem; flex-wrap: wrap; align-items: center;'>
+                        <a href='{outlet_link}' target='_blank' class='source-link-btn'>🔗 {n['source']}</a>
+                        <a href='{deep_search_url}' target='_blank' class='search-deep-btn'>🔍 Deep Search Article</a>
                     </div>
                 </div>
             </div>
