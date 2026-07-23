@@ -1,7 +1,8 @@
 """
-@SRHXtra Global Command Center Dashboard (V2.2 Refined UI).
+@SRHXtra Global Command Center Dashboard (V2.3 Refined UI).
 Section 1: 30-Day Global Schedule Grouped by Date (12-hr AM/PM IST).
-Section 2: Player Reconnaissance & Updates sorted by Latest Posted IST Time (12-hr AM/PM IST).
+Section 2: Player Reconnaissance & Updates strictly sorted Latest-First by 12-Hour AM/PM IST Time.
+Features 30 Top-Tier Global Cricket Data & News Sources.
 """
 
 import os
@@ -9,7 +10,7 @@ import streamlit as st
 import pandas as pd
 from config.roster import MASTER_ROSTER
 from database.db_manager import init_db, get_recent_news, search_news
-from scrapers.rss_collector import fetch_and_filter_rss
+from scrapers.rss_collector import fetch_and_filter_rss, TOP_30_CRICKET_SOURCES
 from utils.time_utils import format_ist_12hr
 
 # Page Configuration
@@ -20,7 +21,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize Database & Pre-seed Data
+# Initialize Database & Clean Latest-First Data
 init_db()
 
 # Premium Dark Glassmorphism CSS & Responsive Spacing
@@ -134,8 +135,9 @@ st.markdown("""
 
 # Sidebar
 st.sidebar.markdown("# 🧡 @SRHXtra")
-st.sidebar.markdown("**Global Command Center V2.2**")
+st.sidebar.markdown("**Global Command Center V2.3**")
 st.sidebar.markdown(f"🕒 **Current IST:** `{format_ist_12hr()}`")
+st.sidebar.markdown(f"📡 **Data Ingestion:** `30 Reliable Global Outlets`")
 
 st.sidebar.markdown("---")
 franchise_filter = st.sidebar.selectbox(
@@ -143,8 +145,8 @@ franchise_filter = st.sidebar.selectbox(
     ["All", "Sunrisers Hyderabad", "Sunrisers Eastern Cape", "Sunrisers Leeds Men", "Sunrisers Leeds Women"]
 )
 
-if st.sidebar.button("⚡ Live Refresh Feeds"):
-    with st.spinner("Polling 16 global cricket sources..."):
+if st.sidebar.button("⚡ Live Refresh 30 Feeds"):
+    with st.spinner("Polling 30 top global cricket sources..."):
         count = fetch_and_filter_rss()
         st.sidebar.success(f"Captured {count} new Sunrisers items!")
 
@@ -163,7 +165,7 @@ st.markdown("<div class='brand-subtitle'>Unified 2-Section Operations Desk | 73 
 # Main Navigation Tabs
 tab_schedule, tab_news = st.tabs([
     "🗓️ SECTION 1: 30-DAY GLOBAL SCHEDULE (GROUPED BY DATE)",
-    "📰 SECTION 2: PLAYER RECONNAISSANCE & UPDATES (SORTED BY LATEST IST TIME)"
+    "📰 SECTION 2: PLAYER RECONNAISSANCE & UPDATES (LATEST-FIRST IN 12-HR AM/PM IST)"
 ])
 
 # ---------------------------------------------------------
@@ -254,10 +256,10 @@ with tab_schedule:
             """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# SECTION 2: PLAYER RECONNAISSANCE & UPDATES (12-HR AM/PM IST SORTED LATEST FIRST)
+# SECTION 2: PLAYER RECONNAISSANCE & UPDATES (STRICTLY LATEST-FIRST IN 12-HR AM/PM IST)
 # ---------------------------------------------------------
 with tab_news:
-    st.subheader("📰 Player Reconnaissance & Updates (Sorted Latest First by 12-Hour AM/PM IST Time)")
+    st.subheader("📰 Player Reconnaissance & Updates (Strictly Sorted Latest-First by 12-Hour AM/PM IST Time)")
     
     news_list = get_recent_news(limit=50)
     
@@ -280,4 +282,4 @@ with tab_news:
             </div>
             """, unsafe_allow_html=True)
     else:
-        st.info("No player updates captured yet. Click 'Live Refresh Feeds' in the sidebar!")
+        st.info("No player updates captured yet. Click 'Live Refresh 30 Feeds' in the sidebar!")

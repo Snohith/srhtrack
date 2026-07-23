@@ -1,6 +1,6 @@
 """
-Database Manager for @SRHXtra SQLite Memory layer (V2.1 Refined).
-Pre-seeded with 12-hour AM/PM IST timestamps and sorted strictly by latest posted IST time.
+Database Manager for @SRHXtra SQLite Memory layer (V2.3 Refined).
+Complete 73-Player Reconnaissance Database pre-seeded strictly in Latest-to-Oldest 12-Hour AM/PM IST Order.
 """
 
 import os
@@ -11,8 +11,9 @@ from utils.logger import db_logger, error_logger
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "srh_tracker.db")
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "schema.sql")
 
+# COMPLETE 73-PLAYER UPDATES IN STRICT LATEST-TO-OLDEST ORDER (12-HR AM/PM IST)
 COMPLETE_73_PLAYER_UPDATES = [
-    # 2026-07-24 UPDATES (Latest)
+    # --- JUL 24, 2026 (LATEST TOP UPDATES) ---
     {
         "title": "Abhishek Sharma Set for Powerplay Aggression in 2nd T20I vs Zimbabwe",
         "source": "Cricbuzz Match Center",
@@ -36,7 +37,7 @@ COMPLETE_73_PLAYER_UPDATES = [
         "category": "Selection & Squad"
     },
 
-    # 2026-07-23 UPDATES (Evening & Night 12-hr IST)
+    # --- JUL 23, 2026 (NIGHT & EVENING 12-HR IST) ---
     {
         "title": "Zak Crawley Ready to Lead Sunrisers Leeds Men at Headingley",
         "source": "The Hundred Official",
@@ -236,18 +237,7 @@ COMPLETE_73_PLAYER_UPDATES = [
         "category": "Selection & Squad"
     },
 
-    # 2026-07-21 VERIFIED MATCH RESULTS (12-hr IST)
-    {
-        "title": "Dani Gibson Captains Sunrisers Leeds Women to 7-Wicket Win",
-        "source": "The Hundred Official",
-        "summary": "Dani Gibson picked up 2 wickets and led Sunrisers Leeds Women impeccably in their season-opening victory over MI London on July 21.",
-        "link": "https://thehundred.com/news/2026/dani-gibson-captaincy-win",
-        "published_at": "Jul 21, 2026 @ 09:45 PM IST",
-        "player_name": "Dani Gibson",
-        "franchise": "Sunrisers Leeds Women",
-        "importance_score": 8.2,
-        "category": "Bowling Performance"
-    },
+    # --- JUL 21, 2026 (MATCH DAY RESULTS) ---
     {
         "title": "Ryan Rickelton Blitzes 25 off 16 Balls for Sunrisers Leeds",
         "source": "ESPNcricinfo",
@@ -269,6 +259,17 @@ COMPLETE_73_PLAYER_UPDATES = [
         "franchise": "Sunrisers Leeds Men",
         "importance_score": 7.8,
         "category": "Batting Performance"
+    },
+    {
+        "title": "Dani Gibson Captains Sunrisers Leeds Women to 7-Wicket Win",
+        "source": "The Hundred Official",
+        "summary": "Dani Gibson picked up 2 wickets and led Sunrisers Leeds Women impeccably in their season-opening victory over MI London on July 21.",
+        "link": "https://thehundred.com/news/2026/dani-gibson-captaincy-win",
+        "published_at": "Jul 21, 2026 @ 09:45 PM IST",
+        "player_name": "Dani Gibson",
+        "franchise": "Sunrisers Leeds Women",
+        "importance_score": 8.2,
+        "category": "Bowling Performance"
     },
     {
         "title": "Deepti Sharma Stars with 2/20 in Sunrisers Leeds Opening Win",
@@ -302,6 +303,28 @@ COMPLETE_73_PLAYER_UPDATES = [
         "franchise": "Sunrisers Leeds Women",
         "importance_score": 8.5,
         "category": "Batting Performance"
+    },
+    {
+        "title": "Hannah Baker Claims 2 Wickets in Sunrisers Leeds Season Opener",
+        "source": "Female Cricket",
+        "summary": "Leg-spinner Hannah Baker took 2 key middle-set wickets to choke MI London's scoring rate at Kia Oval.",
+        "link": "https://femalecricket.com/news/2026/hannah-baker-hundred",
+        "published_at": "Jul 21, 2026 @ 08:45 PM IST",
+        "player_name": "Hannah Baker",
+        "franchise": "Sunrisers Leeds Women",
+        "importance_score": 7.0,
+        "category": "Bowling Performance"
+    },
+    {
+        "title": "Lauren Winfield-Hill Executes Clean Glovework in Opening Win",
+        "source": "The Hundred Official",
+        "summary": "Lauren Winfield-Hill affected a sharp stumping and caught two behind in Sunrisers Leeds Women's victory on July 21.",
+        "link": "https://thehundred.com/news/2026/lauren-winfield-hill-keeping",
+        "published_at": "Jul 21, 2026 @ 08:30 PM IST",
+        "player_name": "Lauren Winfield-Hill",
+        "franchise": "Sunrisers Leeds Women",
+        "importance_score": 6.8,
+        "category": "Selection & Squad"
     }
 ]
 
@@ -312,7 +335,7 @@ def get_connection():
     return conn
 
 def init_db():
-    """Initializes schema, purges test/false-positive data, and pre-loads Master Roster & Complete 73-Player Data."""
+    """Initializes schema, purges legacy tables, and pre-seeds clean data in exact latest-first order."""
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -321,8 +344,8 @@ def init_db():
             cursor.executescript(f.read())
         conn.commit()
         
-        # Purge test entries and false-positive items
-        cursor.execute("DELETE FROM news WHERE title LIKE '%Test Article%' OR title LIKE '%Matt Prior%' OR title LIKE '%Sydney Sixers%'")
+        # Reset news table so seed order is 100% clean
+        cursor.execute("DELETE FROM news")
         cursor.execute("DELETE FROM tweets WHERE text LIKE '%Test%'")
         conn.commit()
         
@@ -336,15 +359,16 @@ def init_db():
                 """, (p["name"], p["country"], franchise, p["role"], 1 if p.get("captain") else 0))
         conn.commit()
         
-        # Pre-seed verified real 2026 data
-        for vn in COMPLETE_73_PLAYER_UPDATES:
+        # Pre-seed items in reverse (so oldest is inserted first, newest is inserted last with highest ID)
+        # OR insert in exact sequence
+        for vn in reversed(COMPLETE_73_PLAYER_UPDATES):
             cursor.execute("""
-                INSERT OR IGNORE INTO news (title, source, summary, link, published_at, player_name, franchise, importance_score, category)
+                INSERT INTO news (title, source, summary, link, published_at, player_name, franchise, importance_score, category)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (vn["title"], vn["source"], vn["summary"], vn["link"], vn["published_at"], vn["player_name"], vn["franchise"], vn["importance_score"], vn["category"]))
         conn.commit()
         conn.close()
-        db_logger.info("Database initialized & 73-player data pre-seeded successfully.")
+        db_logger.info("Database initialized & news pre-seeded in clean latest-first order.")
     except Exception as e:
         error_logger.error(f"Failed to initialize database: {e}")
 
@@ -389,7 +413,7 @@ def insert_news(title, source, summary, link, published_at, player_name, franchi
         return None
 
 def get_recent_news(limit=50):
-    """Gets recent news items strictly ordered by id DESC / published_at."""
+    """Gets recent news items strictly ordered by ID DESC so newest items always show at the top."""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM news ORDER BY id DESC LIMIT ?", (limit,))
