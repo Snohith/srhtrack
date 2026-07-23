@@ -1,7 +1,6 @@
 """
-Database Manager for @SRHXtra SQLite Memory layer (V2.0 Refined).
-Complete 73-Player Reconnaissance Database pre-seeded and strictly sorted by IST timestamps.
-Includes strict deduplication handling empty links gracefully.
+Database Manager for @SRHXtra SQLite Memory layer (V2.1 Refined).
+Pre-seeded with 12-hour AM/PM IST timestamps and sorted strictly by latest posted IST time.
 """
 
 import os
@@ -19,7 +18,7 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "Cricbuzz Match Center",
         "summary": "Dismissed for 1 in the series opener, Abhishek Sharma is back in the nets preparing for an explosive outing tomorrow at 4:30 PM IST in Harare.",
         "link": "https://cricbuzz.com/cricket-news/2026/abhishek-sharma-2nd-t20i-zim",
-        "published_at": "2026-07-24 10:00 IST",
+        "published_at": "Jul 24, 2026 @ 10:00 AM IST",
         "player_name": "Abhishek Sharma",
         "franchise": "Sunrisers Hyderabad",
         "importance_score": 7.5,
@@ -30,20 +29,20 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "BCCI Official",
         "summary": "Included in India's 15-member T20I squad for Zimbabwe, all-rounder Harsh Dubey is conducting intense net sessions aiming for his international debut tomorrow at 4:30 PM IST.",
         "link": "https://bcci.tv/news/2026/harsh-dubey-t20i-zimbabwe-squad",
-        "published_at": "2026-07-24 09:30 IST",
+        "published_at": "Jul 24, 2026 @ 09:30 AM IST",
         "player_name": "Harsh Dubey",
         "franchise": "Sunrisers Hyderabad",
         "importance_score": 7.0,
         "category": "Selection & Squad"
     },
 
-    # 2026-07-23 UPDATES
+    # 2026-07-23 UPDATES (Evening & Night 12-hr IST)
     {
         "title": "Zak Crawley Ready to Lead Sunrisers Leeds Men at Headingley",
         "source": "The Hundred Official",
         "summary": "Skipper Zak Crawley has confirmed Sunrisers Leeds Men's tactical plan for tomorrow's home clash vs Southern Brave at 7:00 PM IST.",
         "link": "https://thehundred.com/news/2026/zak-crawley-sunrisers-leeds-captain",
-        "published_at": "2026-07-23 22:30 IST",
+        "published_at": "Jul 23, 2026 @ 10:30 PM IST",
         "player_name": "Zak Crawley",
         "franchise": "Sunrisers Leeds Men",
         "importance_score": 8.0,
@@ -54,7 +53,7 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "Sky Sports Cricket",
         "summary": "SEC captain Tristan Stubbs confirmed for MI London's middle order against Welsh Fire tomorrow at 10:30 PM IST.",
         "link": "https://skysports.com/cricket/news/2026/tristan-stubbs-mi-london",
-        "published_at": "2026-07-23 22:00 IST",
+        "published_at": "Jul 23, 2026 @ 10:00 PM IST",
         "player_name": "Tristan Stubbs",
         "franchise": "Sunrisers Eastern Cape",
         "importance_score": 7.5,
@@ -65,7 +64,7 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "BBC Sport",
         "summary": "Harry Brook conducted power-hitting drills at Headingley ahead of tomorrow's encounter against Southern Brave Men at 7:00 PM IST.",
         "link": "https://bbc.com/sport/cricket/2026/harry-brook-headingley-opener",
-        "published_at": "2026-07-23 22:00 IST",
+        "published_at": "Jul 23, 2026 @ 10:00 PM IST",
         "player_name": "Harry Brook",
         "franchise": "Sunrisers Leeds Men",
         "importance_score": 8.2,
@@ -76,7 +75,7 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "Wisden",
         "summary": "Marco Jansen's left-arm bounce will be MI London's primary weapon against Welsh Fire tomorrow at 10:30 PM IST.",
         "link": "https://wisden.com/matches/2026/marco-jansen-the-hundred",
-        "published_at": "2026-07-23 21:30 IST",
+        "published_at": "Jul 23, 2026 @ 09:30 PM IST",
         "player_name": "Marco Jansen",
         "franchise": "Sunrisers Eastern Cape",
         "importance_score": 7.2,
@@ -87,7 +86,7 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "Cricket World",
         "summary": "Quinton de Kock set to open the batting for Southern Brave against Sunrisers Leeds Men tomorrow at 7:00 PM IST.",
         "link": "https://cricketworld.com/news/2026/quinton-de-kock-southern-brave",
-        "published_at": "2026-07-23 21:00 IST",
+        "published_at": "Jul 23, 2026 @ 09:00 PM IST",
         "player_name": "Quinton de Kock",
         "franchise": "Sunrisers Eastern Cape",
         "importance_score": 7.5,
@@ -98,7 +97,7 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "The Hundred Official",
         "summary": "Brydon Carse cleared to bowl full 20-ball sets for Sunrisers Leeds Men at Headingley tomorrow evening.",
         "link": "https://thehundred.com/news/2026/brydon-carse-pace-leader",
-        "published_at": "2026-07-23 21:00 IST",
+        "published_at": "Jul 23, 2026 @ 09:00 PM IST",
         "player_name": "Brydon Carse",
         "franchise": "Sunrisers Leeds Men",
         "importance_score": 7.5,
@@ -109,7 +108,7 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "ECB Official",
         "summary": "James Coles will feature as Southern Brave's middle-order spin option against Sunrisers Leeds tomorrow at 7:00 PM IST.",
         "link": "https://ecb.co.uk/news/2026/james-coles-hundred-selection",
-        "published_at": "2026-07-23 20:30 IST",
+        "published_at": "Jul 23, 2026 @ 08:30 PM IST",
         "player_name": "James Coles",
         "franchise": "Sunrisers Eastern Cape",
         "importance_score": 6.8,
@@ -120,7 +119,7 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "Wisden",
         "summary": "Jonny Bairstow will take the gloves for London Spirit against Trent Rockets on Sunday, July 26 at 10:30 PM IST.",
         "link": "https://wisden.com/news/2026/jonny-bairstow-london-spirit",
-        "published_at": "2026-07-23 20:00 IST",
+        "published_at": "Jul 23, 2026 @ 08:00 PM IST",
         "player_name": "Jonny Bairstow",
         "franchise": "Sunrisers Eastern Cape",
         "importance_score": 7.3,
@@ -131,7 +130,7 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "Sky Sports",
         "summary": "Matthew Potts will share the new ball with Reece Topley and Brydon Carse at Headingley tomorrow night.",
         "link": "https://skysports.com/cricket/2026/matthew-potts-sunrisers-leeds",
-        "published_at": "2026-07-23 20:00 IST",
+        "published_at": "Jul 23, 2026 @ 08:00 PM IST",
         "player_name": "Matthew Potts",
         "franchise": "Sunrisers Leeds Men",
         "importance_score": 7.0,
@@ -142,7 +141,7 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "The Hundred Official",
         "summary": "Dan Lawrence honed sweep shots and lofted drives in pre-match training for Sunrisers Leeds Men.",
         "link": "https://thehundred.com/news/2026/dan-lawrence-headingley",
-        "published_at": "2026-07-23 19:30 IST",
+        "published_at": "Jul 23, 2026 @ 07:30 PM IST",
         "player_name": "Dan Lawrence",
         "franchise": "Sunrisers Leeds Men",
         "importance_score": 6.8,
@@ -153,7 +152,7 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "BCCI Official",
         "summary": "Ishan Kishan hit 3 fours and 2 sixes in Harare during the 1st T20I win on July 23. 2nd T20I scheduled for July 25 at 4:30 PM IST.",
         "link": "https://bcci.tv/news/2026/ishan-kishan-35-zim-v-ind",
-        "published_at": "2026-07-23 19:30 IST",
+        "published_at": "Jul 23, 2026 @ 07:30 PM IST",
         "player_name": "Ishan Kishan",
         "franchise": "Sunrisers Hyderabad",
         "importance_score": 8.0,
@@ -164,29 +163,18 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "BBC Sport",
         "summary": "Lewis Gregory confirmed in Manchester Super Giants squad ahead of their upcoming Hundred matches.",
         "link": "https://bbc.com/sport/cricket/2026/lewis-gregory-manchester",
-        "published_at": "2026-07-23 19:00 IST",
+        "published_at": "Jul 23, 2026 @ 07:00 PM IST",
         "player_name": "Lewis Gregory",
         "franchise": "Sunrisers Eastern Cape",
         "importance_score": 6.7,
         "category": "Selection & Squad"
     },
     {
-        "title": "Matthew Breetzke Conducting Powerplay Hitting Sessions",
-        "source": "Cricket South Africa",
-        "summary": "Matthew Breetzke in intense white-ball batting practice in South Africa prior to next franchise cycle.",
-        "link": "https://cricket.co.za/news/2026/matthew-breetzke-training",
-        "published_at": "2026-07-23 18:30 IST",
-        "player_name": "Matthew Breetzke",
-        "franchise": "Sunrisers Eastern Cape",
-        "importance_score": 6.5,
-        "category": "Batting Performance"
-    },
-    {
         "title": "Travis Head Resting Ahead of Australia White-Ball Tour",
         "source": "Cricket Australia",
         "summary": "Travis Head is on a planned conditioning rest break following IPL 2026 before rejoining national camp.",
         "link": "https://cricket.com.au/news/2026/travis-head-conditioning-rest",
-        "published_at": "2026-07-23 18:00 IST",
+        "published_at": "Jul 23, 2026 @ 06:00 PM IST",
         "player_name": "Travis Head",
         "franchise": "Sunrisers Hyderabad",
         "importance_score": 7.0,
@@ -197,43 +185,10 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "Wisden",
         "summary": "Nathan Ellis executed yorker and back-of-the-hand slower ball drills ahead of tomorrow's match.",
         "link": "https://wisden.com/cricket/2026/nathan-ellis-leeds",
-        "published_at": "2026-07-23 18:00 IST",
+        "published_at": "Jul 23, 2026 @ 06:00 PM IST",
         "player_name": "Nathan Ellis",
         "franchise": "Sunrisers Leeds Men",
         "importance_score": 7.0,
-        "category": "Bowling Performance"
-    },
-    {
-        "title": "Reece Topley In Starting Bowling Lineup for July 25",
-        "source": "The Hundred Official",
-        "summary": "Left-arm pace seamer Reece Topley is fit and firing for Sunrisers Leeds Men's match against Southern Brave.",
-        "link": "https://thehundred.com/news/2026/reece-topley-fit",
-        "published_at": "2026-07-23 17:30 IST",
-        "player_name": "Reece Topley",
-        "franchise": "Sunrisers Leeds Men",
-        "importance_score": 7.1,
-        "category": "Injury / Availability"
-    },
-    {
-        "title": "Liam Livingstone Preparing for London Spirit Opener on July 26",
-        "source": "Sky Sports",
-        "summary": "Liam Livingstone will feature in London Spirit's middle order against Trent Rockets on Sunday at 10:30 PM IST.",
-        "link": "https://skysports.com/cricket/2026/liam-livingstone-london-spirit",
-        "published_at": "2026-07-23 17:30 IST",
-        "player_name": "Liam Livingstone",
-        "franchise": "Sunrisers Hyderabad",
-        "importance_score": 7.2,
-        "category": "Selection & Squad"
-    },
-    {
-        "title": "Chris Wood Bowling Left-Arm Death Overs for Trent Rockets",
-        "source": "Trent Rockets Official",
-        "summary": "Chris Wood confirmed in Trent Rockets bowling attack for their upcoming match against London Spirit.",
-        "link": "https://trentrockets.co.uk/news/2026/chris-wood-bowling",
-        "published_at": "2026-07-23 17:00 IST",
-        "player_name": "Chris Wood",
-        "franchise": "Sunrisers Eastern Cape",
-        "importance_score": 6.6,
         "category": "Bowling Performance"
     },
     {
@@ -241,7 +196,7 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "The Hundred Official",
         "summary": "Heinrich Klaasen arrived in London to lead Spirit's middle-order hitting against Trent Rockets on July 26.",
         "link": "https://thehundred.com/news/2026/heinrich-klaasen-london-spirit",
-        "published_at": "2026-07-23 16:00 IST",
+        "published_at": "Jul 23, 2026 @ 04:00 PM IST",
         "player_name": "Heinrich Klaasen",
         "franchise": "Sunrisers Hyderabad",
         "importance_score": 8.0,
@@ -252,32 +207,10 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "BCCI Medical Board",
         "summary": "Nitish Kumar Reddy is progressing cleanly through bowling load progressions at the National Cricket Academy.",
         "link": "https://bcci.tv/medical/2026/nitish-kumar-reddy-rehab",
-        "published_at": "2026-07-23 15:00 IST",
+        "published_at": "Jul 23, 2026 @ 03:00 PM IST",
         "player_name": "Nitish Kumar Reddy",
         "franchise": "Sunrisers Hyderabad",
         "importance_score": 7.0,
-        "category": "Injury / Availability"
-    },
-    {
-        "title": "Harshal Patel Training at NCA Bangalore",
-        "source": "Press Trust of India",
-        "summary": "Harshal Patel honing dipping slower balls and yorkers ahead of upcoming domestic and international T20s.",
-        "link": "https://ptinews.com/sports/2026/harshal-patel-nca",
-        "published_at": "2026-07-23 14:00 IST",
-        "player_name": "Harshal Patel",
-        "franchise": "Sunrisers Hyderabad",
-        "importance_score": 6.8,
-        "category": "Batting Performance"
-    },
-    {
-        "title": "Anrich Nortje Clearing High-Speed Bowling Drills in SA",
-        "source": "Cricket South Africa",
-        "summary": "Anrich Nortje clocked 145+ kmph in national camp, proving 100% fitness following his rest break.",
-        "link": "https://cricket.co.za/news/2026/anrich-nortje-speed-test",
-        "published_at": "2026-07-23 13:00 IST",
-        "player_name": "Anrich Nortje",
-        "franchise": "Sunrisers Eastern Cape",
-        "importance_score": 7.5,
         "category": "Injury / Availability"
     },
     {
@@ -285,7 +218,7 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "Cricket Australia",
         "summary": "Australian skipper Pat Cummins has been declared fully fit post-IPL rest block ahead of upcoming international series assignments.",
         "link": "https://cricket.com.au/news/2026/pat-cummins-fitness-clearance",
-        "published_at": "2026-07-23 12:00 IST",
+        "published_at": "Jul 23, 2026 @ 12:00 PM IST",
         "player_name": "Pat Cummins",
         "franchise": "Sunrisers Hyderabad",
         "importance_score": 8.0,
@@ -296,20 +229,20 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "Sri Lanka Cricket",
         "summary": "Kamindu Mendis conducting red-ball batting drills in Galle ahead of the 2-Test home series vs India starting August 15.",
         "link": "https://srilankacricket.lk/news/2026/kamindu-mendis-test-prep",
-        "published_at": "2026-07-23 11:00 IST",
+        "published_at": "Jul 23, 2026 @ 11:00 AM IST",
         "player_name": "Kamindu Mendis",
         "franchise": "Sunrisers Hyderabad",
         "importance_score": 7.5,
         "category": "Selection & Squad"
     },
 
-    # 2026-07-21 & 22 VERIFIED MATCH RESULTS & UPDATES
+    # 2026-07-21 VERIFIED MATCH RESULTS (12-hr IST)
     {
         "title": "Dani Gibson Captains Sunrisers Leeds Women to 7-Wicket Win",
         "source": "The Hundred Official",
         "summary": "Dani Gibson picked up 2 wickets and led Sunrisers Leeds Women impeccably in their season-opening victory over MI London on July 21.",
         "link": "https://thehundred.com/news/2026/dani-gibson-captaincy-win",
-        "published_at": "2026-07-21 21:45 IST",
+        "published_at": "Jul 21, 2026 @ 09:45 PM IST",
         "player_name": "Dani Gibson",
         "franchise": "Sunrisers Leeds Women",
         "importance_score": 8.2,
@@ -320,7 +253,7 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "ESPNcricinfo",
         "summary": "Ryan Rickelton hit 3 sixes in 5 balls during his explosive powerplay knock against MI London on July 21 at Kia Oval.",
         "link": "https://espncricinfo.com/story/2026/ryan-rickelton-hundred-blitz",
-        "published_at": "2026-07-21 23:45 IST",
+        "published_at": "Jul 21, 2026 @ 11:45 PM IST",
         "player_name": "Ryan Rickelton",
         "franchise": "Sunrisers Leeds Men",
         "importance_score": 7.2,
@@ -331,7 +264,7 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "BBC Sport",
         "summary": "Mitchell Marsh opened the batting for Sunrisers Leeds Men with a power-packed 41 off 27 balls against MI London at Kia Oval.",
         "link": "https://bbc.com/sport/cricket/2026/mitchell-marsh-sunrisers-leeds",
-        "published_at": "2026-07-21 23:30 IST",
+        "published_at": "Jul 21, 2026 @ 11:30 PM IST",
         "player_name": "Mitchell Marsh",
         "franchise": "Sunrisers Leeds Men",
         "importance_score": 7.8,
@@ -342,7 +275,7 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "Sky Sports Cricket",
         "summary": "Deepti Sharma delivered a match-winning spell of 2/20, including a sharp caught-and-bowled dismissal of Hayley Matthews to restrict MI London.",
         "link": "https://skysports.com/cricket/news/2026/deepti-sharma-sunrisers-leeds",
-        "published_at": "2026-07-21 21:30 IST",
+        "published_at": "Jul 21, 2026 @ 09:30 PM IST",
         "player_name": "Deepti Sharma",
         "franchise": "Sunrisers Leeds Women",
         "importance_score": 8.0,
@@ -353,7 +286,7 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "Wisden",
         "summary": "Annabel Sutherland finished the chase unbeaten on 30* to guarantee Sunrisers Leeds Women a 7-wicket victory on July 21.",
         "link": "https://wisden.com/matches/2026/annabel-sutherland-win",
-        "published_at": "2026-07-21 21:15 IST",
+        "published_at": "Jul 21, 2026 @ 09:15 PM IST",
         "player_name": "Annabel Sutherland",
         "franchise": "Sunrisers Leeds Women",
         "importance_score": 7.5,
@@ -364,33 +297,11 @@ COMPLETE_73_PLAYER_UPDATES = [
         "source": "The Hundred Match Center",
         "summary": "Phoebe Litchfield top-scored with a rapid 43 off 26 balls to open Sunrisers Leeds Women's season in style at Kia Oval.",
         "link": "https://thehundred.com/news/2026/sunrisers-leeds-women-win-opener",
-        "published_at": "2026-07-21 21:00 IST",
+        "published_at": "Jul 21, 2026 @ 09:00 PM IST",
         "player_name": "Phoebe Litchfield",
         "franchise": "Sunrisers Leeds Women",
         "importance_score": 8.5,
         "category": "Batting Performance"
-    },
-    {
-        "title": "Hannah Baker Claims 2 Wickets in Sunrisers Leeds Season Opener",
-        "source": "Female Cricket",
-        "summary": "Leg-spinner Hannah Baker took 2 key middle-set wickets to choke MI London's scoring rate at Kia Oval.",
-        "link": "https://femalecricket.com/news/2026/hannah-baker-hundred",
-        "published_at": "2026-07-21 20:45 IST",
-        "player_name": "Hannah Baker",
-        "franchise": "Sunrisers Leeds Women",
-        "importance_score": 7.0,
-        "category": "Bowling Performance"
-    },
-    {
-        "title": "Lauren Winfield-Hill Executes Clean Glovework in Opening Win",
-        "source": "The Hundred Official",
-        "summary": "Lauren Winfield-Hill affected a sharp stumping and caught two behind in Sunrisers Leeds Women's victory on July 21.",
-        "link": "https://thehundred.com/news/2026/lauren-winfield-hill-keeping",
-        "published_at": "2026-07-21 20:30 IST",
-        "player_name": "Lauren Winfield-Hill",
-        "franchise": "Sunrisers Leeds Women",
-        "importance_score": 6.8,
-        "category": "Selection & Squad"
     }
 ]
 
@@ -478,10 +389,10 @@ def insert_news(title, source, summary, link, published_at, player_name, franchi
         return None
 
 def get_recent_news(limit=50):
-    """Gets recent news items strictly ordered by published_at / ID DESC."""
+    """Gets recent news items strictly ordered by id DESC / published_at."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM news ORDER BY published_at DESC, id DESC LIMIT ?", (limit,))
+    cursor.execute("SELECT * FROM news ORDER BY id DESC LIMIT ?", (limit,))
     rows = cursor.fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -494,7 +405,7 @@ def search_news(query):
     cursor.execute("""
         SELECT * FROM news 
         WHERE LOWER(title) LIKE ? OR LOWER(summary) LIKE ? OR LOWER(player_name) LIKE ?
-        ORDER BY published_at DESC, id DESC
+        ORDER BY id DESC
     """, (q, q, q))
     rows = cursor.fetchall()
     conn.close()

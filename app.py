@@ -1,6 +1,7 @@
 """
-@SRHXtra Global Command Center Dashboard (Ultra-Premium Responsive UI V2.0).
-Featuring Glassmorphism aesthetics, Google Fonts (Outfit & Inter), mobile responsiveness, and 2 core sections.
+@SRHXtra Global Command Center Dashboard (V2.2 Refined UI).
+Section 1: 30-Day Global Schedule Grouped by Date (12-hr AM/PM IST).
+Section 2: Player Reconnaissance & Updates sorted by Latest Posted IST Time (12-hr AM/PM IST).
 """
 
 import os
@@ -9,7 +10,7 @@ import pandas as pd
 from config.roster import MASTER_ROSTER
 from database.db_manager import init_db, get_recent_news, search_news
 from scrapers.rss_collector import fetch_and_filter_rss
-from utils.time_utils import format_ist_string
+from utils.time_utils import format_ist_12hr
 
 # Page Configuration
 st.set_page_config(
@@ -19,10 +20,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize Database
+# Initialize Database & Pre-seed Data
 init_db()
 
-# Premium Dark Glassmorphism CSS & Responsive Media Queries
+# Premium Dark Glassmorphism CSS & Responsive Spacing
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Outfit:wght@600;800;900&display=swap');
@@ -33,18 +34,15 @@ st.markdown("""
         color: #E2E8F0;
     }
     
-    /* Main Background Gradient */
     .stApp {
         background: radial-gradient(circle at 10% 20%, rgba(242, 101, 34, 0.08) 0%, rgba(11, 12, 16, 1) 90%);
     }
 
-    /* Sidebar Styling */
     section[data-testid="stSidebar"] {
         background-color: #12131C !important;
         border-right: 1px solid rgba(242, 101, 34, 0.25);
     }
     
-    /* Typography */
     h1, h2, h3, h4, .brand-title {
         font-family: 'Outfit', sans-serif;
         letter-spacing: -0.5px;
@@ -67,17 +65,28 @@ st.markdown("""
         font-weight: 400;
     }
 
-    /* Glassmorphism Cards */
+    .date-header {
+        background: linear-gradient(90deg, rgba(242, 101, 34, 0.2) 0%, rgba(18, 19, 28, 0.8) 100%);
+        border-left: 4px solid #F26522;
+        padding: 0.6rem 1.2rem;
+        border-radius: 8px;
+        margin-top: 1.5rem;
+        margin-bottom: 1rem;
+        font-weight: 800;
+        font-size: 1.3rem;
+        color: #FF8844;
+    }
+
     .glass-card {
         background: rgba(22, 24, 34, 0.75);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
         border: 1px solid rgba(242, 101, 34, 0.18);
-        border-radius: 14px;
-        padding: 1.4rem;
+        border-radius: 12px;
+        padding: 1.3rem;
         margin-bottom: 1.2rem;
         box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        transition: transform 0.2s ease, border-color 0.2s ease;
+        transition: transform 0.2s ease;
     }
     
     .glass-card:hover {
@@ -85,35 +94,24 @@ st.markdown("""
         border-color: rgba(242, 101, 34, 0.45);
     }
 
-    /* Schedule Card Timeline */
-    .schedule-card {
-        background: linear-gradient(135deg, rgba(26, 28, 42, 0.8) 0%, rgba(15, 17, 26, 0.9) 100%);
-        border-left: 5px solid #F26522;
-        border-radius: 12px;
-        padding: 1.2rem;
-        margin-bottom: 1rem;
-    }
-
-    /* Priority News Card */
     .priority-card {
         background: linear-gradient(135deg, rgba(42, 22, 18, 0.85) 0%, rgba(20, 12, 10, 0.95) 100%);
         border-left: 5px solid #FF3D00;
         border-radius: 12px;
-        padding: 1.2rem;
-        margin-bottom: 1rem;
+        padding: 1.3rem;
+        margin-bottom: 1.2rem;
     }
     
-    /* Custom Badges */
     .badge-time {
-        background: rgba(242, 101, 34, 0.15);
-        color: #FF7733;
-        border: 1px solid rgba(242, 101, 34, 0.3);
+        background: rgba(242, 101, 34, 0.18);
+        color: #FF8844;
+        border: 1px solid rgba(242, 101, 34, 0.35);
         padding: 4px 10px;
         border-radius: 20px;
         font-size: 0.85rem;
         font-weight: 600;
         display: inline-block;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.4rem;
     }
     
     .badge-squad {
@@ -127,18 +125,17 @@ st.markdown("""
         display: inline-block;
     }
 
-    /* Mobile Device Responsiveness */
     @media (max-width: 768px) {
         .brand-title { font-size: 2.1rem; }
-        .glass-card, .schedule-card, .priority-card { padding: 1rem; }
+        .glass-card, .priority-card { padding: 1rem; }
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Sidebar Header & Filters
+# Sidebar
 st.sidebar.markdown("# 🧡 @SRHXtra")
-st.sidebar.markdown("**Global Command Center V2.0**")
-st.sidebar.markdown(f"🕒 **Current IST:** `{format_ist_string()}`")
+st.sidebar.markdown("**Global Command Center V2.2**")
+st.sidebar.markdown(f"🕒 **Current IST:** `{format_ist_12hr()}`")
 
 st.sidebar.markdown("---")
 franchise_filter = st.sidebar.selectbox(
@@ -146,17 +143,17 @@ franchise_filter = st.sidebar.selectbox(
     ["All", "Sunrisers Hyderabad", "Sunrisers Eastern Cape", "Sunrisers Leeds Men", "Sunrisers Leeds Women"]
 )
 
-if st.sidebar.button("⚡ Live Refresh 16 Feeds"):
-    with st.spinner("Polling 16 global cricket sources with retry logic..."):
+if st.sidebar.button("⚡ Live Refresh Feeds"):
+    with st.spinner("Polling 16 global cricket sources..."):
         count = fetch_and_filter_rss()
         st.sidebar.success(f"Captured {count} new Sunrisers items!")
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("### 🌐 Remote Access / Any-Device Hosting")
+st.sidebar.markdown("### 🌐 Remote Access")
 st.sidebar.info("""
 **View from any phone or device:**
-1. **Local Network:** `http://<YOUR_LOCAL_IP>:8501`
-2. **Cloud Hosting:** Push to GitHub & deploy free on [Streamlit Community Cloud](https://streamlit.io/cloud).
+1. **Local Wi-Fi:** `http://192.168.1.130:8501`
+2. **Live Cloud URL:** [https://srhtrack.streamlit.app/](https://srhtrack.streamlit.app/)
 """)
 
 # Dashboard Brand Header
@@ -165,79 +162,102 @@ st.markdown("<div class='brand-subtitle'>Unified 2-Section Operations Desk | 73 
 
 # Main Navigation Tabs
 tab_schedule, tab_news = st.tabs([
-    "🗓️ SECTION 1: 30-DAY GLOBAL SCHEDULE (IST)",
-    "📰 SECTION 2: PLAYER RECONNAISSANCE & UPDATES (IST)"
+    "🗓️ SECTION 1: 30-DAY GLOBAL SCHEDULE (GROUPED BY DATE)",
+    "📰 SECTION 2: PLAYER RECONNAISSANCE & UPDATES (SORTED BY LATEST IST TIME)"
 ])
 
 # ---------------------------------------------------------
-# SECTION 1: 30-DAY GLOBAL SCHEDULE (IST)
+# SECTION 1: 30-DAY GLOBAL SCHEDULE (GROUPED BY DATE IN 12-HR IST)
 # ---------------------------------------------------------
 with tab_schedule:
-    st.subheader("🗓️ 30-Day Fixture Calendar (Sorted Chronologically by Date & Start Time)")
-    st.caption("All match timings strictly converted to Indian Standard Time (IST).")
+    st.subheader("🗓️ 30-Day Fixture Calendar (Grouped by Date | Timings in 12-Hour AM/PM IST)")
     
-    schedules = [
-        {"date": "2026-07-25", "time": "03:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Dani Gibson (C), Phoebe Litchfield, Deepti Sharma, Annabel Sutherland & Squad", "vs": "Southern Brave Women", "league": "The Hundred Women"},
-        {"date": "2026-07-25", "time": "04:30 PM IST", "squad": "Sunrisers Hyderabad (India)", "players": "Abhishek Sharma, Ishan Kishan, Harsh Dubey", "vs": "Zimbabwe", "league": "India Tour of Zimbabwe - 2nd T20I"},
-        {"date": "2026-07-25", "time": "07:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Zak Crawley (C), Harry Brook, Mitchell Marsh, Brydon Carse, Ryan Rickelton & Squad", "vs": "Southern Brave Men", "league": "The Hundred Men"},
-        {"date": "2026-07-25", "time": "07:00 PM IST", "squad": "Sunrisers Eastern Cape", "players": "Quinton de Kock, James Coles (Southern Brave)", "vs": "Sunrisers Leeds Men", "league": "The Hundred Men"},
-        {"date": "2026-07-25", "time": "10:30 PM IST", "squad": "Sunrisers Eastern Cape", "players": "Tristan Stubbs (C), Marco Jansen (MI London)", "vs": "Welsh Fire", "league": "The Hundred Men"},
+    raw_schedules = [
+        # July 25, 2026
+        {"date": "July 25, 2026", "time": "03:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Dani Gibson (C), Phoebe Litchfield, Deepti Sharma, Annabel Sutherland, Bryony Smith, Flo Miller, Lauren Winfield-Hill & Squad", "vs": "Southern Brave Women", "league": "The Hundred Women"},
+        {"date": "July 25, 2026", "time": "04:30 PM IST", "squad": "Sunrisers Hyderabad (India)", "players": "Abhishek Sharma, Ishan Kishan, Harsh Dubey", "vs": "Zimbabwe", "league": "India Tour of Zimbabwe - 2nd T20I"},
+        {"date": "July 25, 2026", "time": "07:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Zak Crawley (C), Harry Brook, Mitchell Marsh, Brydon Carse, Ryan Rickelton, Reece Topley & Squad", "vs": "Southern Brave Men", "league": "The Hundred Men"},
+        {"date": "July 25, 2026", "time": "07:00 PM IST", "squad": "Sunrisers Eastern Cape", "players": "Quinton de Kock, James Coles (Southern Brave)", "vs": "Sunrisers Leeds Men", "league": "The Hundred Men"},
+        {"date": "July 25, 2026", "time": "10:30 PM IST", "squad": "Sunrisers Eastern Cape", "players": "Tristan Stubbs (C), Marco Jansen (MI London)", "vs": "Welsh Fire", "league": "The Hundred Men"},
         
-        {"date": "2026-07-26", "time": "04:30 PM IST", "squad": "Sunrisers Hyderabad (India)", "players": "Abhishek Sharma, Ishan Kishan, Harsh Dubey", "vs": "Zimbabwe", "league": "India Tour of Zimbabwe - 3rd T20I"},
-        {"date": "2026-07-26", "time": "10:30 PM IST", "squad": "SRH & SEC Stars", "players": "Heinrich Klaasen (SRH), Jonny Bairstow (SEC), Liam Livingstone (SRH)", "vs": "Trent Rockets", "league": "The Hundred Men"},
+        # July 26, 2026
+        {"date": "July 26, 2026", "time": "04:30 PM IST", "squad": "Sunrisers Hyderabad (India)", "players": "Abhishek Sharma, Ishan Kishan, Harsh Dubey", "vs": "Zimbabwe", "league": "India Tour of Zimbabwe - 3rd T20I"},
+        {"date": "July 26, 2026", "time": "10:30 PM IST", "squad": "SRH & SEC Stars", "players": "Heinrich Klaasen (SRH), Jonny Bairstow (SEC), Liam Livingstone (SRH)", "vs": "Trent Rockets", "league": "The Hundred Men"},
         
-        {"date": "2026-07-27", "time": "11:00 PM IST", "squad": "Sunrisers Eastern Cape Showcase", "players": "Quinton de Kock, James Coles vs Tristan Stubbs, Marco Jansen", "vs": "MI London vs Southern Brave", "league": "The Hundred Men"},
+        # July 27, 2026
+        {"date": "July 27, 2026", "time": "11:00 PM IST", "squad": "Sunrisers Eastern Cape Showcase", "players": "Quinton de Kock, James Coles vs Tristan Stubbs, Marco Jansen", "vs": "MI London vs Southern Brave", "league": "The Hundred Men"},
         
-        {"date": "2026-07-28", "time": "07:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Dani Gibson, Phoebe Litchfield, Deepti Sharma & Squad", "vs": "Manchester Super Giants Women", "league": "The Hundred Women"},
-        {"date": "2026-07-28", "time": "11:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Harry Brook, Mitchell Marsh, Brydon Carse & Squad", "vs": "Manchester Super Giants Men", "league": "The Hundred Men"},
+        # July 28, 2026
+        {"date": "July 28, 2026", "time": "07:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Dani Gibson, Phoebe Litchfield, Deepti Sharma & Squad", "vs": "Manchester Super Giants Women", "league": "The Hundred Women"},
+        {"date": "July 28, 2026", "time": "11:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Harry Brook, Mitchell Marsh, Brydon Carse & Squad", "vs": "Manchester Super Giants Men", "league": "The Hundred Men"},
         
-        {"date": "2026-07-29", "time": "11:00 PM IST", "squad": "SRH & SEC Stars", "players": "Heinrich Klaasen, Jonny Bairstow vs Tristan Stubbs, Marco Jansen", "vs": "London Spirit vs MI London", "league": "The Hundred Men"},
+        # July 29, 2026
+        {"date": "July 29, 2026", "time": "11:00 PM IST", "squad": "SRH & SEC Stars", "players": "Heinrich Klaasen, Jonny Bairstow vs Tristan Stubbs, Marco Jansen", "vs": "London Spirit vs MI London", "league": "The Hundred Men"},
         
-        {"date": "2026-08-01", "time": "07:00 PM IST", "squad": "SRH & SEC Stars", "players": "Heinrich Klaasen, Jonny Bairstow vs Quinton de Kock, James Coles", "vs": "London Spirit vs Southern Brave", "league": "The Hundred Men"},
+        # August 01, 2026
+        {"date": "August 01, 2026", "time": "07:00 PM IST", "squad": "SRH & SEC Stars", "players": "Heinrich Klaasen, Jonny Bairstow vs Quinton de Kock, James Coles", "vs": "London Spirit vs Southern Brave", "league": "The Hundred Men"},
         
-        {"date": "2026-08-02", "time": "03:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Phoebe Litchfield, Deepti Sharma & Squad", "vs": "Trent Rockets Women", "league": "The Hundred Women"},
-        {"date": "2026-08-02", "time": "07:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Mitchell Marsh, Brydon Carse & Squad", "vs": "Trent Rockets Men", "league": "The Hundred Men"},
-        {"date": "2026-08-02", "time": "11:00 PM IST", "squad": "Sunrisers Eastern Cape", "players": "Tristan Stubbs, Marco Jansen (MI London)", "vs": "Manchester Super Giants", "league": "The Hundred Men"},
+        # August 02, 2026
+        {"date": "August 02, 2026", "time": "03:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Phoebe Litchfield, Deepti Sharma & Squad", "vs": "Trent Rockets Women", "league": "The Hundred Women"},
+        {"date": "August 02, 2026", "time": "07:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Mitchell Marsh, Brydon Carse & Squad", "vs": "Trent Rockets Men", "league": "The Hundred Men"},
+        {"date": "August 02, 2026", "time": "11:00 PM IST", "squad": "Sunrisers Eastern Cape", "players": "Tristan Stubbs, Marco Jansen (MI London)", "vs": "Manchester Super Giants", "league": "The Hundred Men"},
         
-        {"date": "2026-08-04", "time": "07:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Dani Gibson, Phoebe Litchfield, Deepti Sharma & Squad", "vs": "London Spirit Women", "league": "The Hundred Women"},
-        {"date": "2026-08-04", "time": "11:00 PM IST", "squad": "Sunrisers Leeds Men vs London Spirit", "players": "Brydon Carse, Mitchell Marsh vs Heinrich Klaasen, Jonny Bairstow", "vs": "London Spirit", "league": "The Hundred Men"},
+        # August 04, 2026
+        {"date": "August 04, 2026", "time": "07:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Dani Gibson, Phoebe Litchfield, Deepti Sharma & Squad", "vs": "London Spirit Women", "league": "The Hundred Women"},
+        {"date": "August 04, 2026", "time": "11:00 PM IST", "squad": "Sunrisers Leeds Men vs London Spirit", "players": "Brydon Carse, Mitchell Marsh vs Heinrich Klaasen, Jonny Bairstow", "vs": "London Spirit", "league": "The Hundred Men"},
         
-        {"date": "2026-08-07", "time": "07:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Phoebe Litchfield, Deepti Sharma & Squad", "vs": "Welsh Fire Women", "league": "The Hundred Women"},
-        {"date": "2026-08-07", "time": "11:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Harry Brook, Mitchell Marsh, Brydon Carse & Squad", "vs": "Welsh Fire Men", "league": "The Hundred Men"},
+        # August 07, 2026
+        {"date": "August 07, 2026", "time": "07:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Phoebe Litchfield, Deepti Sharma & Squad", "vs": "Welsh Fire Women", "league": "The Hundred Women"},
+        {"date": "August 07, 2026", "time": "11:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Harry Brook, Mitchell Marsh, Brydon Carse & Squad", "vs": "Welsh Fire Men", "league": "The Hundred Men"},
         
-        {"date": "2026-08-09", "time": "03:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Dani Gibson, Phoebe Litchfield, Deepti Sharma & Squad", "vs": "Birmingham Phoenix Women", "league": "The Hundred Women"},
-        {"date": "2026-08-09", "time": "07:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Harry Brook, Mitchell Marsh, Brydon Carse & Squad", "vs": "Birmingham Phoenix Men", "league": "The Hundred Men"},
+        # August 09, 2026
+        {"date": "August 09, 2026", "time": "03:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Dani Gibson, Phoebe Litchfield, Deepti Sharma & Squad", "vs": "Birmingham Phoenix Women", "league": "The Hundred Women"},
+        {"date": "August 09, 2026", "time": "07:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Harry Brook, Mitchell Marsh, Brydon Carse & Squad", "vs": "Birmingham Phoenix Men", "league": "The Hundred Men"},
         
-        {"date": "2026-08-12", "time": "07:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Dani Gibson, Phoebe Litchfield, Deepti Sharma & Squad", "vs": "MI London Women", "league": "The Hundred Women"},
-        {"date": "2026-08-12", "time": "11:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Harry Brook, Mitchell Marsh vs Tristan Stubbs, Marco Jansen", "vs": "MI London Men", "league": "The Hundred Men"},
+        # August 12, 2026
+        {"date": "August 12, 2026", "time": "07:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Dani Gibson, Phoebe Litchfield, Deepti Sharma & Squad", "vs": "MI London Women", "league": "The Hundred Women"},
+        {"date": "August 12, 2026", "time": "11:00 PM IST", "squad": "Sunrisers Leeds Men vs MI London", "players": "Harry Brook, Mitchell Marsh vs Tristan Stubbs, Marco Jansen", "vs": "MI London Men", "league": "The Hundred Men"},
         
-        {"date": "2026-08-15", "time": "10:00 AM IST", "squad": "Sri Lanka & India Tests", "players": "Kamindu Mendis (SL) vs Ishan Kishan, Mohammed Shami, Nitish Kumar Reddy (IND)", "vs": "India vs Sri Lanka (1st Test - Day 1)", "league": "ICC World Test Championship"},
-        {"date": "2026-08-16", "time": "10:00 AM IST", "squad": "Sri Lanka & India Tests", "players": "Kamindu Mendis (SL) vs Ishan Kishan, Mohammed Shami, Nitish Kumar Reddy (IND)", "vs": "India vs Sri Lanka (1st Test - Day 2)", "league": "ICC World Test Championship"},
-        {"date": "2026-08-16", "time": "06:45 PM IST", "squad": "The Hundred Women Final", "players": "Sunrisers Leeds Women (TBD)", "vs": "Final Opponent", "league": "The Hundred Women Final"},
-        {"date": "2026-08-16", "time": "10:30 PM IST", "squad": "The Hundred Men Final", "players": "Sunrisers Leeds Men / Heinrich Klaasen / Tristan Stubbs (TBD)", "vs": "Final Opponent", "league": "The Hundred Men Final"}
+        # August 15, 2026
+        {"date": "August 15, 2026", "time": "10:00 AM IST", "squad": "Sri Lanka & India Tests", "players": "Kamindu Mendis (SL) vs Ishan Kishan, Mohammed Shami, Nitish Kumar Reddy (IND)", "vs": "India vs Sri Lanka (1st Test - Day 1)", "league": "ICC World Test Championship"},
+        
+        # August 16, 2026
+        {"date": "August 16, 2026", "time": "10:00 AM IST", "squad": "Sri Lanka & India Tests", "players": "Kamindu Mendis (SL) vs Ishan Kishan, Mohammed Shami, Nitish Kumar Reddy (IND)", "vs": "India vs Sri Lanka (1st Test - Day 2)", "league": "ICC World Test Championship"},
+        {"date": "August 16, 2026", "time": "06:45 PM IST", "squad": "The Hundred Women Final", "players": "Sunrisers Leeds Women (TBD)", "vs": "Final Opponent", "league": "The Hundred Women Final"},
+        {"date": "August 16, 2026", "time": "10:30 PM IST", "squad": "The Hundred Men Final", "players": "Sunrisers Leeds Men / Heinrich Klaasen / Tristan Stubbs (TBD)", "vs": "Final Opponent", "league": "The Hundred Men Final"}
     ]
     
-    # Filter schedule
+    # Filter Domain
     if franchise_filter != "All":
-        filtered_sched = [s for s in schedules if franchise_filter in s["squad"] or franchise_filter in s["players"] or "SRH" in s["squad"]]
+        filtered_sched = [s for s in raw_schedules if franchise_filter in s["squad"] or franchise_filter in s["players"] or "SRH" in s["squad"]]
     else:
-        filtered_sched = schedules
+        filtered_sched = raw_schedules
         
+    # Group By Date
+    grouped_dates = {}
     for item in filtered_sched:
-        st.markdown(f"""
-        <div class='schedule-card'>
-            <div><span class='badge-time'>📅 {item['date']} @ {item['time']}</span> <span class='badge-squad'>{item['squad']}</span></div>
-            <h3 style='margin: 0.4rem 0; color: #FFFFFF;'>vs {item['vs']}</h3>
-            <p style='color: #CBD5E1; margin-bottom: 0.2rem;'><strong>Squad Players:</strong> {item['players']}</p>
-            <small style='color: #64748B;'>Tournament: {item['league']}</small>
-        </div>
-        """, unsafe_allow_html=True)
+        d = item["date"]
+        if d not in grouped_dates:
+            grouped_dates[d] = []
+        grouped_dates[d].append(item)
+        
+    for date_str, items in grouped_dates.items():
+        st.markdown(f"<div class='date-header'>📅 {date_str}</div>", unsafe_allow_html=True)
+        for item in items:
+            st.markdown(f"""
+            <div class='glass-card'>
+                <div><span class='badge-time'>⏰ {item['time']}</span> <span class='badge-squad'>{item['squad']}</span></div>
+                <h3 style='margin: 0.3rem 0; color: #FFFFFF;'>vs {item['vs']}</h3>
+                <p style='color: #CBD5E1; margin-bottom: 0.2rem;'><strong>Squad Players:</strong> {item['players']}</p>
+                <small style='color: #64748B;'>Tournament: {item['league']}</small>
+            </div>
+            """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# SECTION 2: PLAYER RECONNAISSANCE & UPDATES (IST)
+# SECTION 2: PLAYER RECONNAISSANCE & UPDATES (12-HR AM/PM IST SORTED LATEST FIRST)
 # ---------------------------------------------------------
 with tab_news:
-    st.subheader("📰 Player Reconnaissance & News (Sorted Latest First by IST Timestamp)")
+    st.subheader("📰 Player Reconnaissance & Updates (Sorted Latest First by 12-Hour AM/PM IST Time)")
     
     news_list = get_recent_news(limit=50)
     
@@ -251,13 +271,13 @@ with tab_news:
             <div class='{card_style}'>
                 <div><span class='badge-time'>🕒 {n['published_at']}</span> <span class='badge-squad'>{n['franchise']}</span></div>
                 <h3 style='margin: 0.4rem 0; color: #FFFFFF;'>👤 {n['player_name']} — {n['title']}</h3>
-                <p style='color: #CBD5E1; font-size: 1rem; line-height: 1.5;'>{n['summary']}</p>
-                <div style='display: flex; gap: 1rem; font-size: 0.85rem; color: #94A3B8; margin-top: 0.5rem;'>
-                    <span>Category: <strong>{n['category']}</strong></span>
-                    <span>Impact Score: <strong>🔥 {n['importance_score']}/10</strong></span>
-                    <span>Source: <strong>{n['source']}</strong></span>
+                <p style='color: #CBD5E1; font-size: 1.02rem; line-height: 1.5; margin-bottom: 0.6rem;'>{n['summary']}</p>
+                <div style='display: flex; gap: 1.2rem; font-size: 0.85rem; color: #94A3B8;'>
+                    <span>Category: <strong style='color: #E2E8F0;'>{n['category']}</strong></span>
+                    <span>Impact Rating: <strong style='color: #FF8844;'>🔥 {n['importance_score']}/10</strong></span>
+                    <span>Source: <strong style='color: #E2E8F0;'>{n['source']}</strong></span>
                 </div>
             </div>
             """, unsafe_allow_html=True)
     else:
-        st.info("No player updates captured yet. Click 'Live Refresh 16 Feeds' in the sidebar!")
+        st.info("No player updates captured yet. Click 'Live Refresh Feeds' in the sidebar!")
