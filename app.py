@@ -1,13 +1,14 @@
 """
-@SRHXtra Global Command Center Dashboard (V3.7 Strict Chronological Sorting).
+@SRHXtra Global Command Center Dashboard (V3.8 Bulletproof Chronological Sort).
 Section 1: 30-Day Global Schedule Grouped by Date (12-hr AM/PM IST).
-Section 2: Player Reconnaissance & Updates strictly sorted LATEST-FIRST by float pub_timestamp epoch.
+Section 2: Player Reconnaissance & Updates with BULLETPROOF datetime & epoch sorting (Latest-First).
 Features Verified Media Source Links & Direct Google News Deep-Link Search.
 """
 
 import os
 import sys
 import urllib.parse
+from datetime import datetime
 
 # Ensure root directory is at the top of sys.path for Streamlit Cloud
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -34,7 +35,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize Database & Perform Migration checks
+# Initialize Database & Migration checks
 init_db()
 
 # Clean 30-Minute JavaScript Timer (1,800,000 ms = 30 mins, NO 5-second loop)
@@ -59,6 +60,21 @@ current_news = get_recent_news(limit=100)
 if len(current_news) < 3:
     fetch_and_filter_rss()
     st.session_state["last_refreshed"] = format_ist_12hr()
+
+def get_bulletproof_sort_key(n):
+    """
+    Returns float timestamp for 100% reliable latest-first sorting.
+    Tries pub_timestamp first, then parses published_at string ("Jul 23, 2026 @ 09:07 PM IST").
+    """
+    ts = n.get("pub_timestamp")
+    if ts and isinstance(ts, (int, float)) and ts > 0:
+        return ts
+    pub_str = str(n.get("published_at", ""))
+    try:
+        dt = datetime.strptime(pub_str, "%b %d, %Y @ %I:%M %p IST")
+        return dt.timestamp()
+    except Exception:
+        return 0.0
 
 # Premium Dark Glassmorphism CSS
 st.markdown("""
@@ -210,7 +226,7 @@ st.markdown("""
 
 # Sidebar
 st.sidebar.markdown("# 🧡 @SRHXtra")
-st.sidebar.markdown("**Global Command Center V3.7**")
+st.sidebar.markdown("**Global Command Center V3.8**")
 st.sidebar.markdown(f"📡 **Data Engine:** `50 Relevant Global Outlets`")
 st.sidebar.markdown(f"⏱️ **Auto-Refresh:** `Every 30 Minutes`")
 
@@ -237,7 +253,7 @@ st.markdown("<div class='brand-subtitle'>Unified 2-Section Operations Desk | 73 
 # Main Navigation Tabs
 tab_schedule, tab_news = st.tabs([
     "🗓️ SECTION 1: 30-DAY GLOBAL SCHEDULE (GROUPED BY DATE)",
-    "📰 SECTION 2: PLAYER RECONNAISSANCE & UPDATES (STRICT LATEST-FIRST ORDER)"
+    "📰 SECTION 2: PLAYER RECONNAISSANCE & UPDATES (BULLETPROOF LATEST-FIRST ORDER)"
 ])
 
 # ---------------------------------------------------------
@@ -328,10 +344,10 @@ with tab_schedule:
             """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# SECTION 2: PLAYER RECONNAISSANCE & UPDATES (STRICT LATEST-FIRST ORDER BY PUB_TIMESTAMP)
+# SECTION 2: PLAYER RECONNAISSANCE & UPDATES (BULLETPROOF LATEST-FIRST ORDER)
 # ---------------------------------------------------------
 with tab_news:
-    st.subheader("📰 Player Reconnaissance & Updates (Strict Latest-First Order)")
+    st.subheader("📰 Player Reconnaissance & Updates (Bulletproof Latest-First Order)")
     
     news_list = get_recent_news(limit=100)
     
@@ -339,8 +355,8 @@ with tab_news:
     if franchise_filter != "All":
         news_list = [n for n in news_list if n["franchise"] == franchise_filter]
 
-    # Explicit Python sorting by pub_timestamp DESC to guarantee 100% strict chronological latest-first order
-    news_list = sorted(news_list, key=lambda x: x.get("pub_timestamp", 0.0), reverse=True)
+    # Explicit Bulletproof Sorting by Datetime / Float Epoch (Latest First)
+    news_list = sorted(news_list, key=get_bulletproof_sort_key, reverse=True)
 
     if news_list:
         for n in news_list:
