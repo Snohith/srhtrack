@@ -1,7 +1,7 @@
 """
-@SRHXtra Global Command Center Dashboard (V3.6 Verified Live Engine).
+@SRHXtra Global Command Center Dashboard (V3.7 Strict Chronological Sorting).
 Section 1: 30-Day Global Schedule Grouped by Date (12-hr AM/PM IST).
-Section 2: Player Reconnaissance & Updates with TRUE original article publication dates in 12-Hour AM/PM IST.
+Section 2: Player Reconnaissance & Updates strictly sorted LATEST-FIRST by float pub_timestamp epoch.
 Features Verified Media Source Links & Direct Google News Deep-Link Search.
 """
 
@@ -34,7 +34,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize Database & Purge Legacy Rows
+# Initialize Database & Perform Migration checks
 init_db()
 
 # Clean 30-Minute JavaScript Timer (1,800,000 ms = 30 mins, NO 5-second loop)
@@ -55,7 +55,7 @@ if "last_refreshed" not in st.session_state:
     st.session_state["last_refreshed"] = format_ist_12hr()
 
 # Auto-ingest fresh live RSS if database has < 3 items
-current_news = get_recent_news(limit=50)
+current_news = get_recent_news(limit=100)
 if len(current_news) < 3:
     fetch_and_filter_rss()
     st.session_state["last_refreshed"] = format_ist_12hr()
@@ -210,7 +210,7 @@ st.markdown("""
 
 # Sidebar
 st.sidebar.markdown("# 🧡 @SRHXtra")
-st.sidebar.markdown("**Global Command Center V3.6**")
+st.sidebar.markdown("**Global Command Center V3.7**")
 st.sidebar.markdown(f"📡 **Data Engine:** `50 Relevant Global Outlets`")
 st.sidebar.markdown(f"⏱️ **Auto-Refresh:** `Every 30 Minutes`")
 
@@ -237,7 +237,7 @@ st.markdown("<div class='brand-subtitle'>Unified 2-Section Operations Desk | 73 
 # Main Navigation Tabs
 tab_schedule, tab_news = st.tabs([
     "🗓️ SECTION 1: 30-DAY GLOBAL SCHEDULE (GROUPED BY DATE)",
-    "📰 SECTION 2: PLAYER RECONNAISSANCE & UPDATES (VERIFIED MEDIA LINKS)"
+    "📰 SECTION 2: PLAYER RECONNAISSANCE & UPDATES (STRICT LATEST-FIRST ORDER)"
 ])
 
 # ---------------------------------------------------------
@@ -328,16 +328,19 @@ with tab_schedule:
             """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# SECTION 2: PLAYER RECONNAISSANCE & UPDATES (WITH DIRECT CLICKABLE SOURCE & DEEP SEARCH LINKS)
+# SECTION 2: PLAYER RECONNAISSANCE & UPDATES (STRICT LATEST-FIRST ORDER BY PUB_TIMESTAMP)
 # ---------------------------------------------------------
 with tab_news:
-    st.subheader("📰 Player Reconnaissance & Updates (Sorted Latest-First | Working Media Links)")
+    st.subheader("📰 Player Reconnaissance & Updates (Strict Latest-First Order)")
     
-    news_list = get_recent_news(limit=50)
+    news_list = get_recent_news(limit=100)
     
     # Filter Domain for News
     if franchise_filter != "All":
         news_list = [n for n in news_list if n["franchise"] == franchise_filter]
+
+    # Explicit Python sorting by pub_timestamp DESC to guarantee 100% strict chronological latest-first order
+    news_list = sorted(news_list, key=lambda x: x.get("pub_timestamp", 0.0), reverse=True)
 
     if news_list:
         for n in news_list:

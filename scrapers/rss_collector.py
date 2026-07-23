@@ -1,7 +1,7 @@
 """
-Expanded RSS Feed Collector for @SRHXtra V3.5.
+Expanded RSS Feed Collector for @SRHXtra V3.6.
 Features 50 Top-Tier Relevant Global Cricket Data & Media Outlets.
-Stores ORIGINAL article publication timestamps in 12-Hour AM/PM IST and filters out outdated items (>72h).
+Stores ORIGINAL article publication timestamps & numeric epoch floats for strict latest-first sorting.
 """
 
 import time
@@ -112,8 +112,8 @@ def fetch_and_filter_rss():
             summary = clean_text(entry.get("summary", "") or entry.get("description", ""))
             link = entry.get("link", "")
             
-            # Parse TRUE original article publication date in IST & calculate age
-            pub_date, age_hours, _ = parse_rss_date_to_ist(entry)
+            # Parse TRUE original article publication date in IST & calculate numeric pub_ts
+            pub_date, age_hours, pub_ts = parse_rss_date_to_ist(entry)
             
             # Discard outdated articles (>72 hours old) to guarantee fresh news
             if age_hours > 72.0:
@@ -134,7 +134,8 @@ def fetch_and_filter_rss():
                         player_name=mp["player_name"],
                         franchise=mp["franchise"],
                         importance_score=score,
-                        category=category
+                        category=category,
+                        pub_timestamp=pub_ts
                     )
                     
                     if news_id:

@@ -1,6 +1,6 @@
 """
-Database Manager for @SRHXtra SQLite Memory layer (V5.1 Clean).
-Ensures legacy timestamp purging and 100% real live original date storage.
+Database Manager for @SRHXtra SQLite Memory layer (V5.2 Strict Chronological Epoch Sorting).
+Stores pub_timestamp numeric float and orders all Section 2 news strictly BY pub_timestamp DESC.
 """
 
 import os
@@ -19,7 +19,7 @@ def get_connection():
     return conn
 
 def init_db():
-    """Initializes database schema, purges legacy hardcoded timestamp rows, and ensures 73-player roster."""
+    """Initializes database schema, handles schema migrations, and purges legacy non-chronological rows."""
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -27,15 +27,16 @@ def init_db():
         with open(SCHEMA_PATH, "r") as f:
             cursor.executescript(f.read())
         conn.commit()
-        
-        # Purge legacy database entries containing hardcoded 04:24 / 04:20 IST timestamps
-        cursor.execute("""
-            DELETE FROM news 
-            WHERE published_at LIKE '%04:24 AM IST%' 
-               OR published_at LIKE '%04:20 AM IST%' 
-               OR published_at LIKE '%04:22 AM IST%'
-               OR published_at LIKE '%04:25 AM IST%'
-        """)
+
+        # Schema migration check: ensure pub_timestamp column exists
+        cursor.execute("PRAGMA table_info(news)")
+        columns = [c["name"] for c in cursor.fetchall()]
+        if "pub_timestamp" not in columns:
+            cursor.execute("ALTER TABLE news ADD COLUMN pub_timestamp REAL DEFAULT 0.0")
+            conn.commit()
+            
+        # Purge legacy rows that lacked pub_timestamp
+        cursor.execute("DELETE FROM news WHERE pub_timestamp IS NULL OR pub_timestamp = 0.0")
         conn.commit()
 
         # Populate Master Roster of 73 Players
@@ -70,9 +71,9 @@ def extract_topic_keywords(title):
     ignore = {"cricket", "india", "england", "australia", "south", "africa", "first", "second", "third", "match", "series"}
     return [w for w in words if w not in ignore]
 
-def insert_or_consolidate_news(title, source, summary, link, published_at, player_name, franchise, importance_score, category):
+def insert_or_consolidate_news(title, source, summary, link, published_at, player_name, franchise, importance_score, category, pub_timestamp=0.0):
     """
-    Inserts a real live RSS news article.
+    Inserts a real live RSS news article with numeric pub_timestamp.
     If an article about the SAME TOPIC for the same player already exists, consolidates sources and links into ONE single card!
     """
     conn = get_connection()
@@ -87,7 +88,7 @@ def insert_or_consolidate_news(title, source, summary, link, published_at, playe
                 return None
 
         # Check single-topic duplicate (Same Player + matching key topic words)
-        cursor.execute("SELECT id, title, source, link, importance_score FROM news WHERE player_name = ?", (player_name,))
+        cursor.execute("SELECT id, title, source, link, importance_score, pub_timestamp FROM news WHERE player_name = ?", (player_name,))
         player_news = cursor.fetchall()
         
         new_keywords = set(extract_topic_keywords(title))
@@ -103,12 +104,13 @@ def insert_or_consolidate_news(title, source, summary, link, published_at, playe
                     updated_sources = ", ".join(existing_sources + [source])
                     updated_links = ", ".join(existing_links + [link])
                     max_score = max(row["importance_score"], importance_score)
+                    latest_ts = max(row["pub_timestamp"], pub_timestamp)
                     
                     cursor.execute("""
                         UPDATE news 
-                        SET source = ?, link = ?, importance_score = ?
+                        SET source = ?, link = ?, importance_score = ?, pub_timestamp = ?
                         WHERE id = ?
-                    """, (updated_sources, updated_links, max_score, row["id"]))
+                    """, (updated_sources, updated_links, max_score, latest_ts, row["id"]))
                     conn.commit()
                     db_logger.info(f"Consolidated new source '{source}' into existing topic for {player_name}.")
                 
@@ -117,9 +119,9 @@ def insert_or_consolidate_news(title, source, summary, link, published_at, playe
 
         # Insert as new unique topic card
         cursor.execute("""
-            INSERT INTO news (title, source, summary, link, published_at, player_name, franchise, importance_score, category)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (title, source, summary, link, published_at, player_name, franchise, importance_score, category))
+            INSERT INTO news (title, source, summary, link, published_at, pub_timestamp, player_name, franchise, importance_score, category)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (title, source, summary, link, published_at, pub_timestamp, player_name, franchise, importance_score, category))
         conn.commit()
         news_id = cursor.lastrowid
         conn.close()
@@ -131,10 +133,10 @@ def insert_or_consolidate_news(title, source, summary, link, published_at, playe
         return None
 
 def get_recent_news(limit=100):
-    """Gets recent scraped live news items ordered strictly by ID DESC (newest scraped articles first)."""
+    """Gets recent scraped live news items ordered strictly BY pub_timestamp DESC (latest published timestamp first)."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM news ORDER BY id DESC LIMIT ?", (limit,))
+    cursor.execute("SELECT * FROM news ORDER BY pub_timestamp DESC, id DESC LIMIT ?", (limit,))
     rows = cursor.fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -147,7 +149,7 @@ def search_news(query):
     cursor.execute("""
         SELECT * FROM news 
         WHERE LOWER(title) LIKE ? OR LOWER(summary) LIKE ? OR LOWER(player_name) LIKE ?
-        ORDER BY id DESC
+        ORDER BY pub_timestamp DESC, id DESC
     """, (q, q, q))
     rows = cursor.fetchall()
     conn.close()

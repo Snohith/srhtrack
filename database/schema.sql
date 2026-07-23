@@ -1,4 +1,4 @@
--- @SRHXtra SQLite Multi-Table Schema
+-- @SRHXtra SQLite Multi-Table Schema (V3.7 with Numeric Epoch Timestamp)
 
 CREATE TABLE IF NOT EXISTS players (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS news (
     summary TEXT,
     link TEXT UNIQUE,
     published_at TEXT,
+    pub_timestamp REAL DEFAULT 0.0,
     player_name TEXT,
     franchise TEXT,
     importance_score REAL DEFAULT 5.0,

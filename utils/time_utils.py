@@ -1,6 +1,6 @@
 """
 Timezone and 12-Hour AM/PM IST conversion & RSS date parsing utilities for @SRHXtra.
-Converts all RSS entry timestamps to accurate 12-Hour AM/PM IST and filters outdated articles.
+Converts all RSS entry timestamps to accurate 12-Hour AM/PM IST and calculates numeric epoch timestamps for strict chronological sorting.
 """
 
 import time
@@ -25,20 +25,22 @@ def format_ist_string(dt_obj=None):
 def parse_rss_date_to_ist(entry):
     """
     Parses original publication date from RSS entry, converts to IST, and returns:
-    (formatted_ist_str, age_in_hours, dt_ist)
+    (formatted_ist_str, age_in_hours, pub_timestamp_float)
     """
     now_utc = datetime.now(timezone.utc)
     pub_parsed = entry.get("published_parsed") or entry.get("updated_parsed")
     
     if pub_parsed:
         try:
-            dt_utc = datetime.fromtimestamp(time.mktime(pub_parsed), tz=timezone.utc)
+            pub_ts = float(time.mktime(pub_parsed))
+            dt_utc = datetime.fromtimestamp(pub_ts, tz=timezone.utc)
             dt_ist = dt_utc.astimezone(IST)
             age_hours = (now_utc - dt_utc).total_seconds() / 3600.0
-            return dt_ist.strftime("%b %d, %Y @ %I:%M %p IST"), age_hours, dt_ist
+            return dt_ist.strftime("%b %d, %Y @ %I:%M %p IST"), age_hours, pub_ts
         except Exception:
             pass
 
     # Fallback to current time if feed lacks valid timestamp
     dt_ist = get_current_ist()
-    return dt_ist.strftime("%b %d, %Y @ %I:%M %p IST"), 0.0, dt_ist
+    current_ts = float(time.time())
+    return dt_ist.strftime("%b %d, %Y @ %I:%M %p IST"), 0.0, current_ts
