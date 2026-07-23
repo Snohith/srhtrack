@@ -1,8 +1,8 @@
 """
-@SRHXtra Global Command Center Dashboard (V2.7 Refined UI).
+@SRHXtra Global Command Center Dashboard (V2.9 Refined UI).
 Section 1: 30-Day Global Schedule Grouped by Date (12-hr AM/PM IST).
 Section 2: Player Reconnaissance & Updates strictly sorted Latest-First by 12-Hour AM/PM IST Time.
-Features 50 Top-Tier Relevant Global Cricket Media Outlets.
+Features clickable source links (including multiple sources if available).
 """
 
 import os
@@ -155,6 +155,26 @@ st.markdown("""
         display: inline-block;
     }
 
+    .source-link-btn {
+        background: rgba(242, 101, 34, 0.2);
+        color: #FF8844 !important;
+        border: 1px solid rgba(242, 101, 34, 0.4);
+        padding: 4px 12px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-decoration: none !important;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: background 0.2s ease;
+    }
+
+    .source-link-btn:hover {
+        background: rgba(242, 101, 34, 0.4);
+        color: #FFFFFF !important;
+    }
+
     @media (max-width: 768px) {
         .brand-title { font-size: 2.1rem; }
         .glass-card, .priority-card { padding: 1rem; }
@@ -164,7 +184,7 @@ st.markdown("""
 
 # Sidebar
 st.sidebar.markdown("# 🧡 @SRHXtra")
-st.sidebar.markdown("**Global Command Center V2.7**")
+st.sidebar.markdown("**Global Command Center V2.9**")
 st.sidebar.markdown(f"📡 **Data Engine:** `50 Relevant Global Outlets`")
 st.sidebar.markdown(f"⏱️ **Auto-Refresh:** `Every 30 Minutes`")
 
@@ -191,7 +211,7 @@ st.markdown("<div class='brand-subtitle'>Unified 2-Section Operations Desk | 73 
 # Main Navigation Tabs
 tab_schedule, tab_news = st.tabs([
     "🗓️ SECTION 1: 30-DAY GLOBAL SCHEDULE (GROUPED BY DATE)",
-    "📰 SECTION 2: PLAYER RECONNAISSANCE & UPDATES (LATEST-FIRST IN 12-HR AM/PM IST)"
+    "📰 SECTION 2: PLAYER RECONNAISSANCE & UPDATES (WITH DIRECT SOURCE LINKS)"
 ])
 
 # ---------------------------------------------------------
@@ -282,10 +302,10 @@ with tab_schedule:
             """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# SECTION 2: PLAYER RECONNAISSANCE & UPDATES (STRICTLY LATEST-FIRST IN 12-HR AM/PM IST)
+# SECTION 2: PLAYER RECONNAISSANCE & UPDATES (WITH DIRECT CLICKABLE SOURCE LINKS)
 # ---------------------------------------------------------
 with tab_news:
-    st.subheader("📰 Player Reconnaissance & Updates (Strictly Sorted Latest-First by 12-Hour AM/PM IST Time)")
+    st.subheader("📰 Player Reconnaissance & Updates (Sorted Latest-First | Clickable Source Links)")
     
     news_list = get_recent_news(limit=50)
     
@@ -293,17 +313,28 @@ with tab_news:
         for n in news_list:
             is_priority = n['importance_score'] >= 7.5
             card_style = "priority-card" if is_priority else "glass-card"
-            badge_label = "🔥 PRIORITY ALERT" if is_priority else "MATCH UPDATE"
             
+            # Process Source Links (handles single URL or multiple comma-separated URLs)
+            raw_sources = str(n['source']).split(",") if n['source'] else ["Official Source"]
+            raw_links = str(n['link']).split(",") if n['link'] else ["#"]
+            
+            source_html = ""
+            for i, src in enumerate(raw_sources):
+                src_name = src.strip()
+                src_url = raw_links[i].strip() if i < len(raw_links) else (raw_links[0].strip() if raw_links else "#")
+                source_html += f"<a href='{src_url}' target='_blank' class='source-link-btn'>🔗 {src_name}</a> "
+
             st.markdown(f"""
             <div class='{card_style}'>
                 <div><span class='badge-time'>🕒 {n['published_at']}</span> <span class='badge-squad'>{n['franchise']}</span></div>
                 <h3 style='margin: 0.4rem 0; color: #FFFFFF;'>👤 {n['player_name']} — {n['title']}</h3>
-                <p style='color: #CBD5E1; font-size: 1.02rem; line-height: 1.5; margin-bottom: 0.6rem;'>{n['summary']}</p>
-                <div style='display: flex; gap: 1.2rem; font-size: 0.85rem; color: #94A3B8;'>
+                <p style='color: #CBD5E1; font-size: 1.02rem; line-height: 1.5; margin-bottom: 0.8rem;'>{n['summary']}</p>
+                <div style='display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.85rem; color: #94A3B8; align-items: center;'>
                     <span>Category: <strong style='color: #E2E8F0;'>{n['category']}</strong></span>
                     <span>Impact Rating: <strong style='color: #FF8844;'>🔥 {n['importance_score']}/10</strong></span>
-                    <span>Source: <strong style='color: #E2E8F0;'>{n['source']}</strong></span>
+                    <div style='display: inline-flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;'>
+                        <span style='color: #94A3B8;'>Verified Sources:</span> {source_html}
+                    </div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
