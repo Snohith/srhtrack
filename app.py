@@ -1,11 +1,6 @@
 """
-@SRHXtra Global Command Center Dashboard (V2.5 Refined UI).
-Features:
-- Automatic 30-Minute UI Refresh (<meta http-equiv="refresh" content="1800">)
-- Manual Instant Refresh ("⚡ Live Refresh 30 Feeds")
-- Sidebar displays clean "Last Refreshed" timestamp in 12-Hour AM/PM IST format
-- Section 1: Grouped by Date (12-hr AM/PM IST)
-- Section 2: Strictly sorted Latest-First (12-hr AM/PM IST)
+@SRHXtra Global Command Center Dashboard (V2.6 Refined UI).
+Fixes 5-second loop by replacing HTML meta refresh with clean 30-minute setTimeout (1,800,000 ms).
 """
 
 import os
@@ -16,6 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import time
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 from config.roster import MASTER_ROSTER
 from database.db_manager import init_db, get_recent_news, search_news
@@ -38,8 +34,18 @@ st.set_page_config(
 # Initialize Database & Pre-seed Data
 init_db()
 
-# Auto-refresh every 30 minutes (1800 seconds)
-st.markdown("<meta http-equiv='refresh' content='1800'>", unsafe_allow_html=True)
+# Clean 30-Minute JavaScript Timer (1,800,000 ms = 30 mins, NO 5-second loop)
+components.html(
+    """
+    <script>
+        setTimeout(function(){
+            window.parent.location.reload();
+        }, 1800000);
+    </script>
+    """,
+    height=0,
+    width=0
+)
 
 # Session State for Last Refreshed IST Timestamp
 if "last_refreshed" not in st.session_state:
@@ -156,7 +162,7 @@ st.markdown("""
 
 # Sidebar
 st.sidebar.markdown("# 🧡 @SRHXtra")
-st.sidebar.markdown("**Global Command Center V2.5**")
+st.sidebar.markdown("**Global Command Center V2.6**")
 st.sidebar.markdown(f"📡 **Data Engine:** `30 Reliable Sources`")
 st.sidebar.markdown(f"⏱️ **Auto-Refresh:** `Every 30 Minutes`")
 
