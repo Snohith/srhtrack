@@ -1,10 +1,11 @@
 """
-Database Manager for @SRHXtra SQLite Memory layer (V6.0 All-Player Complete News Feed).
-Stores EVERY SINGLE scraped article for all 73 players without topic deduplication.
+Database Manager for @SRHXtra SQLite Memory layer (V7.0 Topic Summarization & Merger Engine).
+Summarizes and merges multiple coverage articles about the same player/event into ONE single consolidated card with all source links attached.
 """
 
 import os
 import sqlite3
+import re
 from config.roster import MASTER_ROSTER
 from utils.logger import db_logger, error_logger
 
@@ -18,7 +19,7 @@ def get_connection():
     return conn
 
 def init_db():
-    """Initializes database schema, handles schema migrations, and purges legacy hardcoded timestamp rows."""
+    """Initializes database schema, handles schema migrations, and purges legacy non-chronological rows."""
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -60,23 +61,74 @@ def get_all_players(franchise_filter=None):
     conn.close()
     return [dict(r) for r in rows]
 
-def insert_news(title, source, summary, link, published_at, player_name, franchise, importance_score, category, pub_timestamp=0.0):
+def extract_topic_keywords(title):
+    """Extracts significant keywords for single-topic deduplication."""
+    words = re.findall(r'\b[a-zA-Z]{4,}\b', title.lower())
+    ignore = {"cricket", "india", "england", "australia", "south", "africa", "first", "second", "third", "match", "series"}
+    return [w for w in words if w not in ignore]
+
+def insert_and_summarize_news(title, source, summary, link, published_at, player_name, franchise, importance_score, category, pub_timestamp=0.0):
     """
-    Inserts EVERY SINGLE scraped news article for all 73 players (No topic deduplication).
-    Only checks exact URL / exact Title uniqueness so identical URL feeds aren't repeated.
+    Inserts or summarizes multiple coverage articles for the same player into ONE single consolidated card.
+    Merges summaries, updates latest timestamp, and attaches all verified source buttons.
     """
     conn = get_connection()
     cursor = conn.cursor()
     try:
+        # Check exact link or exact title match first
         if link and link.strip() and link != "#":
-            cursor.execute("SELECT id FROM news WHERE link = ? OR title = ?", (link, title))
-        else:
-            cursor.execute("SELECT id FROM news WHERE title = ?", (title,))
-            
-        if cursor.fetchone():
-            conn.close()
-            return None
+            cursor.execute("SELECT id, source, link FROM news WHERE link = ? OR title = ?", (link, title))
+            existing = cursor.fetchone()
+            if existing:
+                conn.close()
+                return None
 
+        # Check for related topic cards for the same player
+        cursor.execute("SELECT id, title, source, summary, link, importance_score, pub_timestamp, published_at FROM news WHERE player_name = ?", (player_name,))
+        player_news = cursor.fetchall()
+        
+        new_keywords = set(extract_topic_keywords(title))
+        for row in player_news:
+            existing_keywords = set(extract_topic_keywords(row["title"]))
+            overlap = new_keywords.intersection(existing_keywords)
+            
+            # If 2 or more major topic words match for the same player, SUMMARIZE & MERGE into single card!
+            if len(overlap) >= 2 or (len(new_keywords) == 1 and overlap):
+                existing_sources = [s.strip() for s in row["source"].split(",")]
+                existing_links = [l.strip() for l in row["link"].split(",")]
+                
+                # Merge source and link if not already present
+                if source not in existing_sources:
+                    existing_sources.append(source)
+                if link not in existing_links:
+                    existing_links.append(link)
+                
+                updated_sources = ", ".join(existing_sources)
+                updated_links = ", ".join(existing_links)
+                
+                # Combine summaries intelligently into a single comprehensive synthesis
+                existing_summary = row["summary"].strip()
+                if summary and summary not in existing_summary:
+                    merged_summary = f"{existing_summary} | [{source} Update]: {summary}"
+                else:
+                    merged_summary = existing_summary
+                
+                # Use latest timestamp so consolidated card moves to top
+                latest_ts = max(row["pub_timestamp"], pub_timestamp)
+                latest_pub_date = published_at if pub_timestamp > row["pub_timestamp"] else row["published_at"]
+                max_score = max(row["importance_score"], importance_score)
+
+                cursor.execute("""
+                    UPDATE news 
+                    SET source = ?, summary = ?, link = ?, importance_score = ?, pub_timestamp = ?, published_at = ?
+                    WHERE id = ?
+                """, (updated_sources, merged_summary, updated_links, max_score, latest_ts, latest_pub_date, row["id"]))
+                conn.commit()
+                db_logger.info(f"Summarized & merged new report from '{source}' into single card for {player_name}.")
+                conn.close()
+                return row["id"]
+
+        # Insert as new standalone topic card
         cursor.execute("""
             INSERT INTO news (title, source, summary, link, published_at, pub_timestamp, player_name, franchise, importance_score, category)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -84,14 +136,14 @@ def insert_news(title, source, summary, link, published_at, player_name, franchi
         conn.commit()
         news_id = cursor.lastrowid
         conn.close()
-        db_logger.info(f"Inserted article #{news_id} for {player_name} from {source}.")
+        db_logger.info(f"Inserted new topic card #{news_id} for {player_name} from {source}.")
         return news_id
     except Exception as e:
         error_logger.error(f"Database insert error: {e}")
         conn.close()
         return None
 
-def get_recent_news(limit=200):
+def get_recent_news(limit=100):
     """Gets recent scraped live news items ordered strictly BY pub_timestamp DESC (latest published timestamp first)."""
     conn = get_connection()
     cursor = conn.cursor()
