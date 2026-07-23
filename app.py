@@ -1,6 +1,8 @@
 """
-@SRHXtra Global Command Center Dashboard (V2.6 Refined UI).
-Fixes 5-second loop by replacing HTML meta refresh with clean 30-minute setTimeout (1,800,000 ms).
+@SRHXtra Global Command Center Dashboard (V2.7 Refined UI).
+Section 1: 30-Day Global Schedule Grouped by Date (12-hr AM/PM IST).
+Section 2: Player Reconnaissance & Updates strictly sorted Latest-First by 12-Hour AM/PM IST Time.
+Features 50 Top-Tier Relevant Global Cricket Media Outlets.
 """
 
 import os
@@ -18,7 +20,7 @@ from database.db_manager import init_db, get_recent_news, search_news
 from utils.time_utils import format_ist_12hr
 
 try:
-    from scrapers.rss_collector import fetch_and_filter_rss
+    from scrapers.rss_collector import fetch_and_filter_rss, TOP_50_CRICKET_SOURCES
 except Exception:
     def fetch_and_filter_rss():
         return 0
@@ -162,8 +164,8 @@ st.markdown("""
 
 # Sidebar
 st.sidebar.markdown("# 🧡 @SRHXtra")
-st.sidebar.markdown("**Global Command Center V2.6**")
-st.sidebar.markdown(f"📡 **Data Engine:** `30 Reliable Sources`")
+st.sidebar.markdown("**Global Command Center V2.7**")
+st.sidebar.markdown(f"📡 **Data Engine:** `50 Relevant Global Outlets`")
 st.sidebar.markdown(f"⏱️ **Auto-Refresh:** `Every 30 Minutes`")
 
 st.sidebar.markdown("---")
@@ -175,8 +177,8 @@ franchise_filter = st.sidebar.selectbox(
     ["All", "Sunrisers Hyderabad", "Sunrisers Eastern Cape", "Sunrisers Leeds Men", "Sunrisers Leeds Women"]
 )
 
-if st.sidebar.button("⚡ Live Refresh 30 Feeds"):
-    with st.spinner("Polling 30 top global cricket sources..."):
+if st.sidebar.button("⚡ Live Refresh 50 Feeds"):
+    with st.spinner("Polling 50 top global cricket sources..."):
         count = fetch_and_filter_rss()
         st.session_state["last_refreshed"] = format_ist_12hr()
         st.sidebar.success(f"Captured {count} new Sunrisers items!")
@@ -306,4 +308,4 @@ with tab_news:
             </div>
             """, unsafe_allow_html=True)
     else:
-        st.info("No player updates captured yet. Click 'Live Refresh 30 Feeds' in the sidebar!")
+        st.info("No player updates captured yet. Click 'Live Refresh 50 Feeds' in the sidebar!")
