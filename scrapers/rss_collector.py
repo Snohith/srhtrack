@@ -1,6 +1,7 @@
 """
-Expanded RSS Feed Collector for @SRHXtra V2.7.
+Expanded RSS Feed Collector for @SRHXtra V2.8.
 Features 50 Top-Tier Relevant Global Cricket Data & Media Outlets.
+Clean Ingestion Engine storing deduplicated player reconnaissance updates in 12-Hour AM/PM IST.
 """
 
 import time
@@ -10,8 +11,7 @@ import bs4
 import html
 from config.roster import match_player_in_text
 from agents.ranker import calculate_importance_score, categorize_news
-from agents.tweet_generator import generate_tweet_drafts
-from database.db_manager import insert_news, insert_tweet, insert_notification
+from database.db_manager import insert_news, insert_notification
 from utils.logger import rss_logger, error_logger
 from utils.time_utils import format_ist_12hr
 
@@ -133,16 +133,11 @@ def fetch_and_filter_rss():
                     
                     if news_id:
                         total_found += 1
-                        if score >= 4.0:
-                            drafts = generate_tweet_drafts(mp["player_name"], mp["franchise"], summary[:200])
-                            insert_tweet(drafts["draft_1"], category, mp["player_name"])
-                            
-                            if score >= 7.0:
-                                insert_tweet(drafts["draft_2"], "High Priority News", mp["player_name"])
-                                insert_notification(
-                                    message=f"🔥 PRIORITY UPDATE ({score}/10): {mp['player_name']} ({mp['franchise']})",
-                                    type_str="PRIORITY"
-                                )
+                        if score >= 7.0:
+                            insert_notification(
+                                message=f"🔥 PRIORITY UPDATE ({score}/10): {mp['player_name']} ({mp['franchise']})",
+                                type_str="PRIORITY"
+                            )
     
     rss_logger.info(f"50-Source Ingestion Cycle Complete. {total_found} new Sunrisers items processed.")
     return total_found
