@@ -1,0 +1,28 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Streamlit local settings
+.streamlit/credentials.toml
+
+# Local SQLite Database & Logs
+database/srh_tracker.db
+logs/*.log
+
+# Generated Stat Cards
+generated/*.png
+!generated/.gitkeep
+
+# OS / Editor junk
+.DS_Store
+.vscode/
+.idea/
+*.swp
