@@ -1,7 +1,7 @@
 """
-@SRHXtra Global Command Center Dashboard (V3.2 Refined UI).
+@SRHXtra Global Command Center Dashboard (V3.6 Verified Live Engine).
 Section 1: 30-Day Global Schedule Grouped by Date (12-hr AM/PM IST).
-Section 2: Player Reconnaissance & Updates strictly sorted Latest-First by 12-Hour AM/PM IST Time.
+Section 2: Player Reconnaissance & Updates with TRUE original article publication dates in 12-Hour AM/PM IST.
 Features Verified Media Source Links & Direct Google News Deep-Link Search.
 """
 
@@ -34,7 +34,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize Database & Pre-seed Data
+# Initialize Database & Purge Legacy Rows
 init_db()
 
 # Clean 30-Minute JavaScript Timer (1,800,000 ms = 30 mins, NO 5-second loop)
@@ -52,6 +52,12 @@ components.html(
 
 # Session State for Last Refreshed IST Timestamp
 if "last_refreshed" not in st.session_state:
+    st.session_state["last_refreshed"] = format_ist_12hr()
+
+# Auto-ingest fresh live RSS if database has < 3 items
+current_news = get_recent_news(limit=50)
+if len(current_news) < 3:
+    fetch_and_filter_rss()
     st.session_state["last_refreshed"] = format_ist_12hr()
 
 # Premium Dark Glassmorphism CSS
@@ -204,7 +210,7 @@ st.markdown("""
 
 # Sidebar
 st.sidebar.markdown("# 🧡 @SRHXtra")
-st.sidebar.markdown("**Global Command Center V3.2**")
+st.sidebar.markdown("**Global Command Center V3.6**")
 st.sidebar.markdown(f"📡 **Data Engine:** `50 Relevant Global Outlets`")
 st.sidebar.markdown(f"⏱️ **Auto-Refresh:** `Every 30 Minutes`")
 
@@ -221,7 +227,7 @@ if st.sidebar.button("⚡ Live Refresh 50 Feeds"):
     with st.spinner("Polling 50 top global cricket sources..."):
         count = fetch_and_filter_rss()
         st.session_state["last_refreshed"] = format_ist_12hr()
-        st.sidebar.success(f"Captured {count} new Sunrisers items!")
+        st.sidebar.success(f"Captured {count} fresh Sunrisers items!")
         st.rerun()
 
 # Dashboard Brand Header
@@ -329,14 +335,25 @@ with tab_news:
     
     news_list = get_recent_news(limit=50)
     
+    # Filter Domain for News
+    if franchise_filter != "All":
+        news_list = [n for n in news_list if n["franchise"] == franchise_filter]
+
     if news_list:
         for n in news_list:
             is_priority = n['importance_score'] >= 7.5
             card_style = "priority-card" if is_priority else "glass-card"
             
             # Direct Media Outlet Link
-            outlet_link = n['link'] if n['link'] and n['link'] != "#" else f"https://news.google.com/search?q={urllib.parse.quote(n['player_name'] + ' cricket')}"
+            raw_sources = str(n['source']).split(",") if n['source'] else ["Official Source"]
+            raw_links = str(n['link']).split(",") if n['link'] else ["#"]
             
+            source_html = ""
+            for i, src in enumerate(raw_sources):
+                src_name = src.strip()
+                src_url = raw_links[i].strip() if i < len(raw_links) else (raw_links[0].strip() if raw_links else "#")
+                source_html += f"<a href='{src_url}' target='_blank' class='source-link-btn'>🔗 {src_name}</a> "
+
             # Google News Deep-Search Link for 100% Guaranteed Relevance
             deep_search_query = f"{n['player_name']} {n['title']}"
             deep_search_url = f"https://news.google.com/search?q={urllib.parse.quote(deep_search_query)}"
@@ -350,11 +367,11 @@ with tab_news:
                     <span>Category: <strong style='color: #E2E8F0;'>{n['category']}</strong></span>
                     <span>Impact Rating: <strong style='color: #FF8844;'>🔥 {n['importance_score']}/10</strong></span>
                     <div style='display: inline-flex; gap: 0.6rem; flex-wrap: wrap; align-items: center;'>
-                        <a href='{outlet_link}' target='_blank' class='source-link-btn'>🔗 {n['source']}</a>
+                        {source_html}
                         <a href='{deep_search_url}' target='_blank' class='search-deep-btn'>🔍 Deep Search Article</a>
                     </div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
     else:
-        st.info("No player updates captured yet. Click 'Live Refresh 50 Feeds' in the sidebar!")
+        st.info("No player updates captured yet for this squad. Click 'Live Refresh 50 Feeds' in the sidebar!")

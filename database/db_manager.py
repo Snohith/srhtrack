@@ -1,6 +1,6 @@
 """
-Database Manager for @SRHXtra SQLite Memory layer (V5.0 Topic Consolidation Engine).
-Ensures 100% real live data, 73-player coverage across 4 squads, and single-topic multi-source deduplication.
+Database Manager for @SRHXtra SQLite Memory layer (V5.1 Clean).
+Ensures legacy timestamp purging and 100% real live original date storage.
 """
 
 import os
@@ -19,7 +19,7 @@ def get_connection():
     return conn
 
 def init_db():
-    """Initializes database schema and ensures tables exist."""
+    """Initializes database schema, purges legacy hardcoded timestamp rows, and ensures 73-player roster."""
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -28,6 +28,16 @@ def init_db():
             cursor.executescript(f.read())
         conn.commit()
         
+        # Purge legacy database entries containing hardcoded 04:24 / 04:20 IST timestamps
+        cursor.execute("""
+            DELETE FROM news 
+            WHERE published_at LIKE '%04:24 AM IST%' 
+               OR published_at LIKE '%04:20 AM IST%' 
+               OR published_at LIKE '%04:22 AM IST%'
+               OR published_at LIKE '%04:25 AM IST%'
+        """)
+        conn.commit()
+
         # Populate Master Roster of 73 Players
         for team_key, team_info in MASTER_ROSTER.items():
             franchise = team_info["franchise_name"]
