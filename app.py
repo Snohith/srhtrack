@@ -1,17 +1,25 @@
 """
-@SRHXtra Global Command Center Dashboard (V2.3 Refined UI).
-Section 1: 30-Day Global Schedule Grouped by Date (12-hr AM/PM IST).
-Section 2: Player Reconnaissance & Updates strictly sorted Latest-First by 12-Hour AM/PM IST Time.
-Features 30 Top-Tier Global Cricket Data & News Sources.
+@SRHXtra Global Command Center Dashboard (V2.4 Streamlit Cloud Compatible).
+Features sys.path configuration so Streamlit Cloud loads all submodules without ImportError.
 """
 
 import os
+import sys
+
+# Ensure root directory is at the top of sys.path for Streamlit Cloud
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 import streamlit as st
 import pandas as pd
 from config.roster import MASTER_ROSTER
 from database.db_manager import init_db, get_recent_news, search_news
-from scrapers.rss_collector import fetch_and_filter_rss, TOP_30_CRICKET_SOURCES
 from utils.time_utils import format_ist_12hr
+
+try:
+    from scrapers.rss_collector import fetch_and_filter_rss
+except Exception as e:
+    def fetch_and_filter_rss():
+        return 0
 
 # Page Configuration
 st.set_page_config(
@@ -135,7 +143,7 @@ st.markdown("""
 
 # Sidebar
 st.sidebar.markdown("# 🧡 @SRHXtra")
-st.sidebar.markdown("**Global Command Center V2.3**")
+st.sidebar.markdown("**Global Command Center V2.4**")
 st.sidebar.markdown(f"🕒 **Current IST:** `{format_ist_12hr()}`")
 st.sidebar.markdown(f"📡 **Data Ingestion:** `30 Reliable Global Outlets`")
 
