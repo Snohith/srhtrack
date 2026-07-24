@@ -140,12 +140,15 @@ def get_favicon_url(link):
         pass
     return ""
 
+import textwrap
+
 def render_news_card(n):
     """Renders a full news card as an HTML string (main feed).
     Improvements V12.2:
       - #3: time_ago() replaces raw IST timestamp
       - #4: NEW badge for articles < 2 hours old
       - #5: source favicon from Google Favicons API
+      - Fixed: dedent multiline HTML to prevent markdown code block rendering
     """
     link      = safe_article_link(n)
     league    = detect_league_badge(n["title"], n["summary"])
@@ -154,26 +157,26 @@ def render_news_card(n):
     new_badge = "<span class='badge-new'>🔴 NEW</span>" if is_new_article(pub_ts) else ""
     favicon   = get_favicon_url(link)
     fav_html  = f"<img src='{favicon}' class='source-fav' onerror='this.style.display=\"none\"'>" if favicon else ""
-    return f"""
-    <a href='{link}' target='_blank' class='obsidian-card-link'>
-        <div class='obsidian-card'>
-            <div class='card-tags'>
-                {new_badge}
-                <span class='badge-player'>👤 {n['player_name']}</span>
-                <span class='badge-squad'>🧡 {n['franchise']} Squad</span>
-                <span class='badge-league'>🏏 {league}</span>
+    return textwrap.dedent(f"""
+        <a href='{link}' target='_blank' class='obsidian-card-link'>
+            <div class='obsidian-card'>
+                <div class='card-tags'>
+                    {new_badge}
+                    <span class='badge-player'>👤 {n['player_name']}</span>
+                    <span class='badge-squad'>🧡 {n['franchise']} Squad</span>
+                    <span class='badge-league'>🏏 {league}</span>
+                </div>
+                <h2 class='obsidian-card-title'>{n['title']}</h2>
+                <p class='obsidian-card-desc'>{n['summary']}</p>
+                <div class='obsidian-card-footer'>
+                    <span class='time-ago-pill'>🕒 {ago}</span>
+                    <span class='time-text muted-text'>{n['published_at']}</span>
+                    <span class='source-pill'>{fav_html} {n['source']}</span>
+                    <span class='read-hint'>Read Story ↗</span>
+                </div>
             </div>
-            <h2 class='obsidian-card-title'>{n['title']}</h2>
-            <p class='obsidian-card-desc'>{n['summary']}</p>
-            <div class='obsidian-card-footer'>
-                <span class='time-ago-pill'>🕒 {ago}</span>
-                <span class='time-text muted-text'>{n['published_at']}</span>
-                <span class='source-pill'>{fav_html} {n['source']}</span>
-                <span class='read-hint'>Read Story ↗</span>
-            </div>
-        </div>
-    </a>
-    """
+        </a>
+    """).strip()
 
 def render_pulse_item(n):
     """Renders a compact pulse sidebar item as an HTML string.
@@ -185,14 +188,14 @@ def render_pulse_item(n):
     is_new    = is_new_article(pub_ts)
     dot       = "<span class='pulse-new-dot'></span>" if is_new else ""
     headline  = n["title"][:65] + ("..." if len(n["title"]) > 65 else "")
-    return f"""
-    <div class='pulse-item'>
-        <div class='pulse-time'>{dot}🕒 {ago}</div>
-        <a href='{link}' target='_blank' class='pulse-headline'>
-            👤 {n['player_name']} — {headline}
-        </a>
-    </div>
-    """
+    return textwrap.dedent(f"""
+        <div class='pulse-item'>
+            <div class='pulse-time'>{dot}🕒 {ago}</div>
+            <a href='{link}' target='_blank' class='pulse-headline'>
+                👤 {n['player_name']} — {headline}
+            </a>
+        </div>
+    """).strip()
 
 # ── CSS Theme ─────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -445,17 +448,17 @@ with tab_schedule:
         for date_str, items in grouped_dates.items():
             st.markdown(f"<h3 style='color:#F26522;margin-top:1.5rem;font-family:\"Plus Jakarta Sans\",sans-serif;'>📅 {date_str}</h3>", unsafe_allow_html=True)
             for item in items:
-                st.markdown(f"""
-                <div class='obsidian-card' style='margin-bottom:1rem;'>
-                    <div class='card-tags'>
-                        <span class='badge-player'>⏰ {item['time']}</span>
-                        <span class='badge-squad'>{item['squad']}</span>
-                        <span class='badge-league'>🏏 {item['league']}</span>
+                st.markdown(textwrap.dedent(f"""
+                    <div class='obsidian-card' style='margin-bottom:1rem;'>
+                        <div class='card-tags'>
+                            <span class='badge-player'>⏰ {item['time']}</span>
+                            <span class='badge-squad'>{item['squad']}</span>
+                            <span class='badge-league'>🏏 {item['league']}</span>
+                        </div>
+                        <h3 style='margin:0.4rem 0;color:#FFFFFF;font-size:1.35rem;font-family:"Plus Jakarta Sans",sans-serif;'>vs {item['vs']}</h3>
+                        <p style='color:#CBD5E1;margin-bottom:0.2rem;font-size:1.02rem;'><strong>Squad Players:</strong> {item['players']}</p>
                     </div>
-                    <h3 style='margin:0.4rem 0;color:#FFFFFF;font-size:1.35rem;font-family:"Plus Jakarta Sans",sans-serif;'>vs {item['vs']}</h3>
-                    <p style='color:#CBD5E1;margin-bottom:0.2rem;font-size:1.02rem;'><strong>Squad Players:</strong> {item['players']}</p>
-                </div>
-                """, unsafe_allow_html=True)
+                """).strip(), unsafe_allow_html=True)
     else:
         st.info(f"No fixtures found for **{franchise_filter}**. Try selecting 'All' to see every franchise.")
 
