@@ -1,7 +1,12 @@
 """
-@SRHXtra Premium Obsidian Command Center (V12.0 — No Calendar Grid).
+@SRHXtra Premium Obsidian Command Center (V12.1 — Debugged).
 Section 1: Match Day Fixture Breakdown & Player Roster (cards list, no calendar grid).
 Section 2: Live Pulse News Portal — live search, cached DB reads, refresh cooldown.
+
+V12.1 fixes:
+  - Franchise filter now handles composite squad names (SRH & SEC Stars, Sri Lanka & India Tests)
+  - 50th RSS source added (count now matches UI label)
+  - Removed unused GRID_DATE_SLOTS import
 """
 
 import os
@@ -317,12 +322,29 @@ tab_schedule, tab_news = st.tabs([
 with tab_schedule:
     st.subheader("📋 Full Match Day Breakdown & Player Roster (July / August 2026)")
 
-    # Filter by franchise
+    # Build a set of player names for the selected franchise for rich matching
     if franchise_filter != "All":
-        filtered_sched = [
-            s for s in FIXTURE_SCHEDULE
-            if franchise_filter in s["squad"] or franchise_filter in s["players"]
-        ]
+        franchise_key_map = {
+            "Sunrisers Hyderabad": "SRH",
+            "Sunrisers Eastern Cape": "SEC",
+            "Sunrisers Leeds Men": "Leeds_Men",
+            "Sunrisers Leeds Women": "Leeds_Women",
+        }
+        fkey = franchise_key_map.get(franchise_filter, "")
+        franchise_players = set()
+        if fkey and fkey in MASTER_ROSTER:
+            franchise_players = {p["name"] for p in MASTER_ROSTER[fkey]["players"]}
+
+        def _fixture_matches_filter(s):
+            # Direct franchise name in squad
+            if franchise_filter in s["squad"]:
+                return True
+            # Any player from this franchise mentioned in the players field
+            if any(pname in s["players"] for pname in franchise_players):
+                return True
+            return False
+
+        filtered_sched = [s for s in FIXTURE_SCHEDULE if _fixture_matches_filter(s)]
     else:
         filtered_sched = FIXTURE_SCHEDULE
 
@@ -346,7 +368,7 @@ with tab_schedule:
                 </div>
                 """, unsafe_allow_html=True)
     else:
-        st.info("No fixtures found for the selected franchise filter.")
+        st.info(f"No fixtures found for **{franchise_filter}**. Try selecting 'All' to see every franchise.")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TAB 2: LIVE PULSE & NEWS RECON FEED

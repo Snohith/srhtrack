@@ -78,6 +78,7 @@ TOP_50_CRICKET_SOURCES = [
     {"name": "Fox Sports Australia",       "url": "https://service.foxsports.com.au/Rss/ffx/cricket.xml"},
     {"name": "Nine Wide World of Sports",  "url": "https://wwos.ninemsn.com.au/rss/cricket"},
     {"name": "ABC News Australia Sport",   "url": "https://www.abc.net.au/news/feed/51120/rss.xml"},
+    {"name": "PakPassion Cricket",         "url": "https://www.pakpassion.net/ppforum/external.php?type=RSS2"},  # ← 50th source
     {"name": "Sydney Morning Herald Sport","url": "https://www.smh.com.au/rss/sport/cricket.xml"},
     {"name": "Female Cricket",             "url": "https://femalecricket.com/feed"},
     {"name": "Women's CricZone",           "url": "https://www.womenscriczone.com/feed"},
