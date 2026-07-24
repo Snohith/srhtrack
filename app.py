@@ -1,7 +1,7 @@
 """
-@SRHXtra Premium Obsidian Command Center (V7.0).
-Inspired by Premium Obsidian Dark UI with Glowing Neon Accents & Multi-Column Layout.
-Section 1: 30-Day Global Fixture Grid & Calendar.
+@SRHXtra Premium Obsidian Command Center (V8.0 - Full Calendar Grid Engine).
+Inspired by Premium Obsidian Dark UI with Glowing Neon Accents & Interactive Month Calendar Grid.
+Section 1: Interactive Obsidian Month Calendar Grid (Grouped by Date in 12-hr AM/PM IST).
 Section 2: Live Pulse News Portal (Exact Raw Headlines | Direct Source Redirection | Strict 24h Expiry).
 """
 
@@ -164,6 +164,90 @@ st.markdown("""
         font-weight: 500;
     }
 
+    /* Obsidian Month Calendar Grid Layout */
+    .cal-grid-header {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 8px;
+        text-align: center;
+        font-weight: 700;
+        color: #94A3B8;
+        font-size: 0.9rem;
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .cal-day-cell {
+        background: rgba(18, 22, 33, 0.75);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        padding: 0.8rem;
+        min-height: 140px;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+
+    .cal-day-cell:hover {
+        border-color: rgba(242, 101, 34, 0.5);
+        background: rgba(24, 29, 44, 0.9);
+    }
+
+    .cal-day-cell.has-match {
+        border-color: rgba(242, 101, 34, 0.35);
+        background: radial-gradient(circle at top right, rgba(242, 101, 34, 0.12) 0%, rgba(18, 22, 33, 0.85) 80%);
+    }
+
+    .cal-date-num {
+        font-family: 'Playfair Display', serif;
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #64748B;
+        margin-bottom: 0.4rem;
+    }
+
+    .cal-date-num.active-date {
+        color: #FFFFFF;
+    }
+
+    .cal-match-box {
+        background: rgba(10, 13, 20, 0.8);
+        border: 1px solid rgba(242, 101, 34, 0.4);
+        border-radius: 10px;
+        padding: 0.5rem 0.6rem;
+        margin-top: 0.3rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .cal-teams {
+        font-size: 0.85rem;
+        font-weight: 800;
+        color: #FFFFFF;
+        margin-bottom: 0.2rem;
+        line-height: 1.2;
+    }
+
+    .cal-time-pill {
+        display: inline-block;
+        background: rgba(242, 101, 34, 0.2);
+        color: #FF8844;
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 6px;
+    }
+
+    .cal-status-pill {
+        display: inline-block;
+        background: rgba(239, 68, 68, 0.25);
+        color: #EF4444;
+        font-size: 0.7rem;
+        font-weight: 800;
+        padding: 2px 6px;
+        border-radius: 6px;
+        margin-left: 3px;
+    }
+
     /* Obsidian Glass Cards */
     a.obsidian-card-link {
         text-decoration: none !important;
@@ -230,19 +314,6 @@ st.markdown("""
         border-radius: 20px;
         font-size: 0.84rem;
         font-weight: 700;
-    }
-
-    .badge-live {
-        background: rgba(239, 68, 68, 0.2);
-        color: #EF4444;
-        border: 1px solid rgba(239, 68, 68, 0.4);
-        padding: 3px 10px;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: 700;
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
     }
 
     .obsidian-card-title {
@@ -327,7 +398,6 @@ st.markdown("""
         border-left: 2px solid rgba(242, 101, 34, 0.4);
         padding-left: 0.9rem;
         margin-bottom: 1rem;
-        position: relative;
     }
 
     .pulse-item:hover {
@@ -356,16 +426,17 @@ st.markdown("""
     @media (max-width: 992px) {
         .obsidian-title { font-size: 2.1rem; }
         .obsidian-card { padding: 1.1rem; }
+        .cal-grid-header { font-size: 0.75rem; }
     }
 </style>
 """, unsafe_allow_html=True)
 
 # Sidebar
 st.sidebar.markdown("# 🧡 @SRHXtra")
-st.sidebar.markdown("**Premium Obsidian V7.0**")
+st.sidebar.markdown("**Obsidian Calendar V8.0**")
 st.sidebar.markdown("📡 **System:** `Command Center`")
+st.sidebar.markdown("🗓️ **Calendar:** `Obsidian Month Matrix`")
 st.sidebar.markdown("👥 **Coverage:** `73 Players & 4 Squads`")
-st.sidebar.markdown("⏱️ **Expiry:** `Strict Last 24 Hours`")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"🕒 **Last Refreshed IST:**\n`{st.session_state['last_refreshed']}`")
@@ -385,7 +456,7 @@ if st.sidebar.button("⚡ Live Refresh 50 Feeds"):
 
 # Dashboard Brand Header
 st.markdown("<div class='obsidian-title'>Premium Obsidian Command Center</div>", unsafe_allow_html=True)
-st.markdown("<div class='obsidian-subtitle'>Real-Time Reconnaissance Hub | 73 Squad Members Across 4 Franchises | Direct Source Portal</div>", unsafe_allow_html=True)
+st.markdown("<div class='obsidian-subtitle'>Real-Time Reconnaissance Hub & Obsidian Calendar Matrix | 73 Squad Members Across 4 Franchises</div>", unsafe_allow_html=True)
 
 # Top KPI Metric Bar
 st.markdown(f"""
@@ -395,6 +466,13 @@ st.markdown(f"""
         <div>
             <div class='metric-val'>50</div>
             <div class='metric-lbl'>Global Feeds</div>
+        </div>
+    </div>
+    <div class='metric-pill'>
+        <div class='metric-icon'>📅</div>
+        <div>
+            <div class='metric-val'>30-Day</div>
+            <div class='metric-lbl'>Calendar Matrix</div>
         </div>
     </div>
     <div class='metric-pill'>
@@ -412,13 +490,6 @@ st.markdown(f"""
         </div>
     </div>
     <div class='metric-pill'>
-        <div class='metric-icon'>⏱️</div>
-        <div>
-            <div class='metric-val'>24h</div>
-            <div class='metric-lbl'>Strict Expiry</div>
-        </div>
-    </div>
-    <div class='metric-pill'>
         <div class='metric-icon'>⚡</div>
         <div>
             <div class='metric-val'>Live</div>
@@ -430,85 +501,132 @@ st.markdown(f"""
 
 # Main Navigation Tabs
 tab_schedule, tab_news = st.tabs([
-    "🗓️ FIXTURES & CALENDAR (30-DAY SCHEDULE)",
+    "🗓️ OBSIDIAN MONTH CALENDAR GRID (30-DAY FIXTURE MATRIX)",
     "📡 LIVE PULSE & NEWS RECON FEED"
 ])
 
 # ---------------------------------------------------------
-# TAB 1: FIXTURES & CALENDAR (GROUPED BY DATE IN 12-HR IST)
+# TAB 1: OBSIDIAN MONTH CALENDAR GRID (30-DAY FIXTURE MATRIX)
 # ---------------------------------------------------------
 with tab_schedule:
-    st.subheader("🗓️ 30-Day Fixture Calendar (Timings in 12-Hour AM/PM IST)")
+    st.subheader("🗓️ Obsidian Month Fixture Grid (July / August 2026)")
     
     raw_schedules = [
-        # July 25, 2026
-        {"date": "July 25, 2026", "time": "03:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Dani Gibson (C), Phoebe Litchfield, Deepti Sharma, Annabel Sutherland, Bryony Smith, Flo Miller, Lauren Winfield-Hill & Squad", "vs": "Southern Brave Women", "league": "The Hundred Women"},
-        {"date": "July 25, 2026", "time": "04:30 PM IST", "squad": "Sunrisers Hyderabad (India)", "players": "Abhishek Sharma, Ishan Kishan, Harsh Dubey", "vs": "Zimbabwe", "league": "India Tour of Zimbabwe - 2nd T20I"},
-        {"date": "July 25, 2026", "time": "07:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Zak Crawley (C), Harry Brook, Mitchell Marsh, Brydon Carse, Ryan Rickelton, Reece Topley & Squad", "vs": "Southern Brave Men", "league": "The Hundred Men"},
-        {"date": "July 25, 2026", "time": "07:00 PM IST", "squad": "Sunrisers Eastern Cape", "players": "Quinton de Kock, James Coles (Southern Brave)", "vs": "Sunrisers Leeds Men", "league": "The Hundred Men"},
-        {"date": "July 25, 2026", "time": "10:30 PM IST", "squad": "Sunrisers Eastern Cape", "players": "Tristan Stubbs (C), Marco Jansen (MI London)", "vs": "Welsh Fire", "league": "The Hundred Men"},
+        {"date_num": 25, "month": "July 2026", "date_str": "July 25, 2026", "day_name": "Sat", "time": "03:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Dani Gibson (C), Phoebe Litchfield, Deepti Sharma & Squad", "vs": "Southern Brave Women", "league": "The Hundred Women"},
+        {"date_num": 25, "month": "July 2026", "date_str": "July 25, 2026", "day_name": "Sat", "time": "04:30 PM IST", "squad": "Sunrisers Hyderabad", "players": "Abhishek Sharma, Ishan Kishan, Harsh Dubey", "vs": "Zimbabwe", "league": "India Tour of Zimbabwe - 2nd T20I"},
+        {"date_num": 25, "month": "July 2026", "date_str": "July 25, 2026", "day_name": "Sat", "time": "07:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Zak Crawley (C), Harry Brook, Mitchell Marsh & Squad", "vs": "Southern Brave Men", "league": "The Hundred Men"},
         
-        # July 26, 2026
-        {"date": "July 26, 2026", "time": "04:30 PM IST", "squad": "Sunrisers Hyderabad (India)", "players": "Abhishek Sharma, Ishan Kishan, Harsh Dubey", "vs": "Zimbabwe", "league": "India Tour of Zimbabwe - 3rd T20I"},
-        {"date": "July 26, 2026", "time": "10:30 PM IST", "squad": "SRH & SEC Stars", "players": "Heinrich Klaasen (SRH), Jonny Bairstow (SEC), Liam Livingstone (SRH)", "vs": "Trent Rockets", "league": "The Hundred Men"},
+        {"date_num": 26, "month": "July 2026", "date_str": "July 26, 2026", "day_name": "Sun", "time": "04:30 PM IST", "squad": "Sunrisers Hyderabad", "players": "Abhishek Sharma, Ishan Kishan, Harsh Dubey", "vs": "Zimbabwe", "league": "India Tour of Zimbabwe - 3rd T20I"},
+        {"date_num": 26, "month": "July 2026", "date_str": "July 26, 2026", "day_name": "Sun", "time": "10:30 PM IST", "squad": "SRH & SEC Stars", "players": "Heinrich Klaasen, Jonny Bairstow, Liam Livingstone", "vs": "Trent Rockets", "league": "The Hundred Men"},
         
-        # July 27, 2026
-        {"date": "July 27, 2026", "time": "11:00 PM IST", "squad": "Sunrisers Eastern Cape Showcase", "players": "Quinton de Kock, James Coles vs Tristan Stubbs, Marco Jansen", "vs": "MI London vs Southern Brave", "league": "The Hundred Men"},
+        {"date_num": 27, "month": "July 2026", "date_str": "July 27, 2026", "day_name": "Mon", "time": "11:00 PM IST", "squad": "Sunrisers Eastern Cape", "players": "Quinton de Kock vs Tristan Stubbs, Marco Jansen", "vs": "MI London vs Southern Brave", "league": "The Hundred Men"},
         
-        # July 28, 2026
-        {"date": "July 28, 2026", "time": "07:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Dani Gibson, Phoebe Litchfield, Deepti Sharma & Squad", "vs": "Manchester Super Giants Women", "league": "The Hundred Women"},
-        {"date": "July 28, 2026", "time": "11:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Harry Brook, Mitchell Marsh, Brydon Carse & Squad", "vs": "Manchester Super Giants Men", "league": "The Hundred Men"},
+        {"date_num": 28, "month": "July 2026", "date_str": "July 28, 2026", "day_name": "Tue", "time": "07:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Dani Gibson, Phoebe Litchfield, Deepti Sharma", "vs": "Manchester Super Giants Women", "league": "The Hundred Women"},
+        {"date_num": 28, "month": "July 2026", "date_str": "July 28, 2026", "day_name": "Tue", "time": "11:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Harry Brook, Mitchell Marsh, Brydon Carse", "vs": "Manchester Super Giants Men", "league": "The Hundred Men"},
         
-        # July 29, 2026
-        {"date": "July 29, 2026", "time": "11:00 PM IST", "squad": "SRH & SEC Stars", "players": "Heinrich Klaasen, Jonny Bairstow vs Tristan Stubbs, Marco Jansen", "vs": "London Spirit vs MI London", "league": "The Hundred Men"},
+        {"date_num": 29, "month": "July 2026", "date_str": "July 29, 2026", "day_name": "Wed", "time": "11:00 PM IST", "squad": "SRH & SEC Stars", "players": "Heinrich Klaasen, Jonny Bairstow vs Tristan Stubbs", "vs": "London Spirit vs MI London", "league": "The Hundred Men"},
         
-        # August 01, 2026
-        {"date": "August 01, 2026", "time": "07:00 PM IST", "squad": "SRH & SEC Stars", "players": "Heinrich Klaasen, Jonny Bairstow vs Quinton de Kock, James Coles", "vs": "London Spirit vs Southern Brave", "league": "The Hundred Men"},
+        {"date_num": 1, "month": "August 2026", "date_str": "August 01, 2026", "day_name": "Sat", "time": "07:00 PM IST", "squad": "SRH & SEC Stars", "players": "Heinrich Klaasen vs Quinton de Kock", "vs": "London Spirit vs Southern Brave", "league": "The Hundred Men"},
         
-        # August 02, 2026
-        {"date": "August 02, 2026", "time": "03:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Phoebe Litchfield, Deepti Sharma & Squad", "vs": "Trent Rockets Women", "league": "The Hundred Women"},
-        {"date": "August 02, 2026", "time": "07:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Mitchell Marsh, Brydon Carse & Squad", "vs": "Trent Rockets Men", "league": "The Hundred Men"},
-        {"date": "August 02, 2026", "time": "11:00 PM IST", "squad": "Sunrisers Eastern Cape", "players": "Tristan Stubbs, Marco Jansen (MI London)", "vs": "Manchester Super Giants", "league": "The Hundred Men"},
+        {"date_num": 2, "month": "August 2026", "date_str": "August 02, 2026", "day_name": "Sun", "time": "03:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Phoebe Litchfield, Deepti Sharma & Squad", "vs": "Trent Rockets Women", "league": "The Hundred Women"},
+        {"date_num": 2, "month": "August 2026", "date_str": "August 02, 2026", "day_name": "Sun", "time": "07:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Mitchell Marsh, Brydon Carse & Squad", "vs": "Trent Rockets Men", "league": "The Hundred Men"},
         
-        # August 04, 2026
-        {"date": "August 04, 2026", "time": "07:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Dani Gibson, Phoebe Litchfield, Deepti Sharma & Squad", "vs": "London Spirit Women", "league": "The Hundred Women"},
-        {"date": "August 04, 2026", "time": "11:00 PM IST", "squad": "Sunrisers Leeds Men vs London Spirit", "players": "Brydon Carse, Mitchell Marsh vs Heinrich Klaasen, Jonny Bairstow", "vs": "London Spirit", "league": "The Hundred Men"},
+        {"date_num": 4, "month": "August 2026", "date_str": "August 04, 2026", "day_name": "Tue", "time": "07:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Dani Gibson, Phoebe Litchfield & Squad", "vs": "London Spirit Women", "league": "The Hundred Women"},
+        {"date_num": 4, "month": "August 2026", "date_str": "August 04, 2026", "day_name": "Tue", "time": "11:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Brydon Carse vs Heinrich Klaasen, Jonny Bairstow", "vs": "London Spirit", "league": "The Hundred Men"},
         
-        # August 07, 2026
-        {"date": "August 07, 2026", "time": "07:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Phoebe Litchfield, Deepti Sharma & Squad", "vs": "Welsh Fire Women", "league": "The Hundred Women"},
-        {"date": "August 07, 2026", "time": "11:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Harry Brook, Mitchell Marsh, Brydon Carse & Squad", "vs": "Welsh Fire Men", "league": "The Hundred Men"},
+        {"date_num": 7, "month": "August 2026", "date_str": "August 07, 2026", "day_name": "Fri", "time": "07:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Phoebe Litchfield, Deepti Sharma & Squad", "vs": "Welsh Fire Women", "league": "The Hundred Women"},
+        {"date_num": 7, "month": "August 2026", "date_str": "August 07, 2026", "day_name": "Fri", "time": "11:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Harry Brook, Mitchell Marsh & Squad", "vs": "Welsh Fire Men", "league": "The Hundred Men"},
         
-        # August 09, 2026
-        {"date": "August 09, 2026", "time": "03:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Dani Gibson, Phoebe Litchfield, Deepti Sharma & Squad", "vs": "Birmingham Phoenix Women", "league": "The Hundred Women"},
-        {"date": "August 09, 2026", "time": "07:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Harry Brook, Mitchell Marsh, Brydon Carse & Squad", "vs": "Birmingham Phoenix Men", "league": "The Hundred Men"},
+        {"date_num": 9, "month": "August 2026", "date_str": "August 09, 2026", "day_name": "Sun", "time": "03:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Dani Gibson, Phoebe Litchfield & Squad", "vs": "Birmingham Phoenix Women", "league": "The Hundred Women"},
+        {"date_num": 9, "month": "August 2026", "date_str": "August 09, 2026", "day_name": "Sun", "time": "07:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Harry Brook, Mitchell Marsh & Squad", "vs": "Birmingham Phoenix Men", "league": "The Hundred Men"},
         
-        # August 12, 2026
-        {"date": "August 12, 2026", "time": "07:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Dani Gibson, Phoebe Litchfield, Deepti Sharma & Squad", "vs": "MI London Women", "league": "The Hundred Women"},
-        {"date": "August 12, 2026", "time": "11:00 PM IST", "squad": "Sunrisers Leeds Men vs MI London", "players": "Harry Brook, Mitchell Marsh vs Tristan Stubbs, Marco Jansen", "vs": "MI London Men", "league": "The Hundred Men"},
+        {"date_num": 12, "month": "August 2026", "date_str": "August 12, 2026", "day_name": "Wed", "time": "07:30 PM IST", "squad": "Sunrisers Leeds Women", "players": "Phoebe Litchfield, Deepti Sharma & Squad", "vs": "MI London Women", "league": "The Hundred Women"},
+        {"date_num": 12, "month": "August 2026", "date_str": "August 12, 2026", "day_name": "Wed", "time": "11:00 PM IST", "squad": "Sunrisers Leeds Men", "players": "Harry Brook, Mitchell Marsh vs Tristan Stubbs", "vs": "MI London Men", "league": "The Hundred Men"},
         
-        # August 15, 2026
-        {"date": "August 15, 2026", "time": "10:00 AM IST", "squad": "Sri Lanka & India Tests", "players": "Kamindu Mendis (SL) vs Ishan Kishan, Mohammed Shami, Nitish Kumar Reddy (IND)", "vs": "India vs Sri Lanka (1st Test - Day 1)", "league": "ICC World Test Championship"},
+        {"date_num": 15, "month": "August 2026", "date_str": "August 15, 2026", "day_name": "Sat", "time": "10:00 AM IST", "squad": "Sri Lanka & India Tests", "players": "Kamindu Mendis vs Ishan Kishan, Mohammed Shami", "vs": "India vs Sri Lanka (1st Test)", "league": "ICC World Test Championship"},
         
-        # August 16, 2026
-        {"date": "August 16, 2026", "time": "10:00 AM IST", "squad": "Sri Lanka & India Tests", "players": "Kamindu Mendis (SL) vs Ishan Kishan, Mohammed Shami, Nitish Kumar Reddy (IND)", "vs": "India vs Sri Lanka (1st Test - Day 2)", "league": "ICC World Test Championship"},
-        {"date": "August 16, 2026", "time": "06:45 PM IST", "squad": "The Hundred Women Final", "players": "Sunrisers Leeds Women (TBD)", "vs": "Final Opponent", "league": "The Hundred Women Final"},
-        {"date": "August 16, 2026", "time": "10:30 PM IST", "squad": "The Hundred Men Final", "players": "Sunrisers Leeds Men / Heinrich Klaasen / Tristan Stubbs (TBD)", "vs": "Final Opponent", "league": "The Hundred Men Final"}
+        {"date_num": 16, "month": "August 2026", "date_str": "August 16, 2026", "day_name": "Sun", "time": "06:45 PM IST", "squad": "The Hundred Finals", "players": "Sunrisers Leeds / SEC / SRH Stars", "vs": "The Hundred Men & Women Finals", "league": "The Hundred Final"}
     ]
-    
+
     # Filter Domain
     if franchise_filter != "All":
         filtered_sched = [s for s in raw_schedules if franchise_filter in s["squad"] or franchise_filter in s["players"] or "SRH" in s["squad"]]
     else:
         filtered_sched = raw_schedules
-        
-    # Group By Date
+
+    # Render Obsidian Calendar Grid (7 Columns: Sun, Mon, Tue, Wed, Thu, Fri, Sat)
+    st.markdown("""
+    <div class='cal-grid-header'>
+        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # 35-Day Calendar Grid Representation (July 25 to August 2026)
+    # Mapping dates to calendar columns
+    grid_dates = [
+        {"num": 25, "month": "July", "day": "Sat", "matches": [m for m in filtered_sched if m["date_num"] == 25 and "July" in m["month"]]},
+        {"num": 26, "month": "July", "day": "Sun", "matches": [m for m in filtered_sched if m["date_num"] == 26 and "July" in m["month"]]},
+        {"num": 27, "month": "July", "day": "Mon", "matches": [m for m in filtered_sched if m["date_num"] == 27 and "July" in m["month"]]},
+        {"num": 28, "month": "July", "day": "Tue", "matches": [m for m in filtered_sched if m["date_num"] == 28 and "July" in m["month"]]},
+        {"num": 29, "month": "July", "day": "Wed", "matches": [m for m in filtered_sched if m["date_num"] == 29 and "July" in m["month"]]},
+        {"num": 30, "month": "July", "day": "Thu", "matches": []},
+        {"num": 31, "month": "July", "day": "Fri", "matches": []},
+        {"num": 1, "month": "August", "day": "Sat", "matches": [m for m in filtered_sched if m["date_num"] == 1 and "August" in m["month"]]},
+        {"num": 2, "month": "August", "day": "Sun", "matches": [m for m in filtered_sched if m["date_num"] == 2 and "August" in m["month"]]},
+        {"num": 3, "month": "August", "day": "Mon", "matches": []},
+        {"num": 4, "month": "August", "day": "Tue", "matches": [m for m in filtered_sched if m["date_num"] == 4 and "August" in m["month"]]},
+        {"num": 5, "month": "August", "day": "Wed", "matches": []},
+        {"num": 6, "month": "August", "day": "Thu", "matches": []},
+        {"num": 7, "month": "August", "day": "Fri", "matches": [m for m in filtered_sched if m["date_num"] == 7 and "August" in m["month"]]},
+        {"num": 8, "month": "August", "day": "Sat", "matches": []},
+        {"num": 9, "month": "August", "day": "Sun", "matches": [m for m in filtered_sched if m["date_num"] == 9 and "August" in m["month"]]},
+        {"num": 10, "month": "August", "day": "Mon", "matches": []},
+        {"num": 11, "month": "August", "day": "Tue", "matches": []},
+        {"num": 12, "month": "August", "day": "Wed", "matches": [m for m in filtered_sched if m["date_num"] == 12 and "August" in m["month"]]},
+        {"num": 13, "month": "August", "day": "Thu", "matches": []},
+        {"num": 14, "month": "August", "day": "Fri", "matches": []},
+        {"num": 15, "month": "August", "day": "Sat", "matches": [m for m in filtered_sched if m["date_num"] == 15 and "August" in m["month"]]},
+        {"num": 16, "month": "August", "day": "Sun", "matches": [m for m in filtered_sched if m["date_num"] == 16 and "August" in m["month"]]}
+    ]
+
+    # Render Grid Row by Row in 7 Columns
+    for row_start in range(0, len(grid_dates), 7):
+        row_items = grid_dates[row_start:row_start+7]
+        cols = st.columns(7)
+        for idx, item in enumerate(row_items):
+            with cols[idx]:
+                has_matches = len(item["matches"]) > 0
+                cell_class = "cal-day-cell has-match" if has_matches else "cal-day-cell"
+                date_class = "cal-date-num active-date" if has_matches else "cal-date-num"
+                
+                match_html = ""
+                for m in item["matches"][:2]:
+                    match_html += f"""
+                    <div class='cal-match-box'>
+                        <div class='cal-teams'>vs {m['vs'].split(' ')[0]}</div>
+                        <span class='cal-time-pill'>⏰ {m['time'].split(' ')[0]}</span>
+                        <span class='cal-status-pill'>• Live</span>
+                    </div>
+                    """
+
+                st.markdown(f"""
+                <div class='{cell_class}'>
+                    <div class='{date_class}'>{item['num']} <small style='font-size:0.7rem; color:#94A3B8;'>{item['month'][:3]}</small></div>
+                    {match_html}
+                </div>
+                """, unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.markdown("### 📋 Full Match Day Breakdown & Player Roster")
+    
+    # Detailed Day Breakdown Cards
     grouped_dates = {}
     for item in filtered_sched:
-        d = item["date"]
+        d = item["date_str"]
         if d not in grouped_dates:
             grouped_dates[d] = []
         grouped_dates[d].append(item)
-        
+
     for date_str, items in grouped_dates.items():
         st.markdown(f"<div class='date-header'>📅 {date_str}</div>", unsafe_allow_html=True)
         for item in items:
@@ -517,11 +635,10 @@ with tab_schedule:
                 <div class='card-tags'>
                     <span class='badge-player'>⏰ {item['time']}</span>
                     <span class='badge-squad'>{item['squad']}</span>
-                    <span class='badge-live'>• Upcoming</span>
+                    <span class='badge-league'>🏏 {item['league']}</span>
                 </div>
                 <h3 style='margin: 0.4rem 0; color: #FFFFFF; font-size: 1.35rem; font-family: "Plus Jakarta Sans", sans-serif;'>vs {item['vs']}</h3>
                 <p style='color: #CBD5E1; margin-bottom: 0.2rem; font-size: 1.02rem;'><strong>Squad Players:</strong> {item['players']}</p>
-                <small style='color: #94A3B8;'>Tournament: {item['league']}</small>
             </div>
             """, unsafe_allow_html=True)
 
