@@ -1,13 +1,13 @@
 """
-Database Manager for @SRHXtra SQLite Memory layer (V10.0 Clean RSS Direct Feed Engine).
+Database Manager for @SRHXtra SQLite Memory layer (V11.0 Auto-Sanitizing Engine).
 Stores raw exact headlines, summaries, and source links for all 73 players and 4 franchises.
-Purges any article older than 24 hours automatically.
+Includes cleanup_invalid_matches() to automatically purge legacy misattributed rows on Streamlit Cloud disk.
 """
 
 import os
 import sqlite3
 import time
-from config.roster import MASTER_ROSTER
+from config.roster import MASTER_ROSTER, match_player_or_franchise_in_text
 from utils.logger import db_logger, error_logger
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "srh_tracker.db")
@@ -21,6 +21,33 @@ def get_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+def cleanup_invalid_matches():
+    """Re-evaluates all stored articles and purges any legacy misattributed rows from disk."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, title, summary, player_name FROM news")
+        rows = cursor.fetchall()
+        
+        to_delete = []
+        for r in rows:
+            text = f"{r['title']} {r['summary']}"
+            matches = match_player_or_franchise_in_text(text)
+            matched_names = {m["player_name"] for m in matches}
+            
+            # If current player_name in DB is NOT in matched_names, mark for deletion!
+            if r["player_name"] not in matched_names:
+                to_delete.append(r["id"])
+                
+        if to_delete:
+            for idx in to_delete:
+                cursor.execute("DELETE FROM news WHERE id = ?", (idx,))
+            conn.commit()
+            db_logger.info(f"Purged {len(to_delete)} legacy misattributed rows.")
+        conn.close()
+    except Exception as e:
+        error_logger.error(f"Error cleaning invalid matches: {e}")
 
 def purge_expired_24h_news():
     """Purges any news article older than 24 hours (86,400 seconds) from SQLite database."""
@@ -39,7 +66,7 @@ def purge_expired_24h_news():
         error_logger.error(f"Error purging 24h expired news: {e}")
 
 def init_db():
-    """Initializes database schema, handles schema migrations, and purges articles > 24 hours old."""
+    """Initializes database schema, handles schema migrations, purges misattributed rows & 24h expired articles."""
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -55,6 +82,10 @@ def init_db():
             cursor.execute("ALTER TABLE news ADD COLUMN pub_timestamp REAL DEFAULT 0.0")
             conn.commit()
 
+        # Hard purge legacy Sakib Hussain misattribution row
+        cursor.execute("DELETE FROM news WHERE title LIKE '%Pranav, Irfan, Shashank%' OR player_name = 'Sakib Hussain'")
+        conn.commit()
+
         # Populate Master Roster of 73 Players
         for team_key, team_info in MASTER_ROSTER.items():
             franchise = team_info["franchise_name"]
@@ -66,7 +97,8 @@ def init_db():
         conn.commit()
         conn.close()
         
-        # Purge any news older than 24 hours
+        # Purge misattributed legacy rows and articles > 24 hours old
+        cleanup_invalid_matches()
         purge_expired_24h_news()
         db_logger.info("Database schema & 73-player master roster initialized cleanly.")
     except Exception as e:
@@ -116,7 +148,8 @@ def insert_news(title, source, summary, link, published_at, player_name, franchi
         return None
 
 def get_recent_news(limit=150):
-    """Purges >24h expired news and gets recent scraped live news items ordered strictly BY pub_timestamp DESC."""
+    """Purges misattributed legacy rows & >24h expired news, then gets active live news items ordered strictly BY pub_timestamp DESC."""
+    cleanup_invalid_matches()
     purge_expired_24h_news()
     conn = get_connection()
     cursor = conn.cursor()
@@ -127,6 +160,7 @@ def get_recent_news(limit=150):
 
 def search_news(query):
     """Searches news items by keyword across title, summary, or player name."""
+    cleanup_invalid_matches()
     purge_expired_24h_news()
     conn = get_connection()
     cursor = conn.cursor()
