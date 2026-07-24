@@ -1,16 +1,7 @@
 """
-@SRHXtra Premium Obsidian Command Center (V11.0 — Full-Stack Improvements).
-Section 1: Interactive Obsidian Month Calendar Grid (native iframe, correct day alignment).
-Section 2: Live Pulse News Portal — live search, cached DB reads, refresh cooldown.
-
-V11.0 improvements:
-  - @st.cache_data(ttl=300) on DB reads — page renders are near-instant
-  - Search bar in News tab wired to search_news() in db_manager
-  - Schedule data imported from config/schedule.py (app.py now ~200 lines shorter)
-  - News card HTML extracted into render_news_card() / render_pulse_item() helpers
-  - Live Refresh button has 5-minute cooldown to prevent RSS spam
-  - News tab label shows live article count badge
-  - Failed feed count shown in sidebar after refresh
+@SRHXtra Premium Obsidian Command Center (V12.0 — News-Only Edition).
+Live Pulse News Portal — live search, cached DB reads, refresh cooldown.
+Calendar feature removed; news feed now renders directly on the main page.
 """
 
 import os
@@ -24,10 +15,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import streamlit as st
 import streamlit.components.v1 as components
-import pandas as pd
 
 from config.roster import MASTER_ROSTER
-from config.schedule import FIXTURE_SCHEDULE, GRID_DATE_SLOTS
 from database.db_manager import init_db, get_recent_news, search_news, purge_expired_24h_news
 from utils.time_utils import format_ist_12hr
 
@@ -117,7 +106,6 @@ def render_news_card(n):
     """Renders a full news card as an HTML string (main feed)."""
     link = safe_article_link(n)
     league = detect_league_badge(n["title"], n["summary"])
-    pub_time = n["published_at"].split("@")[-1].strip() if "@" in n["published_at"] else n["published_at"]
     return f"""
     <a href='{link}' target='_blank' class='obsidian-card-link'>
         <div class='obsidian-card'>
@@ -262,9 +250,8 @@ st.markdown("""
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 st.sidebar.markdown("# 🧡 @SRHXtra")
-st.sidebar.markdown("**Obsidian Command Center V11.0**")
+st.sidebar.markdown("**Obsidian Command Center V12.0**")
 st.sidebar.markdown("📡 **System:** `Command Center`")
-st.sidebar.markdown("🗓️ **Calendar:** `Native Iframe Matrix`")
 st.sidebar.markdown("👥 **Coverage:** `73 Players & 4 Squads`")
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"🕒 **Last Refreshed IST:**\n`{st.session_state['last_refreshed']}`")
@@ -277,8 +264,7 @@ franchise_filter = st.sidebar.selectbox(
 
 # ── Live Refresh Button with 5-Minute Cooldown ────────────────────────────────
 REFRESH_COOLDOWN_SECS = 300
-now_ts = time.time()
-seconds_since_last = now_ts - st.session_state["last_refresh_ts"]
+seconds_since_last = time.time() - st.session_state["last_refresh_ts"]
 cooldown_remaining = int(REFRESH_COOLDOWN_SECS - seconds_since_last)
 
 if cooldown_remaining > 0:
@@ -295,7 +281,6 @@ else:
             st.session_state["last_refreshed"] = format_ist_12hr()
             cached_get_recent_news.clear()
             cached_search_news.clear()
-            # Show structured feedback if result supports it
             inserted = getattr(result, "inserted", int(result))
             failed   = getattr(result, "failed_feeds", [])
             st.sidebar.success(f"✅ Captured {inserted} fresh Sunrisers items!")
@@ -305,14 +290,13 @@ else:
 
 # ── Dashboard Header ──────────────────────────────────────────────────────────
 st.markdown("<div class='obsidian-title'>Premium Obsidian Command Center</div>", unsafe_allow_html=True)
-st.markdown("<div class='obsidian-subtitle'>Real-Time Reconnaissance Hub & Obsidian Calendar Matrix | 73 Squad Members Across 4 Franchises</div>", unsafe_allow_html=True)
+st.markdown("<div class='obsidian-subtitle'>Real-Time Reconnaissance Hub | 73 Squad Members Across 4 Franchises</div>", unsafe_allow_html=True)
 
 # ── KPI Metric Bar ────────────────────────────────────────────────────────────
 live_count = len(cached_get_recent_news(limit=150))
 st.markdown(f"""
 <div class='metric-bar'>
     <div class='metric-pill'><div class='metric-icon'>📡</div><div><div class='metric-val'>50</div><div class='metric-lbl'>Global Feeds</div></div></div>
-    <div class='metric-pill'><div class='metric-icon'>📅</div><div><div class='metric-val'>30-Day</div><div class='metric-lbl'>Calendar Matrix</div></div></div>
     <div class='metric-pill'><div class='metric-icon'>👥</div><div><div class='metric-val'>73</div><div class='metric-lbl'>Players Tracked</div></div></div>
     <div class='metric-pill'><div class='metric-icon'>🧡</div><div><div class='metric-val'>4</div><div class='metric-lbl'>Global Franchises</div></div></div>
     <div class='metric-pill'><div class='metric-icon'>📰</div><div><div class='metric-val'>{live_count}</div><div class='metric-lbl'>Live Articles</div></div></div>
@@ -320,170 +304,47 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Navigation Tabs ───────────────────────────────────────────────────────────
-tab_schedule, tab_news = st.tabs([
-    "🗓️ OBSIDIAN MONTH CALENDAR GRID (30-DAY FIXTURE MATRIX)",
-    f"📡 LIVE PULSE & NEWS RECON FEED ({live_count})",
-])
+# ── Search Bar ────────────────────────────────────────────────────────────────
+st.subheader("📡 Live Pulse & News Feed (Click Any Card to Open Original Article)")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 1: OBSIDIAN MONTH CALENDAR GRID
-# ─────────────────────────────────────────────────────────────────────────────
-with tab_schedule:
-    st.subheader("🗓️ Obsidian Month Fixture Grid (July / August 2026)")
+search_query = st.text_input(
+    "🔍 Search player, team or keyword",
+    placeholder="e.g. Abhishek Sharma, injury, The Hundred...",
+    label_visibility="collapsed",
+)
 
-    # Filter schedule by franchise
-    if franchise_filter != "All":
-        filtered_sched = [
-            s for s in FIXTURE_SCHEDULE
-            if franchise_filter in s["squad"] or franchise_filter in s["players"]
-        ]
-    else:
-        filtered_sched = FIXTURE_SCHEDULE
+# ── Fetch & Filter News ───────────────────────────────────────────────────────
+if search_query.strip():
+    news_list = cached_search_news(search_query.strip())
+    st.caption(f"🔍 Showing **{len(news_list)}** results for *\"{search_query}\"*")
+else:
+    news_list = cached_get_recent_news(limit=150)
 
-    # Build calendar cell HTML
-    cells_html = ""
-    for slot in GRID_DATE_SLOTS:
-        month_full = "July" if slot["month"] == "Jul" else "August"
-        matches = [
-            m for m in filtered_sched
-            if m["date_num"] == slot["num"] and month_full in m["month"]
-        ]
-        has_matches = bool(matches)
-        cell_cls = "cal-cell has-match" if has_matches else "cal-cell"
-        num_cls  = "cal-num active-num" if has_matches else "cal-num"
+if franchise_filter != "All":
+    news_list = [n for n in news_list if n["franchise"] == franchise_filter]
 
-        matches_html = ""
-        for m in matches[:2]:
-            matches_html += (
-                f"<div class='cal-match-item'>"
-                f"<div class='cal-teams'>vs {m['vs'].split(' ')[0]}</div>"
-                f"<div class='cal-time'>⏰ {m['time'].split(' ')[0]}</div>"
-                f"</div>"
-            )
+news_list = sorted(news_list, key=get_bulletproof_sort_key, reverse=True)
 
-        cells_html += (
-            f"<div class='{cell_cls}'>"
-            f"<div class='{num_cls}'>{slot['num']} "
-            f"<small style='font-size:0.75rem;color:#94A3B8;'>{slot['month']}</small></div>"
-            f"{matches_html}</div>"
-        )
+# ── Render News ───────────────────────────────────────────────────────────────
+if news_list:
+    col_main, col_pulse = st.columns([2.2, 1])
 
-    iframe_html_code = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <style>
-        body {{ margin:0; padding:0; background:transparent; color:#E2E8F0;
-                font-family:'Plus Jakarta Sans',-apple-system,sans-serif; overflow-x:hidden; }}
-        .obsidian-calendar-grid {{ display:grid; grid-template-columns:repeat(7,1fr); gap:10px; width:100%; }}
-        .cal-day-header {{ text-align:center; font-weight:700; color:#94A3B8; font-size:0.85rem;
-                           padding:10px 0; background:#111420; border:1px solid rgba(255,255,255,0.06);
-                           border-radius:8px; letter-spacing:1px; }}
-        .cal-cell {{ background:rgba(18,22,33,0.8); border:1px solid rgba(255,255,255,0.08);
-                     border-radius:12px; padding:0.75rem; min-height:120px; box-sizing:border-box; }}
-        .cal-cell.has-match {{ border-color:rgba(242,101,34,0.5);
-                               background:radial-gradient(circle at top right,rgba(242,101,34,0.15) 0%,rgba(18,22,33,0.9) 80%); }}
-        .cal-num {{ font-size:1.15rem; font-weight:700; color:#64748B; margin-bottom:0.4rem; }}
-        .cal-num.active-num {{ color:#FFFFFF; }}
-        .cal-match-item {{ background:rgba(10,13,20,0.9); border:1px solid rgba(242,101,34,0.5);
-                           border-radius:8px; padding:5px 7px; margin-bottom:5px; }}
-        .cal-teams {{ font-size:0.78rem; font-weight:800; color:#FFFFFF; line-height:1.2; margin-bottom:2px; }}
-        .cal-time {{ font-size:0.7rem; color:#FF8844; font-weight:700; }}
-    </style>
-    </head>
-    <body>
-        <div class='obsidian-calendar-grid'>
-            <div class='cal-day-header'>SUN</div>
-            <div class='cal-day-header'>MON</div>
-            <div class='cal-day-header'>TUE</div>
-            <div class='cal-day-header'>WED</div>
-            <div class='cal-day-header'>THU</div>
-            <div class='cal-day-header'>FRI</div>
-            <div class='cal-day-header'>SAT</div>
-            <div class='cal-cell'></div>
-            <div class='cal-cell'></div>
-            <div class='cal-cell'></div>
-            <div class='cal-cell'></div>
-            <div class='cal-cell'></div>
-            <div class='cal-cell'></div>
-            {cells_html}
-        </div>
-    </body>
-    </html>
-    """
+    with col_main:
+        for n in news_list:
+            st.markdown(render_news_card(n), unsafe_allow_html=True)
 
-    components.html(iframe_html_code, height=480, scrolling=False)
+    with col_pulse:
+        st.markdown("""
+        <div class='pulse-container'>
+            <div class='pulse-title'><span class='pulse-dot'></span> Live Pulse Timeline</div>
+        """, unsafe_allow_html=True)
 
-    st.markdown("---")
-    st.markdown("### 📋 Full Match Day Breakdown & Player Roster")
+        for n in news_list[:8]:
+            st.markdown(render_pulse_item(n), unsafe_allow_html=True)
 
-    grouped_dates = {}
-    for item in filtered_sched:
-        grouped_dates.setdefault(item["date_str"], []).append(item)
-
-    for date_str, items in grouped_dates.items():
-        st.markdown(f"<div class='date-header'>📅 {date_str}</div>", unsafe_allow_html=True)
-        for item in items:
-            st.markdown(f"""
-            <div class='obsidian-card'>
-                <div class='card-tags'>
-                    <span class='badge-player'>⏰ {item['time']}</span>
-                    <span class='badge-squad'>{item['squad']}</span>
-                    <span class='badge-league'>🏏 {item['league']}</span>
-                </div>
-                <h3 style='margin:0.4rem 0;color:#FFFFFF;font-size:1.35rem;font-family:"Plus Jakarta Sans",sans-serif;'>vs {item['vs']}</h3>
-                <p style='color:#CBD5E1;margin-bottom:0.2rem;font-size:1.02rem;'><strong>Squad Players:</strong> {item['players']}</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 2: LIVE PULSE & NEWS RECON FEED
-# ─────────────────────────────────────────────────────────────────────────────
-with tab_news:
-    st.subheader("📡 Live Pulse & News Feed (Click Any Card to Open Original Article)")
-
-    # ── Search bar ────────────────────────────────────────────────────────────
-    search_query = st.text_input(
-        "🔍 Search player, team or keyword",
-        placeholder="e.g. Abhishek Sharma, injury, The Hundred...",
-        label_visibility="collapsed",
-    )
-
+        st.markdown("</div>", unsafe_allow_html=True)
+else:
     if search_query.strip():
-        news_list = cached_search_news(search_query.strip())
-        st.caption(f"🔍 Showing **{len(news_list)}** results for *\"{search_query}\"*")
+        st.info(f"No results found for \"{search_query}\". Try a different player name or keyword.")
     else:
-        news_list = cached_get_recent_news(limit=150)
-
-    # Franchise filter
-    if franchise_filter != "All":
-        news_list = [n for n in news_list if n["franchise"] == franchise_filter]
-
-    # Sort latest-first
-    news_list = sorted(news_list, key=get_bulletproof_sort_key, reverse=True)
-
-    if news_list:
-        col_main, col_pulse = st.columns([2.2, 1])
-
-        # Left: Main News Feed
-        with col_main:
-            for n in news_list:
-                st.markdown(render_news_card(n), unsafe_allow_html=True)
-
-        # Right: Live Pulse Timeline
-        with col_pulse:
-            st.markdown("""
-            <div class='pulse-container'>
-                <div class='pulse-title'><span class='pulse-dot'></span> Live Pulse Timeline</div>
-            """, unsafe_allow_html=True)
-
-            for n in news_list[:8]:
-                st.markdown(render_pulse_item(n), unsafe_allow_html=True)
-
-            st.markdown("</div>", unsafe_allow_html=True)
-    else:
-        if search_query.strip():
-            st.info(f"No results found for \"{search_query}\". Try a different player name or keyword.")
-        else:
-            st.info("No player or franchise updates in the last 24 hours. Click '⚡ Live Refresh 50 Feeds' in the sidebar to scan all sources now!")
+        st.info("No player or franchise updates in the last 24 hours. Click '⚡ Live Refresh 50 Feeds' in the sidebar to scan all sources now!")
