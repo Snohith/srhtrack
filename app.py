@@ -1,7 +1,7 @@
 """
-@SRHXtra Premium Obsidian Command Center (V12.0 — News-Only Edition).
-Live Pulse News Portal — live search, cached DB reads, refresh cooldown.
-Calendar feature removed; news feed now renders directly on the main page.
+@SRHXtra Premium Obsidian Command Center (V12.0 — No Calendar Grid).
+Section 1: Match Day Fixture Breakdown & Player Roster (cards list, no calendar grid).
+Section 2: Live Pulse News Portal — live search, cached DB reads, refresh cooldown.
 """
 
 import os
@@ -17,6 +17,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from config.roster import MASTER_ROSTER
+from config.schedule import FIXTURE_SCHEDULE
 from database.db_manager import init_db, get_recent_news, search_news, purge_expired_24h_news
 from utils.time_utils import format_ist_12hr
 
@@ -304,47 +305,91 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Search Bar ────────────────────────────────────────────────────────────────
-st.subheader("📡 Live Pulse & News Feed (Click Any Card to Open Original Article)")
+# ── Navigation Tabs ───────────────────────────────────────────────────────────
+tab_schedule, tab_news = st.tabs([
+    "📋 MATCH DAY FIXTURE BREAKDOWN",
+    f"📡 LIVE PULSE & NEWS RECON FEED ({live_count})",
+])
 
-search_query = st.text_input(
-    "🔍 Search player, team or keyword",
-    placeholder="e.g. Abhishek Sharma, injury, The Hundred...",
-    label_visibility="collapsed",
-)
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 1: MATCH DAY FIXTURE BREAKDOWN (calendar grid removed, cards kept)
+# ─────────────────────────────────────────────────────────────────────────────
+with tab_schedule:
+    st.subheader("📋 Full Match Day Breakdown & Player Roster (July / August 2026)")
 
-# ── Fetch & Filter News ───────────────────────────────────────────────────────
-if search_query.strip():
-    news_list = cached_search_news(search_query.strip())
-    st.caption(f"🔍 Showing **{len(news_list)}** results for *\"{search_query}\"*")
-else:
-    news_list = cached_get_recent_news(limit=150)
-
-if franchise_filter != "All":
-    news_list = [n for n in news_list if n["franchise"] == franchise_filter]
-
-news_list = sorted(news_list, key=get_bulletproof_sort_key, reverse=True)
-
-# ── Render News ───────────────────────────────────────────────────────────────
-if news_list:
-    col_main, col_pulse = st.columns([2.2, 1])
-
-    with col_main:
-        for n in news_list:
-            st.markdown(render_news_card(n), unsafe_allow_html=True)
-
-    with col_pulse:
-        st.markdown("""
-        <div class='pulse-container'>
-            <div class='pulse-title'><span class='pulse-dot'></span> Live Pulse Timeline</div>
-        """, unsafe_allow_html=True)
-
-        for n in news_list[:8]:
-            st.markdown(render_pulse_item(n), unsafe_allow_html=True)
-
-        st.markdown("</div>", unsafe_allow_html=True)
-else:
-    if search_query.strip():
-        st.info(f"No results found for \"{search_query}\". Try a different player name or keyword.")
+    # Filter by franchise
+    if franchise_filter != "All":
+        filtered_sched = [
+            s for s in FIXTURE_SCHEDULE
+            if franchise_filter in s["squad"] or franchise_filter in s["players"]
+        ]
     else:
-        st.info("No player or franchise updates in the last 24 hours. Click '⚡ Live Refresh 50 Feeds' in the sidebar to scan all sources now!")
+        filtered_sched = FIXTURE_SCHEDULE
+
+    if filtered_sched:
+        grouped_dates = {}
+        for item in filtered_sched:
+            grouped_dates.setdefault(item["date_str"], []).append(item)
+
+        for date_str, items in grouped_dates.items():
+            st.markdown(f"<h3 style='color:#F26522;margin-top:1.5rem;font-family:\"Plus Jakarta Sans\",sans-serif;'>📅 {date_str}</h3>", unsafe_allow_html=True)
+            for item in items:
+                st.markdown(f"""
+                <div class='obsidian-card' style='margin-bottom:1rem;'>
+                    <div class='card-tags'>
+                        <span class='badge-player'>⏰ {item['time']}</span>
+                        <span class='badge-squad'>{item['squad']}</span>
+                        <span class='badge-league'>🏏 {item['league']}</span>
+                    </div>
+                    <h3 style='margin:0.4rem 0;color:#FFFFFF;font-size:1.35rem;font-family:"Plus Jakarta Sans",sans-serif;'>vs {item['vs']}</h3>
+                    <p style='color:#CBD5E1;margin-bottom:0.2rem;font-size:1.02rem;'><strong>Squad Players:</strong> {item['players']}</p>
+                </div>
+                """, unsafe_allow_html=True)
+    else:
+        st.info("No fixtures found for the selected franchise filter.")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 2: LIVE PULSE & NEWS RECON FEED
+# ─────────────────────────────────────────────────────────────────────────────
+with tab_news:
+    st.subheader("📡 Live Pulse & News Feed (Click Any Card to Open Original Article)")
+
+    search_query = st.text_input(
+        "🔍 Search player, team or keyword",
+        placeholder="e.g. Abhishek Sharma, injury, The Hundred...",
+        label_visibility="collapsed",
+    )
+
+    if search_query.strip():
+        news_list = cached_search_news(search_query.strip())
+        st.caption(f"🔍 Showing **{len(news_list)}** results for *\"{search_query}\"*")
+    else:
+        news_list = cached_get_recent_news(limit=150)
+
+    if franchise_filter != "All":
+        news_list = [n for n in news_list if n["franchise"] == franchise_filter]
+
+    news_list = sorted(news_list, key=get_bulletproof_sort_key, reverse=True)
+
+    if news_list:
+        col_main, col_pulse = st.columns([2.2, 1])
+
+        with col_main:
+            for n in news_list:
+                st.markdown(render_news_card(n), unsafe_allow_html=True)
+
+        with col_pulse:
+            st.markdown("""
+            <div class='pulse-container'>
+                <div class='pulse-title'><span class='pulse-dot'></span> Live Pulse Timeline</div>
+            """, unsafe_allow_html=True)
+
+            for n in news_list[:8]:
+                st.markdown(render_pulse_item(n), unsafe_allow_html=True)
+
+            st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        if search_query.strip():
+            st.info(f"No results found for \"{search_query}\". Try a different player name or keyword.")
+        else:
+            st.info("No player or franchise updates in the last 24 hours. Click '⚡ Live Refresh 50 Feeds' in the sidebar to scan all sources now!")
