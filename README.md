@@ -2,13 +2,13 @@
 
 > **Private Repository | Operational Media Desk for the Global Sunrisers Cricket Empire**
 
-`@SRHXtra` is an enterprise-grade, local-first sports data operations platform that tracks **73 players** across all 4 Sunrisers global cricket franchises (**Sunrisers Hyderabad IPL**, **Sunrisers Eastern Cape SA20**, **Sunrisers Leeds Men**, **Sunrisers Leeds Women**).
+`@SRHXtra` is an enterprise-grade, local-first sports data operations platform that tracks **74 players** across all 4 Sunrisers global cricket franchises (**Sunrisers Hyderabad IPL**, **Sunrisers Eastern Cape SA20**, **Sunrisers Leeds Men**, **Sunrisers Leeds Women**).
 
 ---
 
 ## 🌟 Key Features
 
-* **📊 Dynamic Excel Master Roster:** Automatically loads and tracks 73 players from `squadofsunrisers.xlsx` with regex word boundary matching (0 false positives).
+* **📊 Dynamic Excel Master Roster:** Automatically loads and tracks 74 players from `squadofsunrisers.xlsx` with regex word boundary matching (0 false positives).
 * **🗓️ Section 1: 30-Day IST Schedule:** Complete chronological fixture calendar sorted by Date & Start Time strictly in **Indian Standard Time (IST)**.
 * **📰 Section 2: Player Reconnaissance:** Verified match stats, podcast appearances, injury updates, and viral moments sorted latest-first by IST timestamp.
 * **📡 16-Source Data Engine:** Polls 16 top-tier cricket outlets (ESPNcricinfo, Cricbuzz, BBC Sport, Sky Sports, Wisden, etc.) with exponential backoff retries.
@@ -22,7 +22,7 @@
 ```
 Tracker/
 ├── app.py                      # Streamlit UI (2 Streamlined Sections)
-├── squadofsunrisers.xlsx       # Master Roster Spreadsheet (73 Players)
+├── squadofsunrisers.xlsx       # Master Roster Spreadsheet (74 Players)
 ├── config/
 │   └── roster.py               # Dynamic Excel Roster Loader & Regex Engine
 ├── database/

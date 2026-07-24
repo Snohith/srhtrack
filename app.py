@@ -353,7 +353,7 @@ st.markdown("""
 st.sidebar.markdown("# 🧡 @SRHXtra")
 st.sidebar.markdown("**Obsidian Command Center V12.0**")
 st.sidebar.markdown("📡 **System:** `Command Center`")
-st.sidebar.markdown("👥 **Coverage:** `73 Players & 4 Squads`")
+st.sidebar.markdown("👥 **Coverage:** `74 Players & 4 Squads`")
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"🕒 **Last Refreshed IST:**\n`{st.session_state['last_refreshed']}`")
 st.sidebar.markdown("---")
@@ -391,14 +391,14 @@ else:
 
 # ── Dashboard Header ──────────────────────────────────────────────────────────
 st.markdown("<div class='obsidian-title'>Premium Obsidian Command Center</div>", unsafe_allow_html=True)
-st.markdown("<div class='obsidian-subtitle'>Real-Time Reconnaissance Hub | 73 Squad Members Across 4 Franchises</div>", unsafe_allow_html=True)
+st.markdown("<div class='obsidian-subtitle'>Real-Time Reconnaissance Hub | 74 Squad Members Across 4 Franchises</div>", unsafe_allow_html=True)
 
 # ── KPI Metric Bar ────────────────────────────────────────────────────────────
 live_count = len(cached_get_recent_news(limit=150))
 st.markdown(f"""
 <div class='metric-bar'>
     <div class='metric-pill'><div class='metric-icon'>📡</div><div><div class='metric-val'>50</div><div class='metric-lbl'>Global Feeds</div></div></div>
-    <div class='metric-pill'><div class='metric-icon'>👥</div><div><div class='metric-val'>73</div><div class='metric-lbl'>Players Tracked</div></div></div>
+    <div class='metric-pill'><div class='metric-icon'>👥</div><div><div class='metric-val'>74</div><div class='metric-lbl'>Players Tracked</div></div></div>
     <div class='metric-pill'><div class='metric-icon'>🧡</div><div><div class='metric-val'>4</div><div class='metric-lbl'>Global Franchises</div></div></div>
     <div class='metric-pill'><div class='metric-icon'>📰</div><div><div class='metric-val'>{live_count}</div><div class='metric-lbl'>Live Articles</div></div></div>
     <div class='metric-pill'><div class='metric-icon'>⚡</div><div><div class='metric-val'>Live</div><div class='metric-lbl'>Auto Sync</div></div></div>

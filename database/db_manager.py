@@ -1,6 +1,6 @@
 """
 Database Manager for @SRHXtra SQLite Memory layer (V12.0 — Context-Manager Edition).
-Stores raw exact headlines, summaries, and source links for all 73 players and 4 franchises.
+Stores raw exact headlines, summaries, and source links for all 74 players and 4 franchises.
 Improvements in V12.0:
   - contextlib.closing() on every connection to prevent leaks on exceptions
   - purge_stale_notifications() cleans unbounded notifications table weekly
@@ -134,7 +134,7 @@ def init_db():
             except Exception:
                 pass
 
-            # Seed Master Roster of 73 Players
+            # Seed Master Roster of 74 Players
             for team_key, team_info in MASTER_ROSTER.items():
                 franchise = team_info["franchise_name"]
                 for p in team_info["players"]:
@@ -149,7 +149,7 @@ def init_db():
         cleanup_invalid_matches()
         purge_expired_24h_news()
         purge_stale_notifications()
-        db_logger.info("Database schema & 73-player master roster initialised cleanly.")
+        db_logger.info("Database schema & 74-player master roster initialised cleanly.")
     except Exception as e:
         error_logger.error(f"Failed to initialise database: {e}")
 
@@ -170,7 +170,7 @@ def get_all_players(franchise_filter=None):
 
 def insert_news(title, source, summary, link, published_at, player_name, franchise, pub_timestamp=0.0, importance_score=5.0, category="General News"):
     """
-    Inserts exact raw RSS headline & summary for all 73 players and 4 franchises.
+    Inserts exact raw RSS headline & summary for all 74 players and 4 franchises.
     Deduplicates on URL or exact title. Coerces empty/# links to NULL to avoid
     false UNIQUE constraint conflicts on empty strings.
 

@@ -1,6 +1,6 @@
 """
 Master Roster Registry dynamically loaded from squadofsunrisers.xlsx.
-Enforces 100% Strict Full-Name Matching for all 73 squad members to eliminate 100% of surname misattributions (e.g. Mudassar Hussain matching Sakib Hussain).
+Enforces 100% Strict Full-Name Matching for all 74 squad members to eliminate 100% of surname misattributions (e.g. Mudassar Hussain matching Sakib Hussain).
 """
 
 import os
@@ -89,7 +89,7 @@ FRANCHISE_PATTERNS = [
 def match_player_or_franchise_in_text(text):
     """
     Finds Sunrisers players OR franchise team names mentioned in text.
-    STRICT FULL-NAME MATCHING REQUIRED for all 73 squad members to guarantee 100% relevance and 0 misattributions.
+    STRICT FULL-NAME MATCHING REQUIRED for all 74 squad members to guarantee 100% relevance and 0 misattributions.
     """
     text_clean = text.lower()
     
@@ -101,7 +101,7 @@ def match_player_or_franchise_in_text(text):
     matches = []
     matched_names = set()
 
-    # 1. Match Player Names (73 Squad Members) - Full Name Matching Always
+    # 1. Match Player Names (74 Squad Members) - Full Name Matching Always
     for team_key, data in MASTER_ROSTER.items():
         for p in data["players"]:
             p_name = p["name"]

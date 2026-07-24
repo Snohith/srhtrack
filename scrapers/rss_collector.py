@@ -1,6 +1,6 @@
 """
 Expanded RSS Feed Collector for @SRHXtra V9.0 — Phase 1 Ranker Integration.
-Polls 50 Top-Tier Global Outlets for all 73 Squad Members & 4 Franchise Team Names.
+Polls 50 Top-Tier Global Outlets for all 74 Squad Members & 4 Franchise Team Names.
 Stores EXACT raw source titles and descriptions for direct ESPNcricinfo-style cards.
 
 V9.0 changes (Phase 1):
@@ -26,12 +26,16 @@ from utils.time_utils import parse_rss_date_to_ist, format_ist_12hr
 
 # Build a fast lookup: player_name → player_info dict (for captain-aware scoring)
 _PLAYER_INFO_CACHE: dict = {}
-for _team_info in MASTER_ROSTER.values():
-    for _p in _team_info["players"]:
-        _PLAYER_INFO_CACHE[_p["name"]] = {
-            "captain": bool(_p.get("captain")),
-            "role": _p.get("role", ""),
-        }
+
+def get_player_info(player_name):
+    if not _PLAYER_INFO_CACHE or player_name not in _PLAYER_INFO_CACHE:
+        for _team_info in MASTER_ROSTER.values():
+            for _p in _team_info["players"]:
+                _PLAYER_INFO_CACHE[_p["name"]] = {
+                    "captain": bool(_p.get("captain")),
+                    "role": _p.get("role", ""),
+                }
+    return _PLAYER_INFO_CACHE.get(player_name, {"captain": False, "role": ""})
 
 # 50 TOP-TIER GLOBAL CRICKET MEDIA OUTLETS
 # Dead feeds replaced in V8.0 are marked with ← FIXED
@@ -122,7 +126,7 @@ def fetch_feed_with_retry(url, retries=2, delay=1):
 
 def fetch_and_filter_rss():
     """
-    Polls all 50 sources, filters for 73 players OR 4 franchise team names.
+    Polls all 50 sources, filters for 74 players OR 4 franchise team names.
     STRICTLY DISCARDS any article older than 24 hours.
     Stores EXACT raw headline and description from sources.
 
@@ -159,11 +163,11 @@ def fetch_and_filter_rss():
             if age_hours > 24.0:
                 continue
 
-            # Match 73 Players OR 4 Franchise Team Names
+            # Match 74 Players OR 4 Franchise Team Names
             matched_targets = match_player_or_franchise_in_text(f"{title} {summary}")
             for mt in matched_targets:
                 # ── Phase 1: Score & Categorise via ranker ──────────────────
-                player_info = _PLAYER_INFO_CACHE.get(mt["player_name"], {"captain": False})
+                player_info = get_player_info(mt["player_name"])
                 score    = calculate_importance_score(
                     title=title,
                     summary=summary,

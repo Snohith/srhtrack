@@ -42,9 +42,9 @@ def setup_db():
 
 
 def test_master_roster_count():
-    """73 players must be seeded into the DB from the Excel roster."""
+    """74 players must be seeded into the DB from the Excel roster."""
     players = get_all_players()
-    assert len(players) == 73, f"Expected 73 players, got {len(players)}"
+    assert len(players) == 74, f"Expected 74 players, got {len(players)}"
     print(f"✅ Master Roster: {len(players)} players verified across 4 squads.")
 
 
@@ -146,6 +146,18 @@ def test_match_player_function():
     print("✅ Player name matching: passed.")
 
 
+def test_tilly_kesteven_tracking():
+    """Verify Tilly Kesteven is loaded into roster and tracked cleanly."""
+    players = get_all_players(franchise_filter="Sunrisers Leeds Women")
+    p_names = [p["name"] for p in players]
+    assert "Tilly Kesteven" in p_names, f"Expected Tilly Kesteven in Sunrisers Leeds Women, got {p_names}"
+    
+    matches = match_player_or_franchise_in_text("Tilly Kesteven joined the Sunrisers Leeds Women camp recently")
+    m_names = [m["player_name"] for m in matches]
+    assert "Tilly Kesteven" in m_names, f"Expected Tilly Kesteven match, got {m_names}"
+    print("✅ Tilly Kesteven tracking: verified successfully.")
+
+
 def test_logging_files_exist():
     """Logger must have created rss.log and database.log files."""
     rss_logger.info("Test RSS logger verification entry")
@@ -169,5 +181,6 @@ if __name__ == "__main__":
     test_ranker_importance_score()
     test_ranker_categorize()
     test_match_player_function()
+    test_tilly_kesteven_tracking()
     test_logging_files_exist()
     print("\n🎉 ALL SYSTEM VERIFICATION TESTS PASSED CLEANLY!")
