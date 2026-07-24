@@ -12,6 +12,7 @@ V12.1 fixes:
 import os
 import sys
 import time
+import textwrap
 import urllib.parse
 from datetime import datetime
 
@@ -450,17 +451,18 @@ with tab_schedule:
         for date_str, items in grouped_dates.items():
             st.markdown(f"<h3 style='color:#F26522;margin-top:1.5rem;font-family:\"Plus Jakarta Sans\",sans-serif;'>📅 {date_str}</h3>", unsafe_allow_html=True)
             for item in items:
-                st.markdown(textwrap.dedent(f"""
-                    <div class='obsidian-card' style='margin-bottom:1rem;'>
-                        <div class='card-tags'>
-                            <span class='badge-player'>⏰ {item['time']}</span>
-                            <span class='badge-squad'>{item['squad']}</span>
-                            <span class='badge-league'>🏏 {item['league']}</span>
-                        </div>
-                        <h3 style='margin:0.4rem 0;color:#FFFFFF;font-size:1.35rem;font-family:"Plus Jakarta Sans",sans-serif;'>vs {item['vs']}</h3>
-                        <p style='color:#CBD5E1;margin-bottom:0.2rem;font-size:1.02rem;'><strong>Squad Players:</strong> {item['players']}</p>
-                    </div>
-                """).strip(), unsafe_allow_html=True)
+                match_card_html = (
+                    f"<div class='obsidian-card' style='margin-bottom:1rem;'>"
+                    f"<div class='card-tags'>"
+                    f"<span class='badge-player'>⏰ {item['time']}</span>"
+                    f"<span class='badge-squad'>{item['squad']}</span>"
+                    f"<span class='badge-league'>🏏 {item['league']}</span>"
+                    f"</div>"
+                    f"<h3 style='margin:0.4rem 0;color:#FFFFFF;font-size:1.35rem;font-family:\"Plus Jakarta Sans\",sans-serif;'>vs {item['vs']}</h3>"
+                    f"<p style='color:#CBD5E1;margin-bottom:0.2rem;font-size:1.02rem;'><strong>Squad Players:</strong> {item['players']}</p>"
+                    f"</div>"
+                )
+                st.markdown(match_card_html, unsafe_allow_html=True)
     else:
         st.info(f"No fixtures found for **{franchise_filter}**. Try selecting 'All' to see every franchise.")
 
