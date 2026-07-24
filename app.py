@@ -1,7 +1,6 @@
 """
-@SRHXtra Premium Obsidian Command Center (V8.0 - Full Calendar Grid Engine).
-Inspired by Premium Obsidian Dark UI with Glowing Neon Accents & Interactive Month Calendar Grid.
-Section 1: Interactive Obsidian Month Calendar Grid (Grouped by Date in 12-hr AM/PM IST).
+@SRHXtra Premium Obsidian Command Center (V9.0 - Bulletproof Single-Block CSS Calendar Grid).
+Section 1: 30-Day Obsidian Calendar Grid built with native single-block CSS grid (No Streamlit HTML breaks).
 Section 2: Live Pulse News Portal (Exact Raw Headlines | Direct Source Redirection | Strict 24h Expiry).
 """
 
@@ -88,7 +87,7 @@ def detect_league_badge(title, summary):
     else:
         return "Global Cricket"
 
-# Premium Obsidian Dark Theme CSS
+# Premium Obsidian Dark Theme & Native CSS Grid
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
@@ -164,88 +163,72 @@ st.markdown("""
         font-weight: 500;
     }
 
-    /* Obsidian Month Calendar Grid Layout */
-    .cal-grid-header {
+    /* Single-Block Native Obsidian Calendar Grid */
+    .obsidian-calendar-grid {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
-        gap: 8px;
+        gap: 10px;
+        margin-bottom: 2rem;
+    }
+
+    .cal-day-header {
         text-align: center;
         font-weight: 700;
         color: #94A3B8;
-        font-size: 0.9rem;
-        margin-bottom: 10px;
-        text-transform: uppercase;
+        font-size: 0.85rem;
+        padding: 8px 0;
+        background: rgba(18, 22, 33, 0.9);
+        border-radius: 8px;
         letter-spacing: 1px;
     }
 
-    .cal-day-cell {
-        background: rgba(18, 22, 33, 0.75);
+    .cal-cell {
+        background: rgba(18, 22, 33, 0.65);
         border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 14px;
-        padding: 0.8rem;
-        min-height: 140px;
+        border-radius: 12px;
+        padding: 0.75rem;
+        min-height: 120px;
         transition: all 0.2s ease;
-        position: relative;
     }
 
-    .cal-day-cell:hover {
-        border-color: rgba(242, 101, 34, 0.5);
-        background: rgba(24, 29, 44, 0.9);
+    .cal-cell.has-match {
+        border-color: rgba(242, 101, 34, 0.45);
+        background: radial-gradient(circle at top right, rgba(242, 101, 34, 0.15) 0%, rgba(18, 22, 33, 0.85) 85%);
     }
 
-    .cal-day-cell.has-match {
-        border-color: rgba(242, 101, 34, 0.35);
-        background: radial-gradient(circle at top right, rgba(242, 101, 34, 0.12) 0%, rgba(18, 22, 33, 0.85) 80%);
-    }
-
-    .cal-date-num {
+    .cal-num {
         font-family: 'Playfair Display', serif;
-        font-size: 1.2rem;
+        font-size: 1.15rem;
         font-weight: 700;
         color: #64748B;
         margin-bottom: 0.4rem;
     }
 
-    .cal-date-num.active-date {
+    .cal-num.active-num {
         color: #FFFFFF;
     }
 
-    .cal-match-box {
-        background: rgba(10, 13, 20, 0.8);
-        border: 1px solid rgba(242, 101, 34, 0.4);
-        border-radius: 10px;
-        padding: 0.5rem 0.6rem;
-        margin-top: 0.3rem;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    .cal-match-item {
+        background: rgba(10, 13, 20, 0.9);
+        border: 1px solid rgba(242, 101, 34, 0.5);
+        border-radius: 8px;
+        padding: 5px 7px;
+        margin-bottom: 5px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
     }
 
     .cal-teams {
-        font-size: 0.85rem;
+        font-size: 0.78rem;
         font-weight: 800;
         color: #FFFFFF;
-        margin-bottom: 0.2rem;
         line-height: 1.2;
+        margin-bottom: 2px;
     }
 
-    .cal-time-pill {
-        display: inline-block;
-        background: rgba(242, 101, 34, 0.2);
-        color: #FF8844;
-        font-size: 0.72rem;
-        font-weight: 700;
-        padding: 2px 6px;
-        border-radius: 6px;
-    }
-
-    .cal-status-pill {
-        display: inline-block;
-        background: rgba(239, 68, 68, 0.25);
-        color: #EF4444;
+    .cal-time {
         font-size: 0.7rem;
-        font-weight: 800;
-        padding: 2px 6px;
-        border-radius: 6px;
-        margin-left: 3px;
+        color: #FF8844;
+        font-weight: 700;
     }
 
     /* Obsidian Glass Cards */
@@ -426,16 +409,16 @@ st.markdown("""
     @media (max-width: 992px) {
         .obsidian-title { font-size: 2.1rem; }
         .obsidian-card { padding: 1.1rem; }
-        .cal-grid-header { font-size: 0.75rem; }
+        .obsidian-calendar-grid { grid-template-columns: repeat(4, 1fr); }
     }
 </style>
 """, unsafe_allow_html=True)
 
 # Sidebar
 st.sidebar.markdown("# 🧡 @SRHXtra")
-st.sidebar.markdown("**Obsidian Calendar V8.0**")
+st.sidebar.markdown("**Obsidian Calendar V9.0**")
 st.sidebar.markdown("📡 **System:** `Command Center`")
-st.sidebar.markdown("🗓️ **Calendar:** `Obsidian Month Matrix`")
+st.sidebar.markdown("🗓️ **Calendar:** `Obsidian Native Matrix`")
 st.sidebar.markdown("👥 **Coverage:** `73 Players & 4 Squads`")
 
 st.sidebar.markdown("---")
@@ -506,7 +489,7 @@ tab_schedule, tab_news = st.tabs([
 ])
 
 # ---------------------------------------------------------
-# TAB 1: OBSIDIAN MONTH CALENDAR GRID (30-DAY FIXTURE MATRIX)
+# TAB 1: OBSIDIAN MONTH CALENDAR GRID (SINGLE-BLOCK CSS MATRIX)
 # ---------------------------------------------------------
 with tab_schedule:
     st.subheader("🗓️ Obsidian Month Fixture Grid (July / August 2026)")
@@ -554,67 +537,70 @@ with tab_schedule:
     else:
         filtered_sched = raw_schedules
 
-    # Render Obsidian Calendar Grid (7 Columns: Sun, Mon, Tue, Wed, Thu, Fri, Sat)
-    st.markdown("""
-    <div class='cal-grid-header'>
-        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
-    </div>
-    """, unsafe_allow_html=True)
-
     # 35-Day Calendar Grid Representation (July 25 to August 2026)
-    # Mapping dates to calendar columns
     grid_dates = [
-        {"num": 25, "month": "July", "day": "Sat", "matches": [m for m in filtered_sched if m["date_num"] == 25 and "July" in m["month"]]},
-        {"num": 26, "month": "July", "day": "Sun", "matches": [m for m in filtered_sched if m["date_num"] == 26 and "July" in m["month"]]},
-        {"num": 27, "month": "July", "day": "Mon", "matches": [m for m in filtered_sched if m["date_num"] == 27 and "July" in m["month"]]},
-        {"num": 28, "month": "July", "day": "Tue", "matches": [m for m in filtered_sched if m["date_num"] == 28 and "July" in m["month"]]},
-        {"num": 29, "month": "July", "day": "Wed", "matches": [m for m in filtered_sched if m["date_num"] == 29 and "July" in m["month"]]},
-        {"num": 30, "month": "July", "day": "Thu", "matches": []},
-        {"num": 31, "month": "July", "day": "Fri", "matches": []},
-        {"num": 1, "month": "August", "day": "Sat", "matches": [m for m in filtered_sched if m["date_num"] == 1 and "August" in m["month"]]},
-        {"num": 2, "month": "August", "day": "Sun", "matches": [m for m in filtered_sched if m["date_num"] == 2 and "August" in m["month"]]},
-        {"num": 3, "month": "August", "day": "Mon", "matches": []},
-        {"num": 4, "month": "August", "day": "Tue", "matches": [m for m in filtered_sched if m["date_num"] == 4 and "August" in m["month"]]},
-        {"num": 5, "month": "August", "day": "Wed", "matches": []},
-        {"num": 6, "month": "August", "day": "Thu", "matches": []},
-        {"num": 7, "month": "August", "day": "Fri", "matches": [m for m in filtered_sched if m["date_num"] == 7 and "August" in m["month"]]},
-        {"num": 8, "month": "August", "day": "Sat", "matches": []},
-        {"num": 9, "month": "August", "day": "Sun", "matches": [m for m in filtered_sched if m["date_num"] == 9 and "August" in m["month"]]},
-        {"num": 10, "month": "August", "day": "Mon", "matches": []},
-        {"num": 11, "month": "August", "day": "Tue", "matches": []},
-        {"num": 12, "month": "August", "day": "Wed", "matches": [m for m in filtered_sched if m["date_num"] == 12 and "August" in m["month"]]},
-        {"num": 13, "month": "August", "day": "Thu", "matches": []},
-        {"num": 14, "month": "August", "day": "Fri", "matches": []},
-        {"num": 15, "month": "August", "day": "Sat", "matches": [m for m in filtered_sched if m["date_num"] == 15 and "August" in m["month"]]},
-        {"num": 16, "month": "August", "day": "Sun", "matches": [m for m in filtered_sched if m["date_num"] == 16 and "August" in m["month"]]}
+        {"num": 25, "month": "Jul", "day": "Sat", "matches": [m for m in filtered_sched if m["date_num"] == 25 and "July" in m["month"]]},
+        {"num": 26, "month": "Jul", "day": "Sun", "matches": [m for m in filtered_sched if m["date_num"] == 26 and "July" in m["month"]]},
+        {"num": 27, "month": "Jul", "day": "Mon", "matches": [m for m in filtered_sched if m["date_num"] == 27 and "July" in m["month"]]},
+        {"num": 28, "month": "Jul", "day": "Tue", "matches": [m for m in filtered_sched if m["date_num"] == 28 and "July" in m["month"]]},
+        {"num": 29, "month": "Jul", "day": "Wed", "matches": [m for m in filtered_sched if m["date_num"] == 29 and "July" in m["month"]]},
+        {"num": 30, "month": "Jul", "day": "Thu", "matches": []},
+        {"num": 31, "month": "Jul", "day": "Fri", "matches": []},
+        {"num": 1, "month": "Aug", "day": "Sat", "matches": [m for m in filtered_sched if m["date_num"] == 1 and "August" in m["month"]]},
+        {"num": 2, "month": "Aug", "day": "Sun", "matches": [m for m in filtered_sched if m["date_num"] == 2 and "August" in m["month"]]},
+        {"num": 3, "month": "Aug", "day": "Mon", "matches": []},
+        {"num": 4, "month": "Aug", "day": "Tue", "matches": [m for m in filtered_sched if m["date_num"] == 4 and "August" in m["month"]]},
+        {"num": 5, "month": "Aug", "day": "Wed", "matches": []},
+        {"num": 6, "month": "Aug", "day": "Thu", "matches": []},
+        {"num": 7, "month": "Aug", "day": "Fri", "matches": [m for m in filtered_sched if m["date_num"] == 7 and "August" in m["month"]]},
+        {"num": 8, "month": "Aug", "day": "Sat", "matches": []},
+        {"num": 9, "month": "Aug", "day": "Sun", "matches": [m for m in filtered_sched if m["date_num"] == 9 and "August" in m["month"]]},
+        {"num": 10, "month": "Aug", "day": "Mon", "matches": []},
+        {"num": 11, "month": "Aug", "day": "Tue", "matches": []},
+        {"num": 12, "month": "Aug", "day": "Wed", "matches": [m for m in filtered_sched if m["date_num"] == 12 and "August" in m["month"]]},
+        {"num": 13, "month": "Aug", "day": "Thu", "matches": []},
+        {"num": 14, "month": "Aug", "day": "Fri", "matches": []},
+        {"num": 15, "month": "Aug", "day": "Sat", "matches": [m for m in filtered_sched if m["date_num"] == 15 and "August" in m["month"]]},
+        {"num": 16, "month": "Aug", "day": "Sun", "matches": [m for m in filtered_sched if m["date_num"] == 16 and "August" in m["month"]]}
     ]
 
-    # Render Grid Row by Row in 7 Columns
-    for row_start in range(0, len(grid_dates), 7):
-        row_items = grid_dates[row_start:row_start+7]
-        cols = st.columns(7)
-        for idx, item in enumerate(row_items):
-            with cols[idx]:
-                has_matches = len(item["matches"]) > 0
-                cell_class = "cal-day-cell has-match" if has_matches else "cal-day-cell"
-                date_class = "cal-date-num active-date" if has_matches else "cal-date-num"
-                
-                match_html = ""
-                for m in item["matches"][:2]:
-                    match_html += f"""
-                    <div class='cal-match-box'>
-                        <div class='cal-teams'>vs {m['vs'].split(' ')[0]}</div>
-                        <span class='cal-time-pill'>⏰ {m['time'].split(' ')[0]}</span>
-                        <span class='cal-status-pill'>• Live</span>
-                    </div>
-                    """
+    # Build 100% Valid Single HTML Grid String (Prevents Streamlit HTML Column Escaping)
+    grid_html_parts = [
+        "<div class='obsidian-calendar-grid'>",
+        "<div class='cal-day-header'>SUN</div>",
+        "<div class='cal-day-header'>MON</div>",
+        "<div class='cal-day-header'>TUE</div>",
+        "<div class='cal-day-header'>WED</div>",
+        "<div class='cal-day-header'>THU</div>",
+        "<div class='cal-day-header'>FRI</div>",
+        "<div class='cal-day-header'>SAT</div>"
+    ]
 
-                st.markdown(f"""
-                <div class='{cell_class}'>
-                    <div class='{date_class}'>{item['num']} <small style='font-size:0.7rem; color:#94A3B8;'>{item['month'][:3]}</small></div>
-                    {match_html}
-                </div>
-                """, unsafe_allow_html=True)
+    for item in grid_dates:
+        has_matches = len(item["matches"]) > 0
+        cell_cls = "cal-cell has-match" if has_matches else "cal-cell"
+        num_cls = "cal-num active-num" if has_matches else "cal-num"
+        
+        matches_html_str = ""
+        for m in item["matches"][:2]:
+            matches_html_str += f"""
+            <div class='cal-match-item'>
+                <div class='cal-teams'>vs {m['vs'].split(' ')[0]}</div>
+                <div class='cal-time'>⏰ {m['time'].split(' ')[0]}</div>
+            </div>
+            """
+
+        grid_html_parts.append(f"""
+        <div class='{cell_cls}'>
+            <div class='{num_cls}'>{item['num']} <small style='font-size:0.72rem; color:#94A3B8;'>{item['month']}</small></div>
+            {matches_html_str}
+        </div>
+        """)
+
+    grid_html_parts.append("</div>")
+    full_grid_html = "".join(grid_html_parts)
+    
+    st.markdown(full_grid_html, unsafe_allow_html=True)
 
     st.markdown("---")
     st.markdown("### 📋 Full Match Day Breakdown & Player Roster")
