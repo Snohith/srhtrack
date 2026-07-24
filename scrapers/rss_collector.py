@@ -1,7 +1,7 @@
 """
-Expanded RSS Feed Collector for @SRHXtra V4.5.
-Features 50 Top-Tier Relevant Global Cricket Data & Media Outlets.
-Summarizes & merges multiple coverage articles about the same player/event into ONE single consolidated card with all source links.
+Expanded RSS Feed Collector for @SRHXtra V5.0 (Strict 24-Hour Expiry Engine).
+Polls 50 Top-Tier Global Outlets for all 73 Squad Members & 4 Franchise Team Names.
+Strictly purges & discards any article older than 24 hours (age_hours > 24.0).
 """
 
 import time
@@ -9,7 +9,7 @@ import requests
 import feedparser
 import bs4
 import html
-from config.roster import match_player_in_text
+from config.roster import match_player_or_franchise_in_text
 from agents.ranker import calculate_importance_score, categorize_news
 from database.db_manager import insert_and_summarize_news, insert_notification
 from utils.logger import rss_logger, error_logger
@@ -98,9 +98,12 @@ def fetch_feed_with_retry(url, retries=2, delay=1):
     return None
 
 def fetch_and_filter_rss():
-    """Polls 50 top global sources, parses original article IST publication dates, and summarizes multiple reports on the same topic into ONE single card."""
+    """
+    Polls 50 top global sources, filters 73 players OR 4 franchise team names.
+    STRICTLY DISCARDS any article older than 24 hours (age_hours > 24.0).
+    """
     total_found = 0
-    rss_logger.info(f"Starting Ingestion Cycle across {len(TOP_50_CRICKET_SOURCES)} Reliable Sources...")
+    rss_logger.info(f"Starting 24-Hour Ingestion Cycle across {len(TOP_50_CRICKET_SOURCES)} Reliable Sources...")
     
     for feed_info in TOP_50_CRICKET_SOURCES:
         feed = fetch_feed_with_retry(feed_info["url"])
@@ -112,17 +115,18 @@ def fetch_and_filter_rss():
             summary = clean_text(entry.get("summary", "") or entry.get("description", ""))
             link = entry.get("link", "")
             
-            # Parse TRUE original article publication date in IST & calculate numeric pub_ts
+            # Parse TRUE original article publication date in IST & calculate age
             pub_date, age_hours, pub_ts = parse_rss_date_to_ist(entry)
             
-            # Discard outdated articles (>72 hours old) to guarantee fresh news
-            if age_hours > 72.0:
+            # STRICT 24-HOUR EXPIRY RULE: Discard any article older than 24 hours
+            if age_hours > 24.0:
                 continue
 
-            matched_players = match_player_in_text(f"{title} {summary}")
-            if matched_players:
-                for mp in matched_players:
-                    score = calculate_importance_score(title, summary, mp)
+            # Match 73 Players OR 4 Franchise Team Names
+            matched_targets = match_player_or_franchise_in_text(f"{title} {summary}")
+            if matched_targets:
+                for mt in matched_targets:
+                    score = calculate_importance_score(title, summary, mt)
                     category = categorize_news(title, summary)
                     
                     news_id = insert_and_summarize_news(
@@ -131,8 +135,8 @@ def fetch_and_filter_rss():
                         summary=summary[:300] + "..." if len(summary) > 300 else summary,
                         link=link,
                         published_at=pub_date,
-                        player_name=mp["player_name"],
-                        franchise=mp["franchise"],
+                        player_name=mt["player_name"],
+                        franchise=mt["franchise"],
                         importance_score=score,
                         category=category,
                         pub_timestamp=pub_ts
@@ -142,9 +146,9 @@ def fetch_and_filter_rss():
                         total_found += 1
                         if score >= 7.0:
                             insert_notification(
-                                message=f"🔥 PRIORITY UPDATE ({score}/10): {mp['player_name']} ({mp['franchise']})",
+                                message=f"🔥 PRIORITY UPDATE ({score}/10): {mt['player_name']} ({mt['franchise']})",
                                 type_str="PRIORITY"
                             )
     
-    rss_logger.info(f"50-Source Ingestion Cycle Complete. {total_found} fresh Sunrisers items processed.")
+    rss_logger.info(f"50-Source Ingestion Cycle Complete. {total_found} fresh 24h Sunrisers items processed.")
     return total_found

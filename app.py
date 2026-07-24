@@ -1,7 +1,7 @@
 """
-@SRHXtra Global Command Center Dashboard (V3.8 Bulletproof Chronological Sort).
+@SRHXtra Global Command Center Dashboard (V4.0 - 24-Hour Live Engine).
 Section 1: 30-Day Global Schedule Grouped by Date (12-hr AM/PM IST).
-Section 2: Player Reconnaissance & Updates with BULLETPROOF datetime & epoch sorting (Latest-First).
+Section 2: Player Reconnaissance & Updates for 73 Squad Members & 4 Franchises (Strict 24-Hour Expiry).
 Features Verified Media Source Links & Direct Google News Deep-Link Search.
 """
 
@@ -18,7 +18,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 from config.roster import MASTER_ROSTER
-from database.db_manager import init_db, get_recent_news, search_news
+from database.db_manager import init_db, get_recent_news, search_news, purge_expired_24h_news
 from utils.time_utils import format_ist_12hr
 
 try:
@@ -35,8 +35,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize Database & Migration checks
+# Initialize Database & Purge Expired >24h Articles
 init_db()
+purge_expired_24h_news()
 
 # Clean 30-Minute JavaScript Timer (1,800,000 ms = 30 mins, NO 5-second loop)
 components.html(
@@ -55,7 +56,7 @@ components.html(
 if "last_refreshed" not in st.session_state:
     st.session_state["last_refreshed"] = format_ist_12hr()
 
-# Auto-ingest fresh live RSS if database has < 3 items
+# Auto-ingest fresh live RSS if database has < 3 fresh items in last 24h
 current_news = get_recent_news(limit=100)
 if len(current_news) < 3:
     fetch_and_filter_rss()
@@ -64,7 +65,7 @@ if len(current_news) < 3:
 def get_bulletproof_sort_key(n):
     """
     Returns float timestamp for 100% reliable latest-first sorting.
-    Tries pub_timestamp first, then parses published_at string ("Jul 23, 2026 @ 09:07 PM IST").
+    Tries pub_timestamp first, then parses published_at string ("Jul 24, 2026 @ 09:07 AM IST").
     """
     ts = n.get("pub_timestamp")
     if ts and isinstance(ts, (int, float)) and ts > 0:
@@ -226,9 +227,10 @@ st.markdown("""
 
 # Sidebar
 st.sidebar.markdown("# 🧡 @SRHXtra")
-st.sidebar.markdown("**Global Command Center V3.8**")
-st.sidebar.markdown(f"📡 **Data Engine:** `50 Relevant Global Outlets`")
-st.sidebar.markdown(f"⏱️ **Auto-Refresh:** `Every 30 Minutes`")
+st.sidebar.markdown("**Global Command Center V4.0**")
+st.sidebar.markdown(f"📡 **Data Engine:** `50 Global Outlets`")
+st.sidebar.markdown(f"👥 **Targets:** `73 Players & 4 Squads`")
+st.sidebar.markdown(f"⏱️ **Strict Filter:** `Last 24 Hours Only`")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"🕒 **Last Refreshed IST:**\n`{st.session_state['last_refreshed']}`")
@@ -240,20 +242,20 @@ franchise_filter = st.sidebar.selectbox(
 )
 
 if st.sidebar.button("⚡ Live Refresh 50 Feeds"):
-    with st.spinner("Polling 50 top global cricket sources..."):
+    with st.spinner("Polling 50 top global cricket sources for last 24h updates..."):
         count = fetch_and_filter_rss()
         st.session_state["last_refreshed"] = format_ist_12hr()
-        st.sidebar.success(f"Captured {count} fresh Sunrisers items!")
+        st.sidebar.success(f"Captured {count} fresh 24h Sunrisers items!")
         st.rerun()
 
 # Dashboard Brand Header
 st.markdown("<div class='brand-title'>🦅 @SRHXtra GLOBAL TRACKER</div>", unsafe_allow_html=True)
-st.markdown("<div class='brand-subtitle'>Unified 2-Section Operations Desk | 73 Players Tracked Across 4 Global Sunrisers Squads</div>", unsafe_allow_html=True)
+st.markdown("<div class='brand-subtitle'>Unified 2-Section Operations Desk | Monitoring 73 Players & 4 Franchises | Strictly Last 24 Hours</div>", unsafe_allow_html=True)
 
 # Main Navigation Tabs
 tab_schedule, tab_news = st.tabs([
     "🗓️ SECTION 1: 30-DAY GLOBAL SCHEDULE (GROUPED BY DATE)",
-    "📰 SECTION 2: PLAYER RECONNAISSANCE & UPDATES (BULLETPROOF LATEST-FIRST ORDER)"
+    "📰 SECTION 2: LIVE RECONNAISSANCE & UPDATES (STRICT LAST 24 HOURS)"
 ])
 
 # ---------------------------------------------------------
@@ -344,10 +346,10 @@ with tab_schedule:
             """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# SECTION 2: PLAYER RECONNAISSANCE & UPDATES (BULLETPROOF LATEST-FIRST ORDER)
+# SECTION 2: PLAYER & FRANCHISE RECONNAISSANCE (STRICT 24-HOUR EXPIRY | LATEST FIRST)
 # ---------------------------------------------------------
 with tab_news:
-    st.subheader("📰 Player Reconnaissance & Updates (Bulletproof Latest-First Order)")
+    st.subheader("📰 Live Player & Franchise Reconnaissance (Strict Last 24 Hours Only)")
     
     news_list = get_recent_news(limit=100)
     
@@ -393,4 +395,4 @@ with tab_news:
             </div>
             """, unsafe_allow_html=True)
     else:
-        st.info("No player updates captured yet for this squad. Click 'Live Refresh 50 Feeds' in the sidebar!")
+        st.info("No player or franchise updates reported in the last 24 hours. Click 'Live Refresh 50 Feeds' in the sidebar to scan all 50 global outlets now!")

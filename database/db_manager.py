@@ -1,16 +1,21 @@
 """
-Database Manager for @SRHXtra SQLite Memory layer (V7.0 Topic Summarization & Merger Engine).
-Summarizes and merges multiple coverage articles about the same player/event into ONE single consolidated card with all source links attached.
+Database Manager for @SRHXtra SQLite Memory layer (V8.0 Strict 24-Hour Expiry Engine).
+Purges any article older than 24 hours automatically on query & startup.
+Stores 73 players and 4 franchise updates ordered strictly BY pub_timestamp DESC.
 """
 
 import os
 import sqlite3
 import re
+import time
 from config.roster import MASTER_ROSTER
 from utils.logger import db_logger, error_logger
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "srh_tracker.db")
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "schema.sql")
+
+# 24 Hours in Seconds (86,400s)
+SECONDS_24_HOURS = 86400.0
 
 def get_connection():
     """Returns sqlite3 connection with dict cursor capabilities."""
@@ -18,8 +23,24 @@ def get_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+def purge_expired_24h_news():
+    """Purges any news article older than 24 hours (86,400 seconds) from SQLite database."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        now_ts = time.time()
+        cutoff_ts = now_ts - SECONDS_24_HOURS
+        cursor.execute("DELETE FROM news WHERE pub_timestamp > 0 AND pub_timestamp < ?", (cutoff_ts,))
+        deleted = cursor.rowcount
+        conn.commit()
+        conn.close()
+        if deleted > 0:
+            db_logger.info(f"Purged {deleted} expired articles (>24 hours old).")
+    except Exception as e:
+        error_logger.error(f"Error purging 24h expired news: {e}")
+
 def init_db():
-    """Initializes database schema, handles schema migrations, and purges legacy non-chronological rows."""
+    """Initializes database schema, handles schema migrations, and purges articles > 24 hours old."""
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -45,6 +66,9 @@ def init_db():
                 """, (p["name"], p["country"], franchise, p["role"], 1 if p.get("captain") else 0))
         conn.commit()
         conn.close()
+        
+        # Purge any news older than 24 hours
+        purge_expired_24h_news()
         db_logger.info("Database schema & 73-player master roster initialized cleanly.")
     except Exception as e:
         error_logger.error(f"Failed to initialize database: {e}")
@@ -69,7 +93,7 @@ def extract_topic_keywords(title):
 
 def insert_and_summarize_news(title, source, summary, link, published_at, player_name, franchise, importance_score, category, pub_timestamp=0.0):
     """
-    Inserts or summarizes multiple coverage articles for the same player into ONE single consolidated card.
+    Inserts or summarizes multiple coverage articles for the same player/team into ONE single consolidated card.
     Merges summaries, updates latest timestamp, and attaches all verified source buttons.
     """
     conn = get_connection()
@@ -83,7 +107,7 @@ def insert_and_summarize_news(title, source, summary, link, published_at, player
                 conn.close()
                 return None
 
-        # Check for related topic cards for the same player
+        # Check for related topic cards for the same target
         cursor.execute("SELECT id, title, source, summary, link, importance_score, pub_timestamp, published_at FROM news WHERE player_name = ?", (player_name,))
         player_news = cursor.fetchall()
         
@@ -92,7 +116,7 @@ def insert_and_summarize_news(title, source, summary, link, published_at, player
             existing_keywords = set(extract_topic_keywords(row["title"]))
             overlap = new_keywords.intersection(existing_keywords)
             
-            # If 2 or more major topic words match for the same player, SUMMARIZE & MERGE into single card!
+            # If 2 or more major topic words match for the same player/team, SUMMARIZE & MERGE into single card!
             if len(overlap) >= 2 or (len(new_keywords) == 1 and overlap):
                 existing_sources = [s.strip() for s in row["source"].split(",")]
                 existing_links = [l.strip() for l in row["link"].split(",")]
@@ -106,7 +130,7 @@ def insert_and_summarize_news(title, source, summary, link, published_at, player
                 updated_sources = ", ".join(existing_sources)
                 updated_links = ", ".join(existing_links)
                 
-                # Combine summaries intelligently into a single comprehensive synthesis
+                # Combine summaries intelligently
                 existing_summary = row["summary"].strip()
                 if summary and summary not in existing_summary:
                     merged_summary = f"{existing_summary} | [{source} Update]: {summary}"
@@ -144,7 +168,8 @@ def insert_and_summarize_news(title, source, summary, link, published_at, player
         return None
 
 def get_recent_news(limit=100):
-    """Gets recent scraped live news items ordered strictly BY pub_timestamp DESC (latest published timestamp first)."""
+    """Purges >24h expired news and gets recent scraped live news items ordered strictly BY pub_timestamp DESC."""
+    purge_expired_24h_news()
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM news ORDER BY pub_timestamp DESC, id DESC LIMIT ?", (limit,))
@@ -154,6 +179,7 @@ def get_recent_news(limit=100):
 
 def search_news(query):
     """Searches news items by keyword across title, summary, or player name."""
+    purge_expired_24h_news()
     conn = get_connection()
     cursor = conn.cursor()
     q = f"%{query.lower()}%"
@@ -176,6 +202,7 @@ def insert_notification(message, type_str="INFO"):
 
 def get_analytics_summary():
     """Returns analytics metrics for dashboard."""
+    purge_expired_24h_news()
     conn = get_connection()
     cursor = conn.cursor()
     

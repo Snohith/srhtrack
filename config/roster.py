@@ -1,6 +1,6 @@
 """
 Master Roster Registry dynamically loaded from squadofsunrisers.xlsx.
-Includes strict Regex matching and common surname filtering (Sharma, Kumar, Patel, Singh, Smith).
+Includes strict Regex matching for all 73 squad members AND 4 Franchise Team Names.
 """
 
 import os
@@ -80,10 +80,19 @@ COMMON_SURNAMES = {
     "smith", "baker", "cross", "head", "wood", "king", "reddy", "green", "brown"
 }
 
-def match_player_in_text(text):
+# Franchise Team Name Patterns
+FRANCHISE_PATTERNS = [
+    {"name": "Sunrisers Hyderabad", "pattern": r'\b(sunrisers hyderabad|srh)\b'},
+    {"name": "Sunrisers Eastern Cape", "pattern": r'\b(sunrisers eastern cape|sec)\b'},
+    {"name": "Sunrisers Leeds Men", "pattern": r'\b(sunrisers leeds men|sunrisers leeds)\b'},
+    {"name": "Sunrisers Leeds Women", "pattern": r'\b(sunrisers leeds women)\b'},
+]
+
+def match_player_or_franchise_in_text(text):
     """
-    Finds Sunrisers players mentioned in text using strict full-name and unique last-name regex matching.
-    Prevents false positive misattributions for common surnames like Sharma or Kumar.
+    Finds Sunrisers players OR franchise team names mentioned in text.
+    1. Checks all 73 squad members.
+    2. If no player name matches, checks for mentions of any of the 4 Franchise Team Names.
     """
     matches = []
     matched_names = set()
@@ -93,13 +102,14 @@ def match_player_in_text(text):
         if fp in text_clean and "travis head" not in text_clean:
             text_clean = text_clean.replace(fp, "")
 
+    # 1. Match Player Names (73 Squad Members)
     for team_key, data in MASTER_ROSTER.items():
         for p in data["players"]:
             p_name = p["name"]
             if p_name in matched_names:
                 continue
 
-            # 1. Full Name Matching (Primary & Most Accurate)
+            # Full Name Matching
             pattern = r'\b' + re.escape(p_name.lower()) + r'\b'
             if re.search(pattern, text_clean):
                 matched_names.add(p_name)
@@ -112,7 +122,7 @@ def match_player_in_text(text):
                     "captain": p.get("captain", False)
                 })
             else:
-                # 2. Unique Last Name Matching (Only if surname is NOT in COMMON_SURNAMES)
+                # Unique Surname Matching
                 name_parts = p_name.split()
                 if len(name_parts) >= 2:
                     last_name = name_parts[-1].lower()
@@ -128,4 +138,29 @@ def match_player_in_text(text):
                                 "role": p["role"],
                                 "captain": p.get("captain", False)
                             })
+
+    # 2. If no player matches, check Franchise Team Names
+    if not matches:
+        for fp in FRANCHISE_PATTERNS:
+            if re.search(fp["pattern"], text_clean):
+                matches.append({
+                    "player_name": f"{fp['name']} Team Update",
+                    "team_key": fp["name"],
+                    "franchise": fp["name"],
+                    "country": "Global",
+                    "role": "Franchise Update",
+                    "captain": False
+                })
+
+    # 3. Generic "Sunrisers" keyword fallback
+    if not matches and re.search(r'\bsunrisers\b', text_clean):
+        matches.append({
+            "player_name": "Sunrisers Franchise Update",
+            "team_key": "Sunrisers Hyderabad",
+            "franchise": "Sunrisers Hyderabad",
+            "country": "Global",
+            "role": "Franchise Update",
+            "captain": False
+        })
+
     return matches
