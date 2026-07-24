@@ -1,7 +1,7 @@
 """
-Expanded RSS Feed Collector for @SRHXtra V6.0 (ESPNcricinfo-Style Feed).
+Expanded RSS Feed Collector for @SRHXtra V7.0 (Raw RSS Direct Feed).
 Polls 50 Top-Tier Global Outlets for all 73 Squad Members & 4 Franchise Team Names.
-Ingests EVERY matching article and stores original published timestamps for direct on-click redirection.
+Stores EXACT raw source titles and descriptions for direct ESPNcricinfo-style cards.
 """
 
 import time
@@ -10,7 +10,6 @@ import feedparser
 import bs4
 import html
 from config.roster import match_player_or_franchise_in_text
-from agents.ranker import calculate_importance_score, categorize_news
 from database.db_manager import insert_news, insert_notification
 from utils.logger import rss_logger, error_logger
 from utils.time_utils import parse_rss_date_to_ist, format_ist_12hr
@@ -78,7 +77,7 @@ TOP_50_CRICKET_SOURCES = [
 ]
 
 def clean_text(raw):
-    """Strips HTML tags and unescapes HTML entities cleanly."""
+    """Strips HTML tags and unescapes HTML entities cleanly while preserving exact wording."""
     if not raw:
         return ""
     text_no_html = bs4.BeautifulSoup(raw, "html.parser").get_text()
@@ -101,6 +100,7 @@ def fetch_and_filter_rss():
     """
     Polls 50 top global sources, filters 73 players OR 4 franchise team names.
     STRICTLY DISCARDS any article older than 24 hours (age_hours > 24.0).
+    Stores EXACT raw headline and description from sources.
     """
     total_found = 0
     rss_logger.info(f"Starting 24-Hour Ingestion Cycle across {len(TOP_50_CRICKET_SOURCES)} Reliable Sources...")
@@ -126,29 +126,23 @@ def fetch_and_filter_rss():
             matched_targets = match_player_or_franchise_in_text(f"{title} {summary}")
             if matched_targets:
                 for mt in matched_targets:
-                    score = calculate_importance_score(title, summary, mt)
-                    category = categorize_news(title, summary)
-                    
                     news_id = insert_news(
                         title=title,
                         source=feed_info["name"],
-                        summary=summary[:300] + "..." if len(summary) > 300 else summary,
+                        summary=summary,
                         link=link,
                         published_at=pub_date,
                         player_name=mt["player_name"],
                         franchise=mt["franchise"],
-                        importance_score=score,
-                        category=category,
                         pub_timestamp=pub_ts
                     )
                     
                     if news_id:
                         total_found += 1
-                        if score >= 7.0:
-                            insert_notification(
-                                message=f"🔥 PRIORITY UPDATE ({score}/10): {mt['player_name']} ({mt['franchise']})",
-                                type_str="PRIORITY"
-                            )
+                        insert_notification(
+                            message=f"⚡ NEW UPDATE: {mt['player_name']} ({mt['franchise']})",
+                            type_str="INFO"
+                        )
     
     rss_logger.info(f"50-Source Ingestion Cycle Complete. {total_found} fresh 24h Sunrisers items processed.")
     return total_found

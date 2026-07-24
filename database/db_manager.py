@@ -1,6 +1,6 @@
 """
-Database Manager for @SRHXtra SQLite Memory layer (V9.0 ESPNcricinfo Live News Feed).
-Stores every single article directly for all 73 players and 4 franchises.
+Database Manager for @SRHXtra SQLite Memory layer (V10.0 Clean RSS Direct Feed Engine).
+Stores raw exact headlines, summaries, and source links for all 73 players and 4 franchises.
 Purges any article older than 24 hours automatically.
 """
 
@@ -84,9 +84,9 @@ def get_all_players(franchise_filter=None):
     conn.close()
     return [dict(r) for r in rows]
 
-def insert_news(title, source, summary, link, published_at, player_name, franchise, importance_score, category, pub_timestamp=0.0):
+def insert_news(title, source, summary, link, published_at, player_name, franchise, pub_timestamp=0.0):
     """
-    Inserts every single scraped news article directly for ESPNcricinfo-style feed.
+    Inserts exact raw RSS headline & summary for all 73 players and 4 franchises.
     Only checks exact URL / exact Title uniqueness so identical URL feeds aren't repeated.
     """
     conn = get_connection()
@@ -103,12 +103,12 @@ def insert_news(title, source, summary, link, published_at, player_name, franchi
 
         cursor.execute("""
             INSERT INTO news (title, source, summary, link, published_at, pub_timestamp, player_name, franchise, importance_score, category)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (title, source, summary, link, published_at, pub_timestamp, player_name, franchise, importance_score, category))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 5.0, 'General')
+        """, (title, source, summary, link, published_at, pub_timestamp, player_name, franchise))
         conn.commit()
         news_id = cursor.lastrowid
         conn.close()
-        db_logger.info(f"Inserted article #{news_id} for {player_name} from {source}.")
+        db_logger.info(f"Inserted raw article #{news_id} for {player_name} from {source}.")
         return news_id
     except Exception as e:
         error_logger.error(f"Database insert error: {e}")
@@ -147,31 +147,3 @@ def insert_notification(message, type_str="INFO"):
     cursor.execute("INSERT INTO notifications (message, type) VALUES (?, ?)", (message, type_str))
     conn.commit()
     conn.close()
-
-def get_analytics_summary():
-    """Returns analytics metrics for dashboard."""
-    purge_expired_24h_news()
-    conn = get_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT COUNT(*) as cnt FROM news")
-    total_news = cursor.fetchone()["cnt"]
-    
-    cursor.execute("SELECT AVG(importance_score) as avg_score FROM news")
-    avg_score = cursor.fetchone()["avg_score"] or 0.0
-    
-    cursor.execute("""
-        SELECT player_name, COUNT(*) as cnt 
-        FROM news 
-        WHERE player_name IS NOT NULL 
-        GROUP BY player_name 
-        ORDER BY cnt DESC LIMIT 5
-    """)
-    top_players = [dict(r) for r in cursor.fetchall()]
-    
-    conn.close()
-    return {
-        "total_news": total_news,
-        "avg_importance": round(avg_score, 1),
-        "top_players": top_players
-    }
