@@ -140,62 +140,64 @@ def get_favicon_url(link):
         pass
     return ""
 
-import textwrap
+import html as html_lib
 
 def render_news_card(n):
     """Renders a full news card as an HTML string (main feed).
-    Improvements V12.2:
-      - #3: time_ago() replaces raw IST timestamp
-      - #4: NEW badge for articles < 2 hours old
-      - #5: source favicon from Google Favicons API
-      - Fixed: dedent multiline HTML to prevent markdown code block rendering
+    Bulletproof V12.3:
+      - Strips all internal newlines from title/summary to prevent Markdown code block triggers
+      - Returns a zero-newline single-line HTML string for 100% reliable Streamlit rendering
     """
-    link      = safe_article_link(n)
-    league    = detect_league_badge(n["title"], n["summary"])
-    pub_ts    = n.get("pub_timestamp", 0)
-    ago       = time_ago(pub_ts)
-    new_badge = "<span class='badge-new'>🔴 NEW</span>" if is_new_article(pub_ts) else ""
-    favicon   = get_favicon_url(link)
-    fav_html  = f"<img src='{favicon}' class='source-fav' onerror='this.style.display=\"none\"'>" if favicon else ""
-    return textwrap.dedent(f"""
-        <a href='{link}' target='_blank' class='obsidian-card-link'>
-            <div class='obsidian-card'>
-                <div class='card-tags'>
-                    {new_badge}
-                    <span class='badge-player'>👤 {n['player_name']}</span>
-                    <span class='badge-squad'>🧡 {n['franchise']} Squad</span>
-                    <span class='badge-league'>🏏 {league}</span>
-                </div>
-                <h2 class='obsidian-card-title'>{n['title']}</h2>
-                <p class='obsidian-card-desc'>{n['summary']}</p>
-                <div class='obsidian-card-footer'>
-                    <span class='time-ago-pill'>🕒 {ago}</span>
-                    <span class='time-text muted-text'>{n['published_at']}</span>
-                    <span class='source-pill'>{fav_html} {n['source']}</span>
-                    <span class='read-hint'>Read Story ↗</span>
-                </div>
-            </div>
-        </a>
-    """).strip()
+    link          = safe_article_link(n)
+    league        = detect_league_badge(n["title"], n["summary"])
+    pub_ts        = n.get("pub_timestamp", 0)
+    ago           = time_ago(pub_ts)
+    new_badge     = "<span class='badge-new'>🔴 NEW</span>" if is_new_article(pub_ts) else ""
+    favicon       = get_favicon_url(link)
+    fav_html      = f"<img src='{favicon}' class='source-fav' onerror='this.style.display=\"none\"'>" if favicon else ""
+    
+    clean_title   = html_lib.escape(str(n.get("title", "")).replace("\n", " ").strip())
+    clean_summary = html_lib.escape(str(n.get("summary", "")).replace("\n", " ").strip())
+    player_name   = html_lib.escape(str(n.get("player_name", "")).strip())
+    franchise     = html_lib.escape(str(n.get("franchise", "")).strip())
+    source        = html_lib.escape(str(n.get("source", "")).strip())
+    pub_at        = html_lib.escape(str(n.get("published_at", "")).strip())
+
+    card_html = (
+        f"<a href='{link}' target='_blank' class='obsidian-card-link'>"
+        f"<div class='obsidian-card'>"
+        f"<div class='card-tags'>{new_badge}<span class='badge-player'>👤 {player_name}</span><span class='badge-squad'>🧡 {franchise} Squad</span><span class='badge-league'>🏏 {league}</span></div>"
+        f"<h2 class='obsidian-card-title'>{clean_title}</h2>"
+        f"<p class='obsidian-card-desc'>{clean_summary}</p>"
+        f"<div class='obsidian-card-footer'>"
+        f"<span class='time-ago-pill'>🕒 {ago}</span>"
+        f"<span class='time-text muted-text'>{pub_at}</span>"
+        f"<span class='source-pill'>{fav_html} {source}</span>"
+        f"<span class='read-hint'>Read Story ↗</span>"
+        f"</div>"
+        f"</div>"
+        f"</a>"
+    )
+    return card_html
 
 def render_pulse_item(n):
-    """Renders a compact pulse sidebar item as an HTML string.
-    Improvement: shows time-ago instead of raw time, NEW dot for fresh articles.
-    """
-    link      = safe_article_link(n)
-    pub_ts    = n.get("pub_timestamp", 0)
-    ago       = time_ago(pub_ts)
-    is_new    = is_new_article(pub_ts)
-    dot       = "<span class='pulse-new-dot'></span>" if is_new else ""
-    headline  = n["title"][:65] + ("..." if len(n["title"]) > 65 else "")
-    return textwrap.dedent(f"""
-        <div class='pulse-item'>
-            <div class='pulse-time'>{dot}🕒 {ago}</div>
-            <a href='{link}' target='_blank' class='pulse-headline'>
-                👤 {n['player_name']} — {headline}
-            </a>
-        </div>
-    """).strip()
+    """Renders a compact pulse sidebar item as a single-line HTML string."""
+    link          = safe_article_link(n)
+    pub_ts        = n.get("pub_timestamp", 0)
+    ago           = time_ago(pub_ts)
+    is_new        = is_new_article(pub_ts)
+    dot           = "<span class='pulse-new-dot'></span>" if is_new else ""
+    raw_title     = str(n.get("title", "")).replace("\n", " ").strip()
+    headline      = html_lib.escape(raw_title[:65] + ("..." if len(raw_title) > 65 else ""))
+    player_name   = html_lib.escape(str(n.get("player_name", "")).strip())
+
+    pulse_html = (
+        f"<div class='pulse-item'>"
+        f"<div class='pulse-time'>{dot}🕒 {ago}</div>"
+        f"<a href='{link}' target='_blank' class='pulse-headline'>👤 {player_name} — {headline}</a>"
+        f"</div>"
+    )
+    return pulse_html
 
 # ── CSS Theme ─────────────────────────────────────────────────────────────────
 st.markdown("""
