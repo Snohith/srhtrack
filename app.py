@@ -1,6 +1,6 @@
 """
-@SRHXtra Premium Obsidian Command Center (V9.0 - Bulletproof Single-Block CSS Calendar Grid).
-Section 1: 30-Day Obsidian Calendar Grid built with native single-block CSS grid (No Streamlit HTML breaks).
+@SRHXtra Premium Obsidian Command Center (V9.1 - Raw HTML Sanitized Grid).
+Section 1: Interactive Obsidian Month Calendar Grid. Sanitized to remove all markdown indentations to prevent code block parsing.
 Section 2: Live Pulse News Portal (Exact Raw Headlines | Direct Source Redirection | Strict 24h Expiry).
 """
 
@@ -416,7 +416,7 @@ st.markdown("""
 
 # Sidebar
 st.sidebar.markdown("# 🧡 @SRHXtra")
-st.sidebar.markdown("**Obsidian Calendar V9.0**")
+st.sidebar.markdown("**Obsidian Calendar V9.1**")
 st.sidebar.markdown("📡 **System:** `Command Center`")
 st.sidebar.markdown("🗓️ **Calendar:** `Obsidian Native Matrix`")
 st.sidebar.markdown("👥 **Coverage:** `73 Players & 4 Squads`")
@@ -564,7 +564,7 @@ with tab_schedule:
         {"num": 16, "month": "Aug", "day": "Sun", "matches": [m for m in filtered_sched if m["date_num"] == 16 and "August" in m["month"]]}
     ]
 
-    # Build 100% Valid Single HTML Grid String (Prevents Streamlit HTML Column Escaping)
+    # Build 100% Flat Single HTML Grid String (Removes all leading spaces & newlines to prevent code-block parsing)
     grid_html_parts = [
         "<div class='obsidian-calendar-grid'>",
         "<div class='cal-day-header'>SUN</div>",
@@ -583,24 +583,17 @@ with tab_schedule:
         
         matches_html_str = ""
         for m in item["matches"][:2]:
-            matches_html_str += f"""
-            <div class='cal-match-item'>
-                <div class='cal-teams'>vs {m['vs'].split(' ')[0]}</div>
-                <div class='cal-time'>⏰ {m['time'].split(' ')[0]}</div>
-            </div>
-            """
+            matches_html_str += f"<div class='cal-match-item'><div class='cal-teams'>vs {m['vs'].split(' ')[0]}</div><div class='cal-time'>⏰ {m['time'].split(' ')[0]}</div></div>"
 
-        grid_html_parts.append(f"""
-        <div class='{cell_cls}'>
-            <div class='{num_cls}'>{item['num']} <small style='font-size:0.72rem; color:#94A3B8;'>{item['month']}</small></div>
-            {matches_html_str}
-        </div>
-        """)
+        grid_html_parts.append(f"<div class='{cell_cls}'><div class='{num_cls}'>{item['num']} <small style='font-size:0.72rem; color:#94A3B8;'>{item['month']}</small></div>{matches_html_str}</div>")
 
     grid_html_parts.append("</div>")
-    full_grid_html = "".join(grid_html_parts)
     
-    st.markdown(full_grid_html, unsafe_allow_html=True)
+    # 100% Flat String Strip
+    flat_calendar_html = "".join([line.strip() for line in grid_html_parts]).replace("\n", "")
+    
+    # Render native HTML code
+    st.markdown(flat_calendar_html, unsafe_allow_html=True)
 
     st.markdown("---")
     st.markdown("### 📋 Full Match Day Breakdown & Player Roster")
