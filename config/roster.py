@@ -1,6 +1,7 @@
 """
 Master Roster Registry dynamically loaded from squadofsunrisers.xlsx.
 Includes strict Regex matching for all 73 squad members AND 4 Franchise Team Names.
+Filters out non-cricket multi-sport false positives (Baseball, NFL, Town Names).
 """
 
 import os
@@ -71,13 +72,18 @@ def load_master_roster_from_excel():
 
 MASTER_ROSTER = load_master_roster_from_excel()
 
-# Blacklisted false-positive phrases
-FALSE_POSITIVE_PHRASES = ["head coach", "head of", "head-to-head", "head coach's", "woodwork"]
+# Blacklisted false-positive phrases across non-cricket sports & news
+FALSE_POSITIVE_PHRASES = [
+    "head coach", "head of", "head-to-head", "head coach's", "woodwork",
+    "padres trade", "cooper kupp", "coles bay", "baseball", "nfl", "nba", "mlb"
+]
 
 # Surnames that MUST require Full Name matching to prevent misattribution
 COMMON_SURNAMES = {
     "sharma", "kumar", "patel", "singh", "ali", "ahmed", "wilson", 
-    "smith", "baker", "cross", "head", "wood", "king", "reddy", "green", "brown"
+    "smith", "baker", "cross", "head", "wood", "king", "reddy", "green", "brown",
+    "miller", "cooper", "coles", "taylor", "white", "bell", "jones", "williams",
+    "davis", "turner", "hill", "young", "wright", "hall", "allen"
 }
 
 # Franchise Team Name Patterns
@@ -91,16 +97,17 @@ FRANCHISE_PATTERNS = [
 def match_player_or_franchise_in_text(text):
     """
     Finds Sunrisers players OR franchise team names mentioned in text.
-    1. Checks all 73 squad members.
-    2. If no player name matches, checks for mentions of any of the 4 Franchise Team Names.
+    Filters out non-cricket false positives (e.g. Mason Miller in MLB, Cooper Kupp in NFL, Coles Bay).
     """
-    matches = []
-    matched_names = set()
     text_clean = text.lower()
     
+    # Discard non-cricket false positive phrases
     for fp in FALSE_POSITIVE_PHRASES:
         if fp in text_clean and "travis head" not in text_clean:
-            text_clean = text_clean.replace(fp, "")
+            return []
+
+    matches = []
+    matched_names = set()
 
     # 1. Match Player Names (73 Squad Members)
     for team_key, data in MASTER_ROSTER.items():
@@ -122,7 +129,7 @@ def match_player_or_franchise_in_text(text):
                     "captain": p.get("captain", False)
                 })
             else:
-                # Unique Surname Matching
+                # Unique Surname Matching (ONLY if surname is NOT in COMMON_SURNAMES)
                 name_parts = p_name.split()
                 if len(name_parts) >= 2:
                     last_name = name_parts[-1].lower()
