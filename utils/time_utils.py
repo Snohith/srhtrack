@@ -4,6 +4,7 @@ Converts all RSS entry timestamps to accurate 12-Hour AM/PM IST and calculates n
 """
 
 import time
+import calendar
 from datetime import datetime, timedelta, timezone
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -32,7 +33,7 @@ def parse_rss_date_to_ist(entry):
     
     if pub_parsed:
         try:
-            pub_ts = float(time.mktime(pub_parsed))
+            pub_ts = float(calendar.timegm(pub_parsed))
             dt_utc = datetime.fromtimestamp(pub_ts, tz=timezone.utc)
             dt_ist = dt_utc.astimezone(IST)
             age_hours = (now_utc - dt_utc).total_seconds() / 3600.0
