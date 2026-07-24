@@ -1,13 +1,16 @@
 """
-Expanded RSS Feed Collector for @SRHXtra V8.0.
+Expanded RSS Feed Collector for @SRHXtra V9.0 — Phase 1 Ranker Integration.
 Polls 50 Top-Tier Global Outlets for all 73 Squad Members & 4 Franchise Team Names.
 Stores EXACT raw source titles and descriptions for direct ESPNcricinfo-style cards.
 
-V8.0 changes:
-  - Replaced 6 dead/broken feed URLs with verified working alternatives
-  - fetch_and_filter_rss() now returns a structured dict:
-      {"inserted": int, "failed_feeds": list[str], "total_polled": int}
-    (still returns the plain int count for backwards compatibility via .get fallback)
+V9.0 changes (Phase 1):
+  - Wired agents/ranker.py into ingestion pipeline (was defined but never called)
+  - calculate_importance_score() called per article — real scores stored (not hardcoded 5.0)
+  - categorize_news() called per article — real categories stored (not hardcoded 'General')
+  - get_source_tier_boost() passed as source_name to ranker for Tier 1/2/3 quality weighting
+  - insert_news() now receives importance_score= and category= kwargs
+  - Log line includes category + score for every inserted article
+  - player_info dict built from MASTER_ROSTER for captain-aware scoring
 """
 
 import time
@@ -15,10 +18,20 @@ import requests
 import feedparser
 import bs4
 import html
-from config.roster import match_player_or_franchise_in_text
+from config.roster import match_player_or_franchise_in_text, MASTER_ROSTER
 from database.db_manager import insert_news, insert_notification
+from agents.ranker import calculate_importance_score, categorize_news
 from utils.logger import rss_logger, error_logger
 from utils.time_utils import parse_rss_date_to_ist, format_ist_12hr
+
+# Build a fast lookup: player_name → player_info dict (for captain-aware scoring)
+_PLAYER_INFO_CACHE: dict = {}
+for _team_info in MASTER_ROSTER.values():
+    for _p in _team_info["players"]:
+        _PLAYER_INFO_CACHE[_p["name"]] = {
+            "captain": bool(_p.get("captain")),
+            "role": _p.get("role", ""),
+        }
 
 # 50 TOP-TIER GLOBAL CRICKET MEDIA OUTLETS
 # Dead feeds replaced in V8.0 are marked with ← FIXED
@@ -113,16 +126,14 @@ def fetch_and_filter_rss():
     STRICTLY DISCARDS any article older than 24 hours.
     Stores EXACT raw headline and description from sources.
 
-    Returns a dict:
-        {
-            "inserted":     int   — new articles added,
-            "failed_feeds": list  — feed names that returned no data,
-            "total_polled": int   — total sources attempted,
-        }
-    For backwards compatibility, the dict also supports len() via __len__ on "inserted".
+    V9.0: Every article is now scored by agents/ranker.py before insertion.
+    importance_score (1.0–10.0) and category are stored in the DB.
+
+    Returns:
+        _RssResult — int subclass with .inserted, .failed_feeds, .total_polled
     """
     total_inserted = 0
-    failed_feeds = []
+    failed_feeds   = []
     rss_logger.info(
         f"Starting 24-Hour Ingestion Cycle across {len(TOP_50_CRICKET_SOURCES)} sources..."
     )
@@ -151,6 +162,17 @@ def fetch_and_filter_rss():
             # Match 73 Players OR 4 Franchise Team Names
             matched_targets = match_player_or_franchise_in_text(f"{title} {summary}")
             for mt in matched_targets:
+                # ── Phase 1: Score & Categorise via ranker ──────────────────
+                player_info = _PLAYER_INFO_CACHE.get(mt["player_name"], {"captain": False})
+                score    = calculate_importance_score(
+                    title=title,
+                    summary=summary,
+                    player_info=player_info,
+                    source_name=feed_info["name"],
+                )
+                category = categorize_news(title=title, summary=summary)
+                # ────────────────────────────────────────────────────────────
+
                 news_id = insert_news(
                     title=title,
                     source=feed_info["name"],
@@ -160,16 +182,24 @@ def fetch_and_filter_rss():
                     player_name=mt["player_name"],
                     franchise=mt["franchise"],
                     pub_timestamp=pub_ts,
+                    importance_score=score,
+                    category=category,
                 )
                 if news_id:
                     total_inserted += 1
                     insert_notification(
-                        message=f"⚡ NEW UPDATE: {mt['player_name']} ({mt['franchise']})",
+                        message=(
+                            f"⚡ {category} | {mt['player_name']} ({mt['franchise']}) "
+                            f"[score={score}]"
+                        ),
                         type_str="INFO",
+                    )
+                    rss_logger.info(
+                        f"  ↳ [{score:>5}] [{category}] {mt['player_name']} — {title[:60]}"
                     )
 
     rss_logger.info(
-        f"Ingestion Cycle complete. {total_inserted} fresh items processed. "
+        f"Ingestion Cycle complete. {total_inserted} fresh items stored. "
         f"{len(failed_feeds)}/{len(TOP_50_CRICKET_SOURCES)} feeds failed."
     )
 

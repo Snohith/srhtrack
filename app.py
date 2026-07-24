@@ -108,14 +108,57 @@ def safe_article_link(n):
         return n["link"]
     return f"https://news.google.com/search?q={urllib.parse.quote(n['player_name'] + ' cricket')}"
 
+def time_ago(pub_ts):
+    """Converts a Unix timestamp to a human-readable 'X time ago' string."""
+    if not pub_ts or pub_ts <= 0:
+        return "recently"
+    diff = time.time() - float(pub_ts)
+    if diff < 60:
+        return "just now"
+    if diff < 3600:
+        mins = int(diff / 60)
+        return f"{mins}m ago"
+    if diff < 86400:
+        hrs = int(diff / 3600)
+        mins = int((diff % 3600) / 60)
+        return f"{hrs}h {mins}m ago" if mins else f"{hrs}h ago"
+    return "1d+ ago"
+
+def is_new_article(pub_ts, hours=2):
+    """Returns True if the article was published within the last N hours."""
+    if not pub_ts or pub_ts <= 0:
+        return False
+    return (time.time() - float(pub_ts)) < (hours * 3600)
+
+def get_favicon_url(link):
+    """Returns a Google favicon URL for a given article link."""
+    try:
+        domain = urllib.parse.urlparse(link).netloc
+        if domain:
+            return f"https://www.google.com/s2/favicons?domain={domain}&sz=16"
+    except Exception:
+        pass
+    return ""
+
 def render_news_card(n):
-    """Renders a full news card as an HTML string (main feed)."""
-    link = safe_article_link(n)
-    league = detect_league_badge(n["title"], n["summary"])
+    """Renders a full news card as an HTML string (main feed).
+    Improvements V12.2:
+      - #3: time_ago() replaces raw IST timestamp
+      - #4: NEW badge for articles < 2 hours old
+      - #5: source favicon from Google Favicons API
+    """
+    link      = safe_article_link(n)
+    league    = detect_league_badge(n["title"], n["summary"])
+    pub_ts    = n.get("pub_timestamp", 0)
+    ago       = time_ago(pub_ts)
+    new_badge = "<span class='badge-new'>🔴 NEW</span>" if is_new_article(pub_ts) else ""
+    favicon   = get_favicon_url(link)
+    fav_html  = f"<img src='{favicon}' class='source-fav' onerror='this.style.display=\"none\"'>" if favicon else ""
     return f"""
     <a href='{link}' target='_blank' class='obsidian-card-link'>
         <div class='obsidian-card'>
             <div class='card-tags'>
+                {new_badge}
                 <span class='badge-player'>👤 {n['player_name']}</span>
                 <span class='badge-squad'>🧡 {n['franchise']} Squad</span>
                 <span class='badge-league'>🏏 {league}</span>
@@ -123,8 +166,9 @@ def render_news_card(n):
             <h2 class='obsidian-card-title'>{n['title']}</h2>
             <p class='obsidian-card-desc'>{n['summary']}</p>
             <div class='obsidian-card-footer'>
-                <span class='time-text'>📅 {n['published_at']}</span>
-                <span class='source-pill'>🔗 {n['source']}</span>
+                <span class='time-ago-pill'>🕒 {ago}</span>
+                <span class='time-text muted-text'>{n['published_at']}</span>
+                <span class='source-pill'>{fav_html} {n['source']}</span>
                 <span class='read-hint'>Read Story ↗</span>
             </div>
         </div>
@@ -132,13 +176,18 @@ def render_news_card(n):
     """
 
 def render_pulse_item(n):
-    """Renders a compact pulse sidebar item as an HTML string."""
-    link = safe_article_link(n)
-    pub_time = n["published_at"].split("@")[-1].strip() if "@" in n["published_at"] else n["published_at"]
-    headline = n["title"][:70] + ("..." if len(n["title"]) > 70 else "")
+    """Renders a compact pulse sidebar item as an HTML string.
+    Improvement: shows time-ago instead of raw time, NEW dot for fresh articles.
+    """
+    link      = safe_article_link(n)
+    pub_ts    = n.get("pub_timestamp", 0)
+    ago       = time_ago(pub_ts)
+    is_new    = is_new_article(pub_ts)
+    dot       = "<span class='pulse-new-dot'></span>" if is_new else ""
+    headline  = n["title"][:65] + ("..." if len(n["title"]) > 65 else "")
     return f"""
     <div class='pulse-item'>
-        <div class='pulse-time'>🕒 {pub_time}</div>
+        <div class='pulse-time'>{dot}🕒 {ago}</div>
         <a href='{link}' target='_blank' class='pulse-headline'>
             👤 {n['player_name']} — {headline}
         </a>
@@ -237,13 +286,53 @@ st.markdown("""
     .time-text   { color: #E2E8F0; font-weight: 600; }
     .read-hint   { margin-left: auto; color: #F26522; font-weight: 700; font-size: 0.88rem; }
 
+    /* NEW badge */
+    .badge-new {
+        background: linear-gradient(135deg, #EF4444, #DC2626);
+        color: #FFFFFF;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        animation: pulse-glow 1.8s ease-in-out infinite;
+        box-shadow: 0 0 12px rgba(239, 68, 68, 0.6);
+    }
+    @keyframes pulse-glow {
+        0%, 100% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
+        50%       { box-shadow: 0 0 20px rgba(239, 68, 68, 0.9); }
+    }
+
+    /* Time-ago pill */
+    .time-ago-pill {
+        background: rgba(242, 101, 34, 0.15);
+        border: 1px solid rgba(242, 101, 34, 0.35);
+        color: #FF8844;
+        font-size: 0.82rem;
+        font-weight: 700;
+        padding: 2px 10px;
+        border-radius: 8px;
+    }
+    .muted-text { color: #64748B !important; font-size: 0.78rem !important; }
+
+    /* Source favicon */
+    .source-fav {
+        width: 14px;
+        height: 14px;
+        vertical-align: middle;
+        border-radius: 3px;
+        margin-right: 4px;
+        display: inline-block;
+    }
+
     /* Live Pulse Sidebar */
     .pulse-container { background: rgba(18, 22, 33, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 1.2rem; }
     .pulse-title { font-family: 'Playfair Display', serif; font-size: 1.25rem; font-weight: 700; color: #FFFFFF; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
     .pulse-dot { width: 8px; height: 8px; background-color: #F26522; border-radius: 50%; display: inline-block; box-shadow: 0 0 10px #F26522; }
+    .pulse-new-dot { width: 7px; height: 7px; background: #EF4444; border-radius: 50%; display: inline-block; margin-right: 4px; box-shadow: 0 0 6px rgba(239,68,68,0.8); animation: pulse-glow 1.8s ease-in-out infinite; }
     .pulse-item { border-left: 2px solid rgba(242, 101, 34, 0.4); padding-left: 0.9rem; margin-bottom: 1rem; }
     .pulse-item:hover { border-left-color: #F26522; }
-    .pulse-time { font-size: 0.78rem; color: #F26522; font-weight: 700; margin-bottom: 0.2rem; }
+    .pulse-time { font-size: 0.78rem; color: #F26522; font-weight: 700; margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.3rem; }
     .pulse-headline { font-size: 0.92rem; color: #E2E8F0; font-weight: 600; line-height: 1.35; text-decoration: none; }
     .pulse-headline:hover { color: #FF8844; }
 

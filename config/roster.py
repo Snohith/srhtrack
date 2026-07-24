@@ -28,9 +28,11 @@ def load_master_roster_from_excel():
         role = str(row.get("Role", "")).strip()
         country = str(row.get("Country", "")).strip()
         unnamed = str(row.get("Unnamed: 4", "")).strip()
+        raw_role = role
+        is_captain = (raw_role == "Captain" or "captain" in raw_role.lower())
 
         if unnamed and unnamed != "nan":
-            if role == "Captain":
+            if raw_role == "Captain":
                 role = country
                 country = unnamed
 
@@ -59,7 +61,6 @@ def load_master_roster_from_excel():
                 "players": []
             }
 
-        is_captain = (role == "Captain" or "captain" in role.lower())
         roster_dict[key]["players"].append({
             "name": player,
             "role": role,

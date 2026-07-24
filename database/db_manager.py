@@ -168,11 +168,14 @@ def get_all_players(franchise_filter=None):
         return [dict(r) for r in cursor.fetchall()]
 
 
-def insert_news(title, source, summary, link, published_at, player_name, franchise, pub_timestamp=0.0):
+def insert_news(title, source, summary, link, published_at, player_name, franchise, pub_timestamp=0.0, importance_score=5.0, category="General News"):
     """
     Inserts exact raw RSS headline & summary for all 73 players and 4 franchises.
     Deduplicates on URL or exact title. Coerces empty/# links to NULL to avoid
     false UNIQUE constraint conflicts on empty strings.
+
+    Phase 1 upgrade: importance_score and category are now real parameters
+    (no longer hardcoded to 5.0 / 'General'). Defaults maintain backwards compat.
     """
     # Coerce empty / placeholder links to None (NULL in SQLite handles UNIQUE safely)
     clean_link = link.strip() if link and link.strip() and link.strip() != "#" else None
@@ -194,13 +197,17 @@ def insert_news(title, source, summary, link, published_at, player_name, franchi
                 """INSERT INTO news
                    (title, source, summary, link, published_at, pub_timestamp,
                     player_name, franchise, importance_score, category)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 5.0, 'General')""",
-                (title, source, summary, clean_link, published_at, pub_timestamp, player_name, franchise)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (title, source, summary, clean_link, published_at, pub_timestamp,
+                 player_name, franchise, importance_score, category)
             )
             conn.commit()
             news_id = cursor.lastrowid
 
-        db_logger.info(f"Inserted article #{news_id} for {player_name} from {source}.")
+        db_logger.info(
+            f"Inserted article #{news_id} [{category} | score={importance_score}] "
+            f"for {player_name} from {source}."
+        )
         return news_id
     except Exception as e:
         error_logger.error(f"Database insert error: {e}")
