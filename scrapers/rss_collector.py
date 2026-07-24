@@ -1,7 +1,7 @@
 """
-Expanded RSS Feed Collector for @SRHXtra V5.0 (Strict 24-Hour Expiry Engine).
+Expanded RSS Feed Collector for @SRHXtra V6.0 (ESPNcricinfo-Style Feed).
 Polls 50 Top-Tier Global Outlets for all 73 Squad Members & 4 Franchise Team Names.
-Strictly purges & discards any article older than 24 hours (age_hours > 24.0).
+Ingests EVERY matching article and stores original published timestamps for direct on-click redirection.
 """
 
 import time
@@ -11,7 +11,7 @@ import bs4
 import html
 from config.roster import match_player_or_franchise_in_text
 from agents.ranker import calculate_importance_score, categorize_news
-from database.db_manager import insert_and_summarize_news, insert_notification
+from database.db_manager import insert_news, insert_notification
 from utils.logger import rss_logger, error_logger
 from utils.time_utils import parse_rss_date_to_ist, format_ist_12hr
 
@@ -129,7 +129,7 @@ def fetch_and_filter_rss():
                     score = calculate_importance_score(title, summary, mt)
                     category = categorize_news(title, summary)
                     
-                    news_id = insert_and_summarize_news(
+                    news_id = insert_news(
                         title=title,
                         source=feed_info["name"],
                         summary=summary[:300] + "..." if len(summary) > 300 else summary,

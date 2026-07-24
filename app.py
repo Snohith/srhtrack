@@ -1,8 +1,7 @@
 """
-@SRHXtra Global Command Center Dashboard (V4.0 - 24-Hour Live Engine).
+@SRHXtra Global Command Center Dashboard (V5.0 - ESPNcricinfo Live News Portal UI).
 Section 1: 30-Day Global Schedule Grouped by Date (12-hr AM/PM IST).
-Section 2: Player Reconnaissance & Updates for 73 Squad Members & 4 Franchises (Strict 24-Hour Expiry).
-Features Verified Media Source Links & Direct Google News Deep-Link Search.
+Section 2: Live ESPNcricinfo-Style News Cards (Direct On-Click Redirection to Original Source Article).
 """
 
 import os
@@ -77,10 +76,10 @@ def get_bulletproof_sort_key(n):
     except Exception:
         return 0.0
 
-# Premium Dark Glassmorphism CSS
+# Premium ESPNcricinfo Dark Portal CSS
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Outfit:wght@600;800;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=Outfit:wght@600;800;900&display=swap');
 
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
@@ -89,7 +88,7 @@ st.markdown("""
     }
     
     .stApp {
-        background: radial-gradient(circle at 10% 20%, rgba(242, 101, 34, 0.08) 0%, rgba(11, 12, 16, 1) 90%);
+        background: radial-gradient(circle at 10% 20%, rgba(242, 101, 34, 0.06) 0%, rgba(11, 12, 16, 1) 90%);
     }
 
     section[data-testid="stSidebar"] {
@@ -97,15 +96,11 @@ st.markdown("""
         border-right: 1px solid rgba(242, 101, 34, 0.25);
     }
     
-    h1, h2, h3, h4, .brand-title {
-        font-family: 'Outfit', sans-serif;
-        letter-spacing: -0.5px;
-    }
-    
     .brand-title {
         background: linear-gradient(135deg, #FF6B00 0%, #FFA800 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
+        font-family: 'Outfit', sans-serif;
         font-size: 2.8rem;
         font-weight: 900;
         margin-bottom: 0.2rem;
@@ -131,106 +126,138 @@ st.markdown("""
         color: #FF8844;
     }
 
-    .glass-card {
-        background: rgba(22, 24, 34, 0.75);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        border: 1px solid rgba(242, 101, 34, 0.18);
-        border-radius: 12px;
-        padding: 1.3rem;
+    /* ESPNcricinfo Style News Card Link Wrapper */
+    a.cricinfo-card-link {
+        text-decoration: none !important;
+        color: inherit !important;
+        display: block;
         margin-bottom: 1.2rem;
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        transition: transform 0.2s ease;
-    }
-    
-    .glass-card:hover {
-        transform: translateY(-2px);
-        border-color: rgba(242, 101, 34, 0.45);
     }
 
-    .priority-card {
-        background: linear-gradient(135deg, rgba(42, 22, 18, 0.85) 0%, rgba(20, 12, 10, 0.95) 100%);
+    /* ESPNcricinfo Style Card Container */
+    .cricinfo-news-card {
+        background: #141622;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+        padding: 1.4rem 1.6rem;
+        transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        cursor: pointer;
+        position: relative;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .cricinfo-news-card:hover {
+        transform: translateY(-3px);
+        border-color: rgba(242, 101, 34, 0.6);
+        background: #191C2C;
+        box-shadow: 0 10px 30px rgba(242, 101, 34, 0.15);
+    }
+
+    .cricinfo-news-card:hover .cricinfo-title {
+        color: #FF8844 !important;
+    }
+
+    /* Priority Card Accent */
+    .cricinfo-news-card.priority-card {
         border-left: 5px solid #FF3D00;
-        border-radius: 12px;
-        padding: 1.3rem;
-        margin-bottom: 1.2rem;
+        background: linear-gradient(135deg, rgba(35, 18, 15, 0.9) 0%, rgba(20, 12, 10, 0.95) 100%);
     }
-    
-    .badge-time {
-        background: rgba(242, 101, 34, 0.18);
+
+    /* Header Tags */
+    .card-meta-top {
+        display: flex;
+        gap: 0.6rem;
+        align-items: center;
+        margin-bottom: 0.6rem;
+    }
+
+    .player-tag {
+        background: rgba(242, 101, 34, 0.15);
         color: #FF8844;
-        border: 1px solid rgba(242, 101, 34, 0.35);
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 600;
-        display: inline-block;
-        margin-bottom: 0.4rem;
+        border: 1px solid rgba(242, 101, 34, 0.3);
+        padding: 3px 10px;
+        border-radius: 16px;
+        font-size: 0.82rem;
+        font-weight: 700;
     }
-    
-    .badge-squad {
+
+    .franchise-tag {
         background: rgba(255, 215, 0, 0.12);
         color: #FFD700;
         border: 1px solid rgba(255, 215, 0, 0.25);
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 600;
-        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 16px;
+        font-size: 0.82rem;
+        font-weight: 700;
     }
 
-    .source-link-btn {
-        background: rgba(242, 101, 34, 0.2);
-        color: #FF8844 !important;
-        border: 1px solid rgba(242, 101, 34, 0.4);
-        padding: 4px 12px;
-        border-radius: 6px;
-        font-size: 0.85rem;
-        font-weight: 600;
-        text-decoration: none !important;
-        display: inline-flex;
+    /* Main Headline */
+    .cricinfo-title {
+        font-family: 'Outfit', sans-serif;
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: #F8FAFC;
+        margin: 0 0 0.5rem 0;
+        line-height: 1.35;
+        transition: color 0.2s ease;
+    }
+
+    /* Summary Sub-headline */
+    .cricinfo-summary {
+        color: #94A3B8;
+        font-size: 0.98rem;
+        line-height: 1.55;
+        margin: 0 0 1rem 0;
+        font-weight: 400;
+    }
+
+    /* Footer Metadata Line */
+    .cricinfo-footer {
+        display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        gap: 4px;
-        transition: background 0.2s ease;
+        gap: 0.7rem;
+        font-size: 0.83rem;
+        color: #64748B;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        padding-top: 0.8rem;
     }
 
-    .source-link-btn:hover {
-        background: rgba(242, 101, 34, 0.4);
-        color: #FFFFFF !important;
-    }
-
-    .search-deep-btn {
-        background: rgba(59, 130, 246, 0.2);
-        color: #60A5FA !important;
-        border: 1px solid rgba(59, 130, 246, 0.4);
-        padding: 4px 12px;
-        border-radius: 6px;
-        font-size: 0.85rem;
+    .source-badge {
+        color: #38BDF8;
         font-weight: 600;
-        text-decoration: none !important;
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
     }
 
-    .search-deep-btn:hover {
-        background: rgba(59, 130, 246, 0.4);
-        color: #FFFFFF !important;
+    .pub-time {
+        color: #A1A1AA;
+        font-weight: 500;
+    }
+
+    .bullet {
+        color: #475569;
+    }
+
+    .redirect-hint {
+        margin-left: auto;
+        color: #F97316;
+        font-weight: 600;
+        font-size: 0.82rem;
     }
 
     @media (max-width: 768px) {
         .brand-title { font-size: 2.1rem; }
-        .glass-card, .priority-card { padding: 1rem; }
+        .cricinfo-news-card { padding: 1rem; }
+        .cricinfo-title { font-size: 1.15rem; }
     }
 </style>
 """, unsafe_allow_html=True)
 
 # Sidebar
 st.sidebar.markdown("# 🧡 @SRHXtra")
-st.sidebar.markdown("**Global Command Center V4.0**")
-st.sidebar.markdown(f"📡 **Data Engine:** `50 Global Outlets`")
+st.sidebar.markdown("**Global Command Center V5.0**")
+st.sidebar.markdown(f"📡 **UI:** `ESPNcricinfo Direct On-Click Feed`")
 st.sidebar.markdown(f"👥 **Targets:** `73 Players & 4 Squads`")
-st.sidebar.markdown(f"⏱️ **Strict Filter:** `Last 24 Hours Only`")
+st.sidebar.markdown(f"⏱️ **Expiry:** `Strict Last 24 Hours`")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"🕒 **Last Refreshed IST:**\n`{st.session_state['last_refreshed']}`")
@@ -242,7 +269,7 @@ franchise_filter = st.sidebar.selectbox(
 )
 
 if st.sidebar.button("⚡ Live Refresh 50 Feeds"):
-    with st.spinner("Polling 50 top global cricket sources for last 24h updates..."):
+    with st.spinner("Polling 50 top global cricket sources..."):
         count = fetch_and_filter_rss()
         st.session_state["last_refreshed"] = format_ist_12hr()
         st.sidebar.success(f"Captured {count} fresh 24h Sunrisers items!")
@@ -250,12 +277,12 @@ if st.sidebar.button("⚡ Live Refresh 50 Feeds"):
 
 # Dashboard Brand Header
 st.markdown("<div class='brand-title'>🦅 @SRHXtra GLOBAL TRACKER</div>", unsafe_allow_html=True)
-st.markdown("<div class='brand-subtitle'>Unified 2-Section Operations Desk | Monitoring 73 Players & 4 Franchises | Strictly Last 24 Hours</div>", unsafe_allow_html=True)
+st.markdown("<div class='brand-subtitle'>ESPNcricinfo Live News Portal | Click Any Article to Open Original Source | Strictly Last 24 Hours</div>", unsafe_allow_html=True)
 
 # Main Navigation Tabs
 tab_schedule, tab_news = st.tabs([
     "🗓️ SECTION 1: 30-DAY GLOBAL SCHEDULE (GROUPED BY DATE)",
-    "📰 SECTION 2: LIVE RECONNAISSANCE & UPDATES (STRICT LAST 24 HOURS)"
+    "📰 SECTION 2: LIVE CRICKET NEWS PORTAL (ON-CLICK REDIRECT)"
 ])
 
 # ---------------------------------------------------------
@@ -346,12 +373,12 @@ with tab_schedule:
             """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# SECTION 2: PLAYER & FRANCHISE RECONNAISSANCE (STRICT 24-HOUR EXPIRY | LATEST FIRST)
+# SECTION 2: ESPNcricinfo STYLE LIVE NEWS PORTAL (DIRECT ON-CLICK REDIRECTION)
 # ---------------------------------------------------------
 with tab_news:
-    st.subheader("📰 Live Player & Franchise Reconnaissance (Strict Last 24 Hours Only)")
+    st.subheader("📰 Live Cricket News Feed (ESPNcricinfo Layout | Click Any Card to Read Original Story)")
     
-    news_list = get_recent_news(limit=100)
+    news_list = get_recent_news(limit=150)
     
     # Filter Domain for News
     if franchise_filter != "All":
@@ -363,36 +390,32 @@ with tab_news:
     if news_list:
         for n in news_list:
             is_priority = n['importance_score'] >= 7.5
-            card_style = "priority-card" if is_priority else "glass-card"
+            priority_class = " priority-card" if is_priority else ""
             
-            # Direct Media Outlet Link
-            raw_sources = str(n['source']).split(",") if n['source'] else ["Official Source"]
-            raw_links = str(n['link']).split(",") if n['link'] else ["#"]
-            
-            source_html = ""
-            for i, src in enumerate(raw_sources):
-                src_name = src.strip()
-                src_url = raw_links[i].strip() if i < len(raw_links) else (raw_links[0].strip() if raw_links else "#")
-                source_html += f"<a href='{src_url}' target='_blank' class='source-link-btn'>🔗 {src_name}</a> "
-
-            # Google News Deep-Search Link for 100% Guaranteed Relevance
-            deep_search_query = f"{n['player_name']} {n['title']}"
-            deep_search_url = f"https://news.google.com/search?q={urllib.parse.quote(deep_search_query)}"
+            # Destination Link (Opens in new tab on click)
+            article_link = n['link'] if n['link'] and n['link'] != "#" else f"https://news.google.com/search?q={urllib.parse.quote(n['player_name'] + ' cricket')}"
 
             st.markdown(f"""
-            <div class='{card_style}'>
-                <div><span class='badge-time'>🕒 {n['published_at']}</span> <span class='badge-squad'>{n['franchise']}</span></div>
-                <h3 style='margin: 0.4rem 0; color: #FFFFFF;'>👤 {n['player_name']} — {n['title']}</h3>
-                <p style='color: #CBD5E1; font-size: 1.02rem; line-height: 1.5; margin-bottom: 0.8rem;'>{n['summary']}</p>
-                <div style='display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.85rem; color: #94A3B8; align-items: center;'>
-                    <span>Category: <strong style='color: #E2E8F0;'>{n['category']}</strong></span>
-                    <span>Impact Rating: <strong style='color: #FF8844;'>🔥 {n['importance_score']}/10</strong></span>
-                    <div style='display: inline-flex; gap: 0.6rem; flex-wrap: wrap; align-items: center;'>
-                        {source_html}
-                        <a href='{deep_search_url}' target='_blank' class='search-deep-btn'>🔍 Deep Search Article</a>
+            <a href='{article_link}' target='_blank' class='cricinfo-card-link'>
+                <div class='cricinfo-news-card{priority_class}'>
+                    <div class='card-meta-top'>
+                        <span class='player-tag'>👤 {n['player_name']}</span>
+                        <span class='franchise-tag'>🧡 {n['franchise']}</span>
+                    </div>
+                    <h2 class='cricinfo-title'>{n['title']}</h2>
+                    <p class='cricinfo-summary'>{n['summary']}</p>
+                    <div class='cricinfo-footer'>
+                        <span class='pub-time'>📅 {n['published_at']}</span>
+                        <span class='bullet'>•</span>
+                        <span class='source-badge'>🔗 {n['source']}</span>
+                        <span class='bullet'>•</span>
+                        <span>Category: <strong style='color: #E2E8F0;'>{n['category']}</strong></span>
+                        <span class='bullet'>•</span>
+                        <span>Rating: <strong style='color: #FF8844;'>🔥 {n['importance_score']}/10</strong></span>
+                        <span class='redirect-hint'>Read Original Article ↗</span>
                     </div>
                 </div>
-            </div>
+            </a>
             """, unsafe_allow_html=True)
     else:
         st.info("No player or franchise updates reported in the last 24 hours. Click 'Live Refresh 50 Feeds' in the sidebar to scan all 50 global outlets now!")
