@@ -1,6 +1,7 @@
 """
-News Importance Ranker for @SRHXtra.
+News Importance Ranker & League Categorizer for @SRHXtra.
 Calculates impact score (1.0 to 10.0) based on performance milestones, captaincy, and injuries.
+Detects tournament context (The Hundred, SA20, IPL, International Cricket).
 """
 
 def calculate_importance_score(title, summary, player_info):
@@ -30,6 +31,21 @@ def calculate_importance_score(title, summary, player_info):
         score += 1.5
 
     return min(10.0, round(score, 1))
+
+def detect_league_context(title, summary):
+    """Detects tournament league context (The Hundred, SA20, IPL, International)."""
+    text = (title + " " + summary).lower()
+    
+    if any(k in text for k in ["the hundred", "hundred", "london spirit", "super giants", "welsh fire", "trent rockets", "southern brave", "birmingham phoenix", "manchester originals"]):
+        return "The Hundred"
+    elif any(k in text for k in ["sa20", "sunrisers eastern cape", "pretoria capitals", "paarl royals", "joburg super kings"]):
+        return "SA20"
+    elif any(k in text for k in ["ipl", "indian premier league", "sunrisers hyderabad"]):
+        return "IPL"
+    elif any(k in text for k in ["t20i", "odi", "test", "india tour", "world cup", "wtc", "international"]):
+        return "International Cricket"
+    else:
+        return "Global Cricket"
 
 def categorize_news(title, summary):
     """Categorizes news item into Batting, Bowling, Selection, Injury, or General."""

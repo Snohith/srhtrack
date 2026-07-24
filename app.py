@@ -1,7 +1,7 @@
 """
-@SRHXtra Global Command Center Dashboard (V5.0 - ESPNcricinfo Live News Portal UI).
+@SRHXtra Global Command Center Dashboard (V5.1 - ESPNcricinfo Live News Portal UI).
 Section 1: 30-Day Global Schedule Grouped by Date (12-hr AM/PM IST).
-Section 2: Live ESPNcricinfo-Style News Cards (Direct On-Click Redirection to Original Source Article).
+Section 2: Live ESPNcricinfo-Style News Cards with Tournament Context & Direct Redirection.
 """
 
 import os
@@ -19,6 +19,7 @@ import pandas as pd
 from config.roster import MASTER_ROSTER
 from database.db_manager import init_db, get_recent_news, search_news, purge_expired_24h_news
 from utils.time_utils import format_ist_12hr
+from agents.ranker import detect_league_context
 
 try:
     from scrapers.rss_collector import fetch_and_filter_rss, TOP_50_CRICKET_SOURCES
@@ -168,6 +169,7 @@ st.markdown("""
         display: flex;
         gap: 0.6rem;
         align-items: center;
+        flex-wrap: wrap;
         margin-bottom: 0.6rem;
     }
 
@@ -185,6 +187,16 @@ st.markdown("""
         background: rgba(255, 215, 0, 0.12);
         color: #FFD700;
         border: 1px solid rgba(255, 215, 0, 0.25);
+        padding: 3px 10px;
+        border-radius: 16px;
+        font-size: 0.82rem;
+        font-weight: 700;
+    }
+
+    .league-tag {
+        background: rgba(56, 189, 248, 0.12);
+        color: #38BDF8;
+        border: 1px solid rgba(56, 189, 248, 0.25);
         padding: 3px 10px;
         border-radius: 16px;
         font-size: 0.82rem;
@@ -254,7 +266,7 @@ st.markdown("""
 
 # Sidebar
 st.sidebar.markdown("# 🧡 @SRHXtra")
-st.sidebar.markdown("**Global Command Center V5.0**")
+st.sidebar.markdown("**Global Command Center V5.1**")
 st.sidebar.markdown(f"📡 **UI:** `ESPNcricinfo Direct On-Click Feed`")
 st.sidebar.markdown(f"👥 **Targets:** `73 Players & 4 Squads`")
 st.sidebar.markdown(f"⏱️ **Expiry:** `Strict Last 24 Hours`")
@@ -277,7 +289,7 @@ if st.sidebar.button("⚡ Live Refresh 50 Feeds"):
 
 # Dashboard Brand Header
 st.markdown("<div class='brand-title'>🦅 @SRHXtra GLOBAL TRACKER</div>", unsafe_allow_html=True)
-st.markdown("<div class='brand-subtitle'>ESPNcricinfo Live News Portal | Click Any Article to Open Original Source | Strictly Last 24 Hours</div>", unsafe_allow_html=True)
+st.markdown("<div class='brand-subtitle'>ESPNcricinfo Live News Portal | Click Any Article to Open Original Story | Strictly Last 24 Hours</div>", unsafe_allow_html=True)
 
 # Main Navigation Tabs
 tab_schedule, tab_news = st.tabs([
@@ -395,12 +407,16 @@ with tab_news:
             # Destination Link (Opens in new tab on click)
             article_link = n['link'] if n['link'] and n['link'] != "#" else f"https://news.google.com/search?q={urllib.parse.quote(n['player_name'] + ' cricket')}"
 
+            # Detect League Context (The Hundred, SA20, IPL, International)
+            league_context = detect_league_context(n['title'], n['summary'])
+
             st.markdown(f"""
             <a href='{article_link}' target='_blank' class='cricinfo-card-link'>
                 <div class='cricinfo-news-card{priority_class}'>
                     <div class='card-meta-top'>
                         <span class='player-tag'>👤 {n['player_name']}</span>
-                        <span class='franchise-tag'>🧡 {n['franchise']}</span>
+                        <span class='franchise-tag'>🧡 {n['franchise']} Squad</span>
+                        <span class='league-tag'>🏏 {league_context}</span>
                     </div>
                     <h2 class='cricinfo-title'>{n['title']}</h2>
                     <p class='cricinfo-summary'>{n['summary']}</p>
