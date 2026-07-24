@@ -1,7 +1,8 @@
 """
-@SRHXtra Global Command Center Dashboard (V6.0 - High-Contrast ESPNcricinfo Portal UI).
-Section 1: 30-Day Global Schedule Grouped by Date (12-hr AM/PM IST).
-Section 2: High-Contrast Live News Feed (Exact Raw Source Headlines & Summaries | Direct On-Click Redirection).
+@SRHXtra Premium Obsidian Command Center (V7.0).
+Inspired by Premium Obsidian Dark UI with Glowing Neon Accents & Multi-Column Layout.
+Section 1: 30-Day Global Fixture Grid & Calendar.
+Section 2: Live Pulse News Portal (Exact Raw Headlines | Direct Source Redirection | Strict 24h Expiry).
 """
 
 import os
@@ -28,7 +29,7 @@ except Exception:
 
 # Page Configuration
 st.set_page_config(
-    page_title="@SRHXtra Global Command Center",
+    page_title="@SRHXtra Premium Obsidian Command Center",
     page_icon="🧡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -62,10 +63,7 @@ if len(current_news) < 3:
     st.session_state["last_refreshed"] = format_ist_12hr()
 
 def get_bulletproof_sort_key(n):
-    """
-    Returns float timestamp for 100% reliable latest-first sorting.
-    Tries pub_timestamp first, then parses published_at string ("Jul 24, 2026 @ 09:07 AM IST").
-    """
+    """Returns float timestamp for 100% reliable latest-first sorting."""
     ts = n.get("pub_timestamp")
     if ts and isinstance(ts, (int, float)) and ts > 0:
         return ts
@@ -90,128 +88,165 @@ def detect_league_badge(title, summary):
     else:
         return "Global Cricket"
 
-# Premium High-Contrast Color Palette CSS
+# Premium Obsidian Dark Theme CSS
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;700;800;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
     html, body, [class*="css"] {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        background-color: #0B0E14;
-        color: #F3F4F6;
+        font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+        background-color: #07090E !important;
+        color: #E2E8F0;
     }
     
     .stApp {
-        background: radial-gradient(circle at 15% 15%, rgba(242, 101, 34, 0.09) 0%, rgba(11, 14, 20, 1) 85%);
+        background: radial-gradient(circle at 50% 8%, rgba(242, 101, 34, 0.08) 0%, rgba(7, 9, 14, 1) 90%);
     }
 
     section[data-testid="stSidebar"] {
-        background-color: #111520 !important;
-        border-right: 1px solid rgba(242, 101, 34, 0.3);
+        background-color: #0D101A !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
     }
     
-    .brand-title {
-        background: linear-gradient(135deg, #FF6B35 0%, #FFB703 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-family: 'Outfit', sans-serif;
-        font-size: 2.8rem;
-        font-weight: 900;
+    .obsidian-title {
+        font-family: 'Playfair Display', serif;
+        font-size: 2.6rem;
+        font-weight: 800;
+        color: #FFFFFF;
         margin-bottom: 0.2rem;
-        line-height: 1.1;
+        letter-spacing: -0.5px;
     }
     
-    .brand-subtitle {
-        color: #9CA3AF;
+    .obsidian-subtitle {
+        color: #94A3B8;
         font-size: 1.05rem;
         margin-bottom: 1.5rem;
         font-weight: 400;
     }
 
-    .date-header {
-        background: linear-gradient(90deg, rgba(242, 101, 34, 0.25) 0%, rgba(26, 31, 46, 0.9) 100%);
-        border-left: 4px solid #FF6B35;
-        padding: 0.7rem 1.2rem;
-        border-radius: 8px;
-        margin-top: 1.5rem;
-        margin-bottom: 1rem;
-        font-weight: 800;
-        font-size: 1.3rem;
-        color: #FFB703;
+    /* Top Metric Pills Bar */
+    .metric-bar {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: 1.8rem;
     }
 
-    /* ESPNcricinfo Style News Card Link Wrapper */
-    a.cricinfo-card-link {
+    .metric-pill {
+        background: rgba(18, 22, 33, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 14px;
+        padding: 0.75rem 1.4rem;
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+
+    .metric-icon {
+        font-size: 1.4rem;
+        background: rgba(242, 101, 34, 0.15);
+        padding: 0.5rem;
+        border-radius: 10px;
+        color: #F26522;
+    }
+
+    .metric-val {
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: #FFFFFF;
+        line-height: 1;
+    }
+
+    .metric-lbl {
+        font-size: 0.8rem;
+        color: #94A3B8;
+        font-weight: 500;
+    }
+
+    /* Obsidian Glass Cards */
+    a.obsidian-card-link {
         text-decoration: none !important;
         color: inherit !important;
         display: block;
         margin-bottom: 1.2rem;
     }
 
-    /* ESPNcricinfo Style High-Contrast Card Container */
-    .cricinfo-news-card {
-        background: #161A26;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 12px;
+    .obsidian-card {
+        background: rgba(18, 22, 33, 0.75);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 16px;
         padding: 1.5rem 1.7rem;
-        transition: all 0.22s ease-in-out;
+        transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
         cursor: pointer;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
     }
 
-    .cricinfo-news-card:hover {
+    .obsidian-card:hover {
         transform: translateY(-3px);
-        border-color: #FF6B35;
-        background: #1C2132;
-        box-shadow: 0 12px 35px rgba(255, 107, 53, 0.25);
+        border-color: #F26522;
+        background: rgba(24, 29, 44, 0.95);
+        box-shadow: 0 12px 35px rgba(242, 101, 34, 0.25);
     }
 
-    .cricinfo-news-card:hover .cricinfo-title {
-        color: #FF6B35 !important;
+    .obsidian-card:hover .obsidian-card-title {
+        color: #FF8844 !important;
     }
 
-    /* Header Badges with High Contrast Colors */
-    .card-meta-top {
+    /* Badges */
+    .card-tags {
         display: flex;
         gap: 0.6rem;
         align-items: center;
         flex-wrap: wrap;
-        margin-bottom: 0.75rem;
+        margin-bottom: 0.8rem;
     }
 
-    .player-tag {
-        background: #FF6B35;
+    .badge-player {
+        background: #F26522;
         color: #FFFFFF;
         padding: 4px 12px;
         border-radius: 20px;
-        font-size: 0.85rem;
+        font-size: 0.84rem;
         font-weight: 700;
-        letter-spacing: 0.2px;
-        box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
+        box-shadow: 0 2px 10px rgba(242, 101, 34, 0.4);
     }
 
-    .franchise-tag {
+    .badge-squad {
         background: #FFB703;
         color: #0F172A;
         padding: 4px 12px;
         border-radius: 20px;
-        font-size: 0.85rem;
+        font-size: 0.84rem;
         font-weight: 800;
-        letter-spacing: 0.2px;
     }
 
-    .league-tag {
+    .badge-league {
         background: #0284C7;
         color: #FFFFFF;
         padding: 4px 12px;
         border-radius: 20px;
-        font-size: 0.85rem;
+        font-size: 0.84rem;
         font-weight: 700;
     }
 
-    /* Main Headline - Maximum Readability */
-    .cricinfo-title {
-        font-family: 'Outfit', sans-serif;
+    .badge-live {
+        background: rgba(239, 68, 68, 0.2);
+        color: #EF4444;
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .obsidian-card-title {
+        font-family: 'Plus Jakarta Sans', sans-serif;
         font-size: 1.35rem;
         font-weight: 700;
         color: #FFFFFF;
@@ -220,66 +255,117 @@ st.markdown("""
         transition: color 0.2s ease;
     }
 
-    /* Summary Sub-headline - Crisp High-Contrast Gray */
-    .cricinfo-summary {
-        color: #D1D5DB;
+    .obsidian-card-desc {
+        color: #CBD5E1;
         font-size: 1.02rem;
         line-height: 1.6;
         margin: 0 0 1.1rem 0;
         font-weight: 400;
     }
 
-    /* Footer Metadata Line */
-    .cricinfo-footer {
+    .obsidian-card-footer {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         gap: 0.8rem;
         font-size: 0.86rem;
-        color: #9CA3AF;
-        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        color: #94A3B8;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
         padding-top: 0.9rem;
     }
 
-    .source-badge {
+    .source-pill {
         color: #38BDF8;
         font-weight: 700;
-        background: rgba(56, 189, 248, 0.1);
+        background: rgba(56, 189, 248, 0.12);
         padding: 3px 10px;
         border-radius: 6px;
         border: 1px solid rgba(56, 189, 248, 0.3);
     }
 
-    .pub-time {
-        color: #E5E7EB;
+    .time-text {
+        color: #E2E8F0;
         font-weight: 600;
     }
 
-    .bullet {
-        color: #4B5563;
-    }
-
-    .redirect-hint {
+    .read-hint {
         margin-left: auto;
-        color: #FF6B35;
+        color: #F26522;
         font-weight: 700;
         font-size: 0.88rem;
     }
 
-    @media (max-width: 768px) {
-        .brand-title { font-size: 2.1rem; }
-        .cricinfo-news-card { padding: 1.1rem; }
-        .cricinfo-title { font-size: 1.18rem; }
+    /* Live Pulse Right Sidebar */
+    .pulse-container {
+        background: rgba(18, 22, 33, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 1.2rem;
+    }
+
+    .pulse-title {
+        font-family: 'Playfair Display', serif;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #FFFFFF;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .pulse-dot {
+        width: 8px;
+        height: 8px;
+        background-color: #F26522;
+        border-radius: 50%;
+        display: inline-block;
+        box-shadow: 0 0 10px #F26522;
+    }
+
+    .pulse-item {
+        border-left: 2px solid rgba(242, 101, 34, 0.4);
+        padding-left: 0.9rem;
+        margin-bottom: 1rem;
+        position: relative;
+    }
+
+    .pulse-item:hover {
+        border-left-color: #F26522;
+    }
+
+    .pulse-time {
+        font-size: 0.78rem;
+        color: #F26522;
+        font-weight: 700;
+        margin-bottom: 0.2rem;
+    }
+
+    .pulse-headline {
+        font-size: 0.92rem;
+        color: #E2E8F0;
+        font-weight: 600;
+        line-height: 1.35;
+        text-decoration: none;
+    }
+
+    .pulse-headline:hover {
+        color: #FF8844;
+    }
+
+    @media (max-width: 992px) {
+        .obsidian-title { font-size: 2.1rem; }
+        .obsidian-card { padding: 1.1rem; }
     }
 </style>
 """, unsafe_allow_html=True)
 
 # Sidebar
 st.sidebar.markdown("# 🧡 @SRHXtra")
-st.sidebar.markdown("**Global Command Center V6.0**")
-st.sidebar.markdown(f"📡 **UI:** `High-Contrast Live Portal`")
-st.sidebar.markdown(f"👥 **Targets:** `73 Players & 4 Squads`")
-st.sidebar.markdown(f"⏱️ **Expiry:** `Strict Last 24 Hours`")
+st.sidebar.markdown("**Premium Obsidian V7.0**")
+st.sidebar.markdown("📡 **System:** `Command Center`")
+st.sidebar.markdown("👥 **Coverage:** `73 Players & 4 Squads`")
+st.sidebar.markdown("⏱️ **Expiry:** `Strict Last 24 Hours`")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"🕒 **Last Refreshed IST:**\n`{st.session_state['last_refreshed']}`")
@@ -298,20 +384,61 @@ if st.sidebar.button("⚡ Live Refresh 50 Feeds"):
         st.rerun()
 
 # Dashboard Brand Header
-st.markdown("<div class='brand-title'>🦅 @SRHXtra GLOBAL TRACKER</div>", unsafe_allow_html=True)
-st.markdown("<div class='brand-subtitle'>High-Contrast Live News Feed | Exact Raw Source Headlines & Summaries | Click Any Article to Read Story</div>", unsafe_allow_html=True)
+st.markdown("<div class='obsidian-title'>Premium Obsidian Command Center</div>", unsafe_allow_html=True)
+st.markdown("<div class='obsidian-subtitle'>Real-Time Reconnaissance Hub | 73 Squad Members Across 4 Franchises | Direct Source Portal</div>", unsafe_allow_html=True)
+
+# Top KPI Metric Bar
+st.markdown(f"""
+<div class='metric-bar'>
+    <div class='metric-pill'>
+        <div class='metric-icon'>📡</div>
+        <div>
+            <div class='metric-val'>50</div>
+            <div class='metric-lbl'>Global Feeds</div>
+        </div>
+    </div>
+    <div class='metric-pill'>
+        <div class='metric-icon'>👥</div>
+        <div>
+            <div class='metric-val'>73</div>
+            <div class='metric-lbl'>Players Tracked</div>
+        </div>
+    </div>
+    <div class='metric-pill'>
+        <div class='metric-icon'>🧡</div>
+        <div>
+            <div class='metric-val'>4</div>
+            <div class='metric-lbl'>Global Franchises</div>
+        </div>
+    </div>
+    <div class='metric-pill'>
+        <div class='metric-icon'>⏱️</div>
+        <div>
+            <div class='metric-val'>24h</div>
+            <div class='metric-lbl'>Strict Expiry</div>
+        </div>
+    </div>
+    <div class='metric-pill'>
+        <div class='metric-icon'>⚡</div>
+        <div>
+            <div class='metric-val'>Live</div>
+            <div class='metric-lbl'>Auto Sync</div>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # Main Navigation Tabs
 tab_schedule, tab_news = st.tabs([
-    "🗓️ SECTION 1: 30-DAY GLOBAL SCHEDULE (GROUPED BY DATE)",
-    "📰 SECTION 2: LIVE CRICKET NEWS FEED (EXACT SOURCE HEADLINES)"
+    "🗓️ FIXTURES & CALENDAR (30-DAY SCHEDULE)",
+    "📡 LIVE PULSE & NEWS RECON FEED"
 ])
 
 # ---------------------------------------------------------
-# SECTION 1: 30-DAY GLOBAL SCHEDULE (GROUPED BY DATE IN 12-HR IST)
+# TAB 1: FIXTURES & CALENDAR (GROUPED BY DATE IN 12-HR IST)
 # ---------------------------------------------------------
 with tab_schedule:
-    st.subheader("🗓️ 30-Day Fixture Calendar (Grouped by Date | Timings in 12-Hour AM/PM IST)")
+    st.subheader("🗓️ 30-Day Fixture Calendar (Timings in 12-Hour AM/PM IST)")
     
     raw_schedules = [
         # July 25, 2026
@@ -386,19 +513,23 @@ with tab_schedule:
         st.markdown(f"<div class='date-header'>📅 {date_str}</div>", unsafe_allow_html=True)
         for item in items:
             st.markdown(f"""
-            <div class='glass-card' style='background: #161A26; border: 1px solid rgba(255, 255, 255, 0.12); padding: 1.2rem; border-radius: 10px; margin-bottom: 1rem;'>
-                <div><span class='player-tag'>⏰ {item['time']}</span> <span class='franchise-tag'>{item['squad']}</span></div>
-                <h3 style='margin: 0.4rem 0; color: #FFFFFF; font-size: 1.3rem;'>vs {item['vs']}</h3>
-                <p style='color: #D1D5DB; margin-bottom: 0.2rem; font-size: 1rem;'><strong>Squad Players:</strong> {item['players']}</p>
-                <small style='color: #9CA3AF;'>Tournament: {item['league']}</small>
+            <div class='obsidian-card'>
+                <div class='card-tags'>
+                    <span class='badge-player'>⏰ {item['time']}</span>
+                    <span class='badge-squad'>{item['squad']}</span>
+                    <span class='badge-live'>• Upcoming</span>
+                </div>
+                <h3 style='margin: 0.4rem 0; color: #FFFFFF; font-size: 1.35rem; font-family: "Plus Jakarta Sans", sans-serif;'>vs {item['vs']}</h3>
+                <p style='color: #CBD5E1; margin-bottom: 0.2rem; font-size: 1.02rem;'><strong>Squad Players:</strong> {item['players']}</p>
+                <small style='color: #94A3B8;'>Tournament: {item['league']}</small>
             </div>
             """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# SECTION 2: HIGH-CONTRAST ESPNcricinfo STYLE LIVE NEWS FEED
+# TAB 2: LIVE PULSE & NEWS RECON FEED (2-COLUMN DASHBOARD)
 # ---------------------------------------------------------
 with tab_news:
-    st.subheader("📰 Live Cricket News Feed (Exact Source Headlines & Descriptions | Click Any Card to Read Story)")
+    st.subheader("📡 Live Pulse & News Feed (Click Any Card to Open Original Article)")
     
     news_list = get_recent_news(limit=150)
     
@@ -410,31 +541,51 @@ with tab_news:
     news_list = sorted(news_list, key=get_bulletproof_sort_key, reverse=True)
 
     if news_list:
-        for n in news_list:
-            # Destination Link (Opens in new tab on click)
-            article_link = n['link'] if n['link'] and n['link'] != "#" else f"https://news.google.com/search?q={urllib.parse.quote(n['player_name'] + ' cricket')}"
+        col_main, col_pulse = st.columns([2.2, 1])
+        
+        # Left Main Feed Column
+        with col_main:
+            for n in news_list:
+                article_link = n['link'] if n['link'] and n['link'] != "#" else f"https://news.google.com/search?q={urllib.parse.quote(n['player_name'] + ' cricket')}"
+                league_context = detect_league_badge(n['title'], n['summary'])
 
-            # Detect League Badge (The Hundred, SA20, IPL, International)
-            league_context = detect_league_badge(n['title'], n['summary'])
+                st.markdown(f"""
+                <a href='{article_link}' target='_blank' class='obsidian-card-link'>
+                    <div class='obsidian-card'>
+                        <div class='card-tags'>
+                            <span class='badge-player'>👤 {n['player_name']}</span>
+                            <span class='badge-squad'>🧡 {n['franchise']} Squad</span>
+                            <span class='badge-league'>🏏 {league_context}</span>
+                        </div>
+                        <h2 class='obsidian-card-title'>{n['title']}</h2>
+                        <p class='obsidian-card-desc'>{n['summary']}</p>
+                        <div class='obsidian-card-footer'>
+                            <span class='time-text'>📅 {n['published_at']}</span>
+                            <span class='source-pill'>🔗 {n['source']}</span>
+                            <span class='read-hint'>Read Story ↗</span>
+                        </div>
+                    </div>
+                </a>
+                """, unsafe_allow_html=True)
 
-            st.markdown(f"""
-            <a href='{article_link}' target='_blank' class='cricinfo-card-link'>
-                <div class='cricinfo-news-card'>
-                    <div class='card-meta-top'>
-                        <span class='player-tag'>👤 {n['player_name']}</span>
-                        <span class='franchise-tag'>🧡 {n['franchise']} Squad</span>
-                        <span class='league-tag'>🏏 {league_context}</span>
-                    </div>
-                    <h2 class='cricinfo-title'>{n['title']}</h2>
-                    <p class='cricinfo-summary'>{n['summary']}</p>
-                    <div class='cricinfo-footer'>
-                        <span class='pub-time'>📅 {n['published_at']}</span>
-                        <span class='bullet'>•</span>
-                        <span class='source-badge'>🔗 {n['source']}</span>
-                        <span class='redirect-hint'>Read Original Article ↗</span>
-                    </div>
-                </div>
-            </a>
+        # Right "Live Pulse 🔴" Column
+        with col_pulse:
+            st.markdown("""
+            <div class='pulse-container'>
+                <div class='pulse-title'><span class='pulse-dot'></span> Live Pulse Timeline</div>
             """, unsafe_allow_html=True)
+            
+            for n in news_list[:8]:
+                article_link = n['link'] if n['link'] and n['link'] != "#" else f"https://news.google.com/search?q={urllib.parse.quote(n['player_name'] + ' cricket')}"
+                st.markdown(f"""
+                <div class='pulse-item'>
+                    <div class='pulse-time'>🕒 {n['published_at'].split('@')[-1].strip() if '@' in n['published_at'] else n['published_at']}</div>
+                    <a href='{article_link}' target='_blank' class='pulse-headline'>
+                        👤 {n['player_name']} — {n['title'][:70]}...
+                    </a>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            st.markdown("</div>", unsafe_allow_html=True)
     else:
         st.info("No player or franchise updates reported in the last 24 hours. Click 'Live Refresh 50 Feeds' in the sidebar to scan all 50 global outlets now!")
