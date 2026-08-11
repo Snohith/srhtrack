@@ -1,0 +1,46 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Streamlit local settings
+.streamlit/credentials.toml
+
+# Local SQLite Database
+database/srh_tracker.db
+
+# Log files (anywhere in the repo)
+logs/*.log
+*.log
+
+# Generated Stat Cards
+generated/*.png
+!generated/.gitkeep
+
+# Generated images at repo root (test artifacts)
+*.png
+*.jpg
+*.jpeg
+
+# OS / Editor junk
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test cache
+.pytest_cache/
+
+# Dev container (local only)
+.devcontainer/
