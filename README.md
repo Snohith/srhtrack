@@ -30,21 +30,26 @@
 
 ```
 srhtrack/
-├── app.py                      # Main Streamlit UI (Premium Obsidian Command Center)
-├── squadofsunrisers.xlsx       # Master Excel Squad Roster (4 Franchises)
+├── app.py                      # Main Streamlit UI (Squad Telemetry & Matchday Intelligence Hub)
+├── squadofsunrisers.xlsx       # Master Excel Squad Roster (4 Franchises, 88 Members)
 ├── scrapers/
 │   ├── rss_collector.py        # 48-source verified RSS engine (dead feeds removed 2026-07-31)
 │   └── web_scraper.py          # Utility web scraper (supplementary)
 ├── config/
 │   ├── roster.py               # Master Roster Engine & player/franchise matcher
-│   └── schedule.py             # Fixture schedule data (July–August 2026)
+│   ├── schedule.py             # Fixture schedule data (July–September 2026)
+│   └── theme.py                # Daylight athletic styling, design tokens & card components
 ├── database/
 │   ├── db_manager.py           # SQLite CRUD, target-aware deduplication, analytics, metadata
 │   └── schema.sql              # Database schema
 ├── agents/
 │   └── ranker.py               # Importance scorer & news categoriser
 ├── scheduler/
+│   ├── __init__.py             # Scheduler module package
 │   └── worker.py               # Background collector worker (manual trigger)
+├── scripts/
+│   ├── __init__.py             # Scripts package
+│   └── update_squads.py        # Automated Excel squad roster builder and migration tool
 ├── utils/
 │   ├── logger.py               # Rotating file loggers
 │   └── time_utils.py           # IST date parsing & formatting

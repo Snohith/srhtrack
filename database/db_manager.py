@@ -143,6 +143,7 @@ def init_db():
                 conn.commit()
             except Exception:
                 pass
+            cursor.execute("DELETE FROM players")
             for team_key, team_info in MASTER_ROSTER.items():
                 franchise = team_info["franchise_name"]
                 for p in team_info["players"]:

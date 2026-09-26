@@ -646,6 +646,72 @@ def get_custom_css():
         margin-right: 5px;
         display: inline-block;
     }
+    /* Official Squad Directory Telemetry Cards */
+    .squad-player-card {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 12px;
+        padding: 1.1rem 1.2rem;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-height: 145px;
+    }
+    .squad-player-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+        border-color: #F26522;
+    }
+    .squad-player-card-coach {
+        border-left: 4px solid #E05600 !important;
+        background: linear-gradient(135deg, #FFFFFF 0%, #FFF7ED 100%) !important;
+    }
+    .squad-player-card-captain {
+        border-left: 4px solid #F59E0B !important;
+        background: linear-gradient(135deg, #FFFFFF 0%, #FEF3C7 100%) !important;
+    }
+    .squad-coach-badge {
+        background: #FFEDD5;
+        color: #C2410C;
+        border: 1px solid #FDBA74;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-size: 0.74rem;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+    }
+    .squad-captain-badge {
+        background: #FEF3C7;
+        color: #B45309;
+        border: 1px solid #FCD34D;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-size: 0.74rem;
+        font-weight: 800;
+    }
+    .squad-card-name {
+        font-family: 'Inter', sans-serif;
+        font-size: 1.12rem;
+        font-weight: 800;
+        color: #0F172A;
+        margin-bottom: 0.25rem;
+    }
+    .squad-card-role {
+        font-size: 0.88rem;
+        color: #475569;
+        font-weight: 600;
+        margin-bottom: 0.6rem;
+    }
+    .squad-card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 1px solid #F1F5F9;
+        padding-top: 0.6rem;
+        font-size: 0.82rem;
+    }
     @media (max-width: 768px) {
         .srh-brand-title { font-size: 1.9rem; }
         .hero-fixture-card { padding: 1rem; }
@@ -931,5 +997,90 @@ def render_otd_telemetry_card(m, is_hero=False):
         f"{scorecard_html}"
         f"{stats_html}"
         f"<div class='otd-desc-dark'>{desc}</div>"
+        f"</div>"
+    )
+
+COUNTRY_FLAGS = {
+    "India": "🇮🇳",
+    "Australia": "🇦🇺",
+    "South Africa": "🇿🇦",
+    "England": "🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+    "Sri Lanka": "🇱🇰",
+    "New Zealand": "🇳🇿",
+    "Pakistan": "🇵🇰",
+    "Bangladesh": "🇧🇩",
+    "Scotland": "🏴󠁧󠁢󠁳󠁣󠁴󠁿",
+}
+
+def render_squad_member_card(member, franchise_name=None):
+    """Renders a sleek athletic card for an official squad member."""
+    name = html_lib.escape(member.get("name", ""))
+    role = html_lib.escape(member.get("role", "Squad Member"))
+    country = html_lib.escape(member.get("country", ""))
+    notes = html_lib.escape(member.get("notes", "")) if member.get("notes") else ""
+    is_captain = bool(member.get("captain", False)) or "(c)" in name.lower() or "captain" in role.lower()
+    is_coach = "coach" in role.lower() or "vettori" in name.lower() or "birrell" in name.lower()
+    is_wk = "(wk)" in name.lower() or "wicket-keeper" in role.lower() or "wicket-keeper" in str(member.get("role", "")).lower()
+
+    flag = COUNTRY_FLAGS.get(member.get("country", ""), "🏏")
+
+    card_classes = ["squad-player-card"]
+    badges = []
+
+    if is_coach:
+        card_classes.append("squad-player-card-coach")
+        badges.append("<span class='squad-coach-badge'>👔 HEAD COACH</span>")
+    elif is_captain:
+        card_classes.append("squad-player-card-captain")
+        badges.append("<span class='squad-captain-badge'>👑 CAPTAIN</span>")
+
+    if is_wk:
+        badges.append("<span class='chip-league' style='padding:2px 7px;font-size:0.74rem;'>🧤 WK</span>")
+
+    # Overseas detection based on franchise home country
+    is_overseas = False
+    f_str = str(franchise_name or "")
+    if "Hyderabad" in f_str or not franchise_name:
+        is_overseas = (country != "India" and not is_coach)
+    elif "Eastern Cape" in f_str:
+        is_overseas = (country != "South Africa" and not is_coach)
+    elif "Leeds" in f_str:
+        is_overseas = (country != "England" and not is_coach)
+
+    if is_overseas:
+        badges.append("<span class='chip-squad' style='padding:2px 7px;font-size:0.74rem;'>✈️ OVERSEAS</span>")
+
+    badges_html = f"<div style='display:flex;gap:0.35rem;flex-wrap:wrap;'>{''.join(badges)}</div>" if badges else "<div></div>"
+
+    role_lower = role.lower()
+    if is_coach:
+        role_icon = "👔"
+    elif "wicket-keeper" in role_lower:
+        role_icon = "🧤"
+    elif "all-rounder" in role_lower:
+        role_icon = "🔥"
+    elif "batter" in role_lower:
+        role_icon = "🏏"
+    elif "bowler" in role_lower or "pace" in role_lower or "spin" in role_lower:
+        role_icon = "⚡"
+    else:
+        role_icon = "👤"
+
+    notes_html = f"<span style='color:#E05600;font-size:0.75rem;font-weight:700;'>{notes}</span>" if notes else ""
+
+    return (
+        f"<div class='{' '.join(card_classes)}'>"
+        f"  <div>"
+        f"    <div style='display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.5rem;gap:0.4rem;'>"
+        f"      {badges_html}"
+        f"      <span style='font-size:1.25rem;line-height:1;' title='{country}'>{flag}</span>"
+        f"    </div>"
+        f"    <div class='squad-card-name'>{name}</div>"
+        f"    <div class='squad-card-role'>{role_icon} {role}</div>"
+        f"  </div>"
+        f"  <div class='squad-card-footer'>"
+        f"    <span style='color:#64748B;font-weight:600;'>{country}</span>"
+        f"    {notes_html}"
+        f"  </div>"
         f"</div>"
     )

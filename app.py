@@ -32,6 +32,7 @@ from config.theme import (
     render_telemetry_metrics, render_featured_hero_news,
     render_telemetry_news_card, render_telemetry_pulse_item,
     render_broadcast_match_card, render_otd_telemetry_card,
+    render_squad_member_card,
     get_favicon_url, safe_article_link, time_ago,
     parse_fixture_datetime, get_fixture_status
 )
@@ -145,8 +146,14 @@ if st.sidebar.button(f"⚡ Live Refresh {_source_count} Feeds", use_container_wi
 with st.sidebar.expander("📋 Squad Roster Breakdown", expanded=False):
     for fkey, fdata in MASTER_ROSTER.items():
         fname = fdata.get("franchise_name", fkey)
-        p_count = len(fdata.get("players", []))
-        st.markdown(f"**{fname}**: `{p_count} players`")
+        p_list = fdata.get("players", [])
+        coach = next((p["name"] for p in p_list if "coach" in p.get("role", "").lower() or "vettori" in p["name"].lower() or "birrell" in p["name"].lower()), None)
+        captain = next((p["name"] for p in p_list if p.get("captain")), None)
+        st.markdown(f"**{fname}**: `{len(p_list)} members`")
+        if coach:
+            st.caption(f"👔 Coach: **{coach}**")
+        if captain:
+            st.caption(f"👑 Captain: **{captain}**")
 st.markdown(render_header_banner(_player_count, 4), unsafe_allow_html=True)
 active_fixtures = [s for s in FIXTURE_SCHEDULE if get_fixture_status(s) in ["LIVE", "UPCOMING"]]
 live_fixtures = [s for s in active_fixtures if get_fixture_status(s) == "LIVE"]
@@ -163,10 +170,11 @@ if hero_fixture:
     st.markdown(render_next_match_hero(hero_fixture, status=hero_status), unsafe_allow_html=True)
 live_count = len(cached_get_recent_news(limit=150))
 st.markdown(render_telemetry_metrics(_source_count, _player_count, live_count), unsafe_allow_html=True)
-tab_news, tab_schedule, tab_otd = st.tabs([
+tab_news, tab_schedule, tab_otd, tab_squads = st.tabs([
     f"📡 LIVE PULSE & NEWS RECON FEED ({live_count})",
     "📋 MATCH DAY FIXTURE BREAKDOWN",
     "🗓️ ON THIS DAY IN SUNRISERS HISTORY",
+    f"👥 SQUAD DATABASE & DIRECTORY ({_player_count})",
 ])
 with tab_news:
     st.markdown("<h3 style='font-family:Inter,sans-serif;font-weight:800;color:#0F172A;margin-bottom:0.8rem;'>📡 Real-Time Intelligence & News Feed</h3>", unsafe_allow_html=True)
@@ -496,3 +504,103 @@ with tab_otd:
             f"</div>",
             unsafe_allow_html=True
         )
+with tab_squads:
+    st.markdown("<h3 style='font-family:Inter,sans-serif;font-weight:800;color:#0F172A;margin-bottom:0.4rem;'>👥 Official Squad Database & Roster Directory</h3>", unsafe_allow_html=True)
+    st.markdown("<div style='color:#475569;margin-bottom:1.2rem;font-weight:500;'>Official active squads, coaching leadership, player roles, and national representation across the Sunrisers network.</div>", unsafe_allow_html=True)
+
+    col_sq_f, col_sq_role, col_sq_search = st.columns([1.5, 1.2, 2])
+    with col_sq_f:
+        squad_team_options = ["All Franchises"] + [fdata["franchise_name"] for fdata in MASTER_ROSTER.values()]
+        def_idx = squad_team_options.index(franchise_filter) if franchise_filter in squad_team_options else 0
+        squad_team_filter = st.selectbox("Franchise Team", squad_team_options, index=def_idx, key="squad_team_sel")
+    with col_sq_role:
+        squad_role_filter = st.selectbox(
+            "Filter Role",
+            ["All Roles", "Head Coach", "Captains & Leaders", "Wicket-keepers", "Batters", "All-rounders", "Bowlers", "Overseas Players"],
+            key="squad_role_sel"
+        )
+    with col_sq_search:
+        squad_search_query = st.text_input("🔍 Search Player / Coach / Country", placeholder="e.g. Vettori, Head, Cummins, Klaasen, Australia...", key="squad_search_input")
+
+    filtered_members = []
+    for fkey, fdata in MASTER_ROSTER.items():
+        fname = fdata["franchise_name"]
+        if squad_team_filter != "All Franchises" and squad_team_filter != fname:
+            continue
+        for p in fdata["players"]:
+            filtered_members.append({**p, "franchise": fname, "league": fdata["league"]})
+
+    if squad_search_query.strip():
+        q = squad_search_query.strip().lower()
+        filtered_members = [
+            p for p in filtered_members
+            if q in p["name"].lower() or q in p["role"].lower() or q in p["country"].lower() or q in p["franchise"].lower()
+        ]
+
+    if squad_role_filter == "Head Coach":
+        filtered_members = [p for p in filtered_members if "coach" in p["role"].lower() or "vettori" in p["name"].lower() or "birrell" in p["name"].lower()]
+    elif squad_role_filter == "Captains & Leaders":
+        filtered_members = [p for p in filtered_members if p.get("captain") or "(c)" in p["name"].lower() or "captain" in p["role"].lower()]
+    elif squad_role_filter == "Wicket-keepers":
+        filtered_members = [p for p in filtered_members if "(wk)" in p["name"].lower() or "wicket-keeper" in p["role"].lower()]
+    elif squad_role_filter == "Batters":
+        filtered_members = [p for p in filtered_members if "batter" in p["role"].lower() and "wicket-keeper" not in p["role"].lower()]
+    elif squad_role_filter == "All-rounders":
+        filtered_members = [p for p in filtered_members if "all-rounder" in p["role"].lower()]
+    elif squad_role_filter == "Bowlers":
+        filtered_members = [p for p in filtered_members if "bowler" in p["role"].lower() and "all-rounder" not in p["role"].lower()]
+    elif squad_role_filter == "Overseas Players":
+        def _is_os(p):
+            c = p.get("country", "")
+            f = p.get("franchise", "")
+            if "coach" in p.get("role", "").lower(): return False
+            if "Hyderabad" in f: return c != "India"
+            if "Eastern Cape" in f: return c != "South Africa"
+            if "Leeds" in f: return c != "England"
+            return False
+        filtered_members = [p for p in filtered_members if _is_os(p)]
+
+    total_found = len(filtered_members)
+    coach_count = sum(1 for p in filtered_members if "coach" in p["role"].lower() or "vettori" in p["name"].lower() or "birrell" in p["name"].lower())
+    cap_count = sum(1 for p in filtered_members if p.get("captain"))
+    distinct_countries = len({p["country"] for p in filtered_members if p.get("country")})
+
+    st.markdown(f"""
+    <div style='display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:0.8rem;margin-top:0.8rem;margin-bottom:1.5rem;'>
+        <div style='background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:0.75rem 1rem;'>
+            <div style='font-size:1.3rem;font-weight:800;color:#0F172A;'>{total_found}</div>
+            <div style='font-size:0.78rem;color:#64748B;font-weight:600;'>Members Displayed</div>
+        </div>
+        <div style='background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:0.75rem 1rem;'>
+            <div style='font-size:1.3rem;font-weight:800;color:#E05600;'>{coach_count}</div>
+            <div style='font-size:0.78rem;color:#64748B;font-weight:600;'>Coaching Leaders</div>
+        </div>
+        <div style='background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:0.75rem 1rem;'>
+            <div style='font-size:1.3rem;font-weight:800;color:#B45309;'>{cap_count}</div>
+            <div style='font-size:0.78rem;color:#64748B;font-weight:600;'>Captains</div>
+        </div>
+        <div style='background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:0.75rem 1rem;'>
+            <div style='font-size:1.3rem;font-weight:800;color:#0284C7;'>{distinct_countries} Nations</div>
+            <div style='font-size:0.78rem;color:#64748B;font-weight:600;'>Global Representation</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if filtered_members:
+        if squad_team_filter == "All Franchises":
+            teams_in_results = {}
+            for p in filtered_members:
+                teams_in_results.setdefault(p["franchise"], []).append(p)
+            for tname, plist in teams_in_results.items():
+                st.markdown(f"<h4 style='color:#E05600;font-family:Inter,sans-serif;font-weight:800;margin-top:1.5rem;margin-bottom:0.8rem;'>🧡 {tname} ({len(plist)} members)</h4>", unsafe_allow_html=True)
+                cols = st.columns(3)
+                for idx, player in enumerate(plist):
+                    with cols[idx % 3]:
+                        st.markdown(render_squad_member_card(player, franchise_name=tname), unsafe_allow_html=True)
+        else:
+            cols = st.columns(3)
+            for idx, player in enumerate(filtered_members):
+                with cols[idx % 3]:
+                    st.markdown(render_squad_member_card(player, franchise_name=squad_team_filter), unsafe_allow_html=True)
+    else:
+        st.info("No squad members match the current filter criteria.")

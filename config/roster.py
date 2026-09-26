@@ -26,7 +26,7 @@ def load_master_roster_from_excel():
             if raw_role == "Captain":
                 role = country
                 country = unnamed
-        if "Leeds Men" in raw_team:
+        if "Leeds Men" in raw_team or raw_team == "Sunrisers Leeds" or ("Leeds" in raw_team and "Women" not in raw_team):
             key = "Leeds_Men"
             franchise_name = "Sunrisers Leeds Men"
             league = "The Hundred"
@@ -88,9 +88,12 @@ PLAYER_ALIASES = [
     {"name": "Travis Head", "pattern": r'\btravis head\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "Australia", "role": "Opening batter"},
     {"name": "Liam Livingstone", "pattern": r'\blivingstone\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "England", "role": "All-rounder"},
     {"name": "Gerald Coetzee", "pattern": r'\bcoetzee\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "South Africa", "role": "Fast bowler"},
-    {"name": "Dilshan Madushanka", "pattern": r'\bmadushanka\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "Sri Lanka", "role": "Fast bowler"},
+    {"name": "Dilshan Madhushanka", "pattern": r'\b(dilshan madhushanka|dilshan madushanka|madhushanka|madushanka)\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "Sri Lanka", "role": "Fast bowler"},
     {"name": "Jaydev Unadkat", "pattern": r'\bunadkat\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "India", "role": "Fast bowler"},
-    {"name": "Quinton de Kock", "pattern": r'\b(de kock|de-kock)\b', "team_key": "SEC", "franchise": "Sunrisers Eastern Cape", "country": "South Africa", "role": "Wicket-keeper batter"},
+    {"name": "R Smaran", "pattern": r'\b(r smaran|smaran ravichandran|smaran)\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "India", "role": "Batter"},
+    {"name": "RS Ambrish", "pattern": r'\b(rs ambrish|r\.s\. ambrish|ambrish)\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "India", "role": "All-rounder / Bowler"},
+    {"name": "Daniel Vettori", "pattern": r'\b(daniel vettori|dan vettori|vettori)\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "New Zealand", "role": "Head Coach"},
+    {"name": "Quinton De Kock", "pattern": r'\b(quinton de kock|quinton de-kock|de kock|de-kock)\b', "team_key": "SEC", "franchise": "Sunrisers Eastern Cape", "country": "South Africa", "role": "Wicket-keeper batter"},
     {"name": "Tristan Stubbs", "pattern": r'\bstubbs\b', "team_key": "SEC", "franchise": "Sunrisers Eastern Cape", "country": "South Africa", "role": "Wicket-keeper batter / Captain"},
     {"name": "Marco Jansen", "pattern": r'\bjansen\b', "team_key": "SEC", "franchise": "Sunrisers Eastern Cape", "country": "South Africa", "role": "All-rounder"},
     {"name": "Anrich Nortje", "pattern": r'\bnortje\b', "team_key": "SEC", "franchise": "Sunrisers Eastern Cape", "country": "South Africa", "role": "Bowler"},
@@ -98,6 +101,10 @@ PLAYER_ALIASES = [
     {"name": "Rishad Hossain", "pattern": r'\brishad\b', "team_key": "SEC", "franchise": "Sunrisers Eastern Cape", "country": "Bangladesh", "role": "Bowler"},
     {"name": "Lutho Sipamla", "pattern": r'\bsipamla\b', "team_key": "SEC", "franchise": "Sunrisers Eastern Cape", "country": "South Africa", "role": "Bowler"},
     {"name": "Senuran Muthusamy", "pattern": r'\bmuthusamy\b', "team_key": "SEC", "franchise": "Sunrisers Eastern Cape", "country": "South Africa", "role": "All-rounder"},
+    {"name": "Mitch Marsh", "pattern": r'\b(mitch marsh|mitchell marsh)\b', "team_key": "SEC", "franchise": "Sunrisers Eastern Cape", "country": "Australia", "role": "All-rounder"},
+    {"name": "Mitch Van Buuren", "pattern": r'\b(mitch van buuren|mitchell van buuren|van buuren)\b', "team_key": "SEC", "franchise": "Sunrisers Eastern Cape", "country": "South Africa", "role": "Batter"},
+    {"name": "Adrian Birrell", "pattern": r'\b(adrian birrell|birrell)\b', "team_key": "SEC", "franchise": "Sunrisers Eastern Cape", "country": "South Africa", "role": "Head Coach"},
+    {"name": "Matty Revis", "pattern": r'\b(matty revis|matt revis)\b', "team_key": "Leeds_Men", "franchise": "Sunrisers Leeds Men", "country": "England", "role": "All-rounder"},
 ]
 def match_player_or_franchise_in_text(text):
     """
