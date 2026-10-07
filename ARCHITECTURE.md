@@ -1,6 +1,6 @@
 # Tracker — How Our Project Works
 
-**One-sentence version:** Tracker reads cricket news from 161 RSS feeds, keeps only stories about our Sunrisers players, stores them with standard defaults, and shows them in a web dashboard.
+**One-sentence version:** Tracker reads cricket news from 193 RSS feeds, keeps only stories about our Sunrisers players, stores them with standard defaults, and shows them in a web dashboard.
 
 Live app: `https://srhtrack.streamlit.app/` — run locally with `streamlit run app.py`.
 
@@ -18,7 +18,7 @@ The player list lives in `data/squadofsunrisers.xlsx` (~90 rows). Everything the
 ## The journey of one news story
 
 ```
-161 RSS feeds
+193 RSS feeds
   → scrapers/rss_collector.py  (download each feed, retry if it fails)
   → config/roster.py           (is a Sunrisers player or team mentioned? if no, drop it)
   → database/srh_tracker.db   (SQLite file — saved for 24 hours)
@@ -27,7 +27,7 @@ The player list lives in `data/squadofsunrisers.xlsx` (~90 rows). Everything the
 
 **Step by step:**
 
-1. **Collect** — Every 15 minutes the app downloads all 161 feeds (ESPNcricinfo, Cricbuzz, BBC, Google News searches, regional papers, etc.). If a feed is dead, a Google News fallback tries to recover its stories.
+1. **Collect** — Every 15 minutes the app downloads all 193 feeds (ESPNcricinfo, Cricbuzz, BBC, Google News searches, regional papers, etc.). If a feed is dead, a Google News fallback tries to recover its stories.
 2. **Filter** — Stories older than 24 hours are thrown away. Then each headline is checked: does it mention one of our players (full name like "Abhishek Sharma", or a nickname like "Klaasen", "Stubbs") or one of our 4 team names? Non-cricket lookalikes (NFL, MLB…) are rejected. No match = dropped.
 3. **Store** — Matching stories are saved in SQLite with standard defaults. The same story can be saved once *per player it mentions* (so one article about Head *and* Klaasen appears under both), but never twice for the same player. Anything older than 24 hours is deleted automatically.
 4. **Show** — The dashboard displays the newest stories first, with search, team filters, and a live timeline.
@@ -46,7 +46,7 @@ The page refreshes itself every 5 minutes; news data is cached for 60 seconds.
 | File | Job |
 |---|---|
 | `app.py` | The whole dashboard (UI + scheduling). |
-| `scrapers/rss_collector.py` | The 161-feed list + download/filter pipeline. |
+| `scrapers/rss_collector.py` | The 193-feed list + download/filter pipeline. |
 | `scrapers/web_scraper.py` | Backup fetcher when a feed fails. |
 | `config/roster.py` | Reads the Excel roster; matches names in headlines. |
 | `config/schedule.py` | Fixture list. |

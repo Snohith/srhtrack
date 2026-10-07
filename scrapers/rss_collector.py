@@ -199,10 +199,8 @@ CRICKET_SOURCES = [
     {"name": "Google News: India Women Cricket", "url": "https://news.google.com/rss/search?q=women+cricket+India&hl=en-IN&gl=IN&ceid=IN:en"},
     {"name": "Google News: WPL Auction",    "url": "https://news.google.com/rss/search?q=WPL+auction+OR+retention&hl=en-IN&gl=IN&ceid=IN:en"},
 
-    # ── Aggregators & Community ───────────────────────────────────────────
-    {"name": "Bing News: Sunrisers",        "url": "https://www.bing.com/news/search?q=Sunrisers&format=RSS"},
-    {"name": "Bing News: SA20",             "url": "https://www.bing.com/news/search?q=SA20+cricket&format=RSS"},
-    {"name": "Bing News: The Hundred Exact", "url": "https://www.bing.com/news/search?q=%22The+Hundred%22+cricket&format=RSS"},
+    # ── Community (honest post dates; aggregator mirrors removed — Bing
+    # re-surfaces evergreen pages with fresh timestamps, defeating the 24h cutoff)
     {"name": "Reddit r/Cricket",            "url": "https://www.reddit.com/r/Cricket/.rss"},
 
     # ── UK & SA Direct Feeds ─────────────────────────────────────────────
@@ -223,6 +221,47 @@ CRICKET_SOURCES = [
     {"name": "Vaartha Telugu",              "url": "https://www.vaartha.com/feed/"},
     {"name": "Hans India Sports",           "url": "https://www.thehansindia.com/rss/sports"},
     {"name": "GreatAndhra Telugu",          "url": "https://www.greatandhra.com/feed"},
+
+    # ── Overseas Depth (non-India coverage: SA/AUS/NZ/SL/BD/PK/SCO/UK) ──
+    {"name": "SA Daily Maverick",           "url": "https://www.dailymaverick.co.za/rss"},
+    {"name": "SA IOL News",                 "url": "https://www.iol.co.za/rss"},
+    {"name": "Google News: News24 SA",      "url": "https://news.google.com/rss/search?q=site:news24.com+cricket+Proteas+or+SA20&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    {"name": "Google News: SuperSport SA",  "url": "https://news.google.com/rss/search?q=site:supersport.com+cricket&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    {"name": "Google News: Cricket Australia", "url": "https://news.google.com/rss/search?q=site:cricket.com.au+Australia&hl=en-AU&gl=AU&ceid=AU:en"},
+    {"name": "Google News: Fox Sports Aus", "url": "https://news.google.com/rss/search?q=site:foxsports.com.au+cricket+Australia&hl=en-AU&gl=AU&ceid=AU:en"},
+    {"name": "NZ Stuff Sport",              "url": "https://www.stuff.co.nz/rss/sport"},
+    {"name": "Google News: NZ Herald",      "url": "https://news.google.com/rss/search?q=site:nzherald.co.nz+Black+Caps+cricket&hl=en-NZ&gl=NZ&ceid=NZ:en"},
+    {"name": "SL ThePapare",                "url": "https://www.thepapare.com/feed"},
+    {"name": "SL AdaDerana News",           "url": "https://www.adaderana.lk/rss.php"},
+    {"name": "PK Dawn Sport",               "url": "https://www.dawn.com/feeds/sport"},
+    {"name": "Google News: Daily Star BD",  "url": "https://news.google.com/rss/search?q=site:thedailystar.net+sports+cricket+Bangladesh&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Scotsman Sport", "url": "https://news.google.com/rss/search?q=site:scotsman.com+cricket+Scotland&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: The Cricketer",  "url": "https://news.google.com/rss/search?q=site:thecricketer.com+county+or+Hundred&hl=en-GB&gl=GB&ceid=GB:en"},
+
+    # ── National Teams & Overseas Press (players on country duty) ──
+    {"name": "SA SABC Sport",               "url": "https://www.sabcsport.com/rss"},
+    {"name": "PK Tribune Sport",             "url": "https://tribune.com.pk/feed/sports"},
+    {"name": "Google News: England Men",    "url": "https://news.google.com/rss/search?q=England+cricket+team+Tests+Ashes&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Australia Men",  "url": "https://news.google.com/rss/search?q=Australia+cricket+team+Baggy+Greens&hl=en-AU&gl=AU&ceid=AU:en"},
+    {"name": "Google News: Proteas",        "url": "https://news.google.com/rss/search?q=Proteas+South+Africa+cricket+team&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    {"name": "Google News: Black Caps",     "url": "https://news.google.com/rss/search?q=Black+Caps+New+Zealand+cricket+team&hl=en-NZ&gl=NZ&ceid=NZ:en"},
+    {"name": "Google News: Pakistan Team",  "url": "https://news.google.com/rss/search?q=Pakistan+cricket+team+Shaheens&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Bangladesh Team", "url": "https://news.google.com/rss/search?q=Bangladesh+Tigers+cricket+team&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Sri Lanka Team", "url": "https://news.google.com/rss/search?q=Sri+Lanka+cricket+team+Lions&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Scotland Team",  "url": "https://news.google.com/rss/search?q=Scotland+cricket+team+Saltires&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Dhaka Tribune",  "url": "https://news.google.com/rss/search?q=site:dhakatribune.com+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Daily Mirror LK", "url": "https://news.google.com/rss/search?q=site:dailymirror.lk+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+
+    # ── SA Depth + Women's Weight (Proteas Women, domestic, women's game) ──
+    {"name": "SA HeraldLive",               "url": "https://www.heraldlive.co.za/rss"},
+    {"name": "Google News: Proteas Women",  "url": "https://news.google.com/rss/search?q=Proteas+Women+South+Africa+cricket&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    {"name": "Google News: SA Domestic",    "url": "https://news.google.com/rss/search?q=Warriors+Titans+Lions+Dolphins+CSA+cricket&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    {"name": "Google News: ICC Women",      "url": "https://news.google.com/rss/search?q=site:icc-cricket.com+women+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: England Women Domestic", "url": "https://news.google.com/rss/search?q=Charlotte+Edwards+Cup+or+Rachael+Heyhoe+Flint&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: WBBL Ashes Women", "url": "https://news.google.com/rss/search?q=Women+Ashes+or+WBBL+final+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: India Women Stars", "url": "https://news.google.com/rss/search?q=India+Women+cricket+Mandhana+or+Shafali+or+Deepti&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Hundred Women Clubs", "url": "https://news.google.com/rss/search?q=%22The+Hundred%22+women+Phoenix+or+Invincibles+or+Spirit&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: WPL Stars",      "url": "https://news.google.com/rss/search?q=womens+cricket+Smriti+or+Perry+or+Wolvaardt&hl=en-GB&gl=GB&ceid=GB:en"},
 
     # ── Ownership Filings & Leadership (exchange disclosures surface here first)
     {"name": "Google News: BSE Filings Sun TV", "url": "https://news.google.com/rss/search?q=site:bseindia.com+Sun+TV+Network&hl=en-IN&gl=IN&ceid=IN:en"},

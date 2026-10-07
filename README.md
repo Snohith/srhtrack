@@ -14,7 +14,7 @@ Live: [https://srhtrack.streamlit.app/](https://srhtrack.streamlit.app/)
 ## 1. How it works
 
 ```
-161 RSS feeds → scrapers/rss_collector.py → config/roster.py matcher
+193 RSS feeds → scrapers/rss_collector.py → config/roster.py matcher
     → SQLite → app.py (Streamlit)
 ```
 
@@ -48,7 +48,7 @@ srhtrack/                         # v14.1.0, Python >= 3.9
 ├── data/squadofsunrisers.xlsx    # Master roster: 88 rows, 86 distinct players, 4 squads
 ├── squadofsunrisers.xlsx         # Legacy fallback copy at repo root
 ├── scrapers/
-│   ├── rss_collector.py          # CRICKET_SOURCES (161 feeds), fetch + filter pipeline
+│   ├── rss_collector.py          # CRICKET_SOURCES (193 feeds), fetch + filter pipeline
 │   └── web_scraper.py            # scrape_match_highlights() helper (no feeds)
 ├── config/
 │   ├── roster.py                 # Excel loader, word-boundary matcher, aliases
@@ -112,7 +112,7 @@ Copy `.env.example` to `.env` to customize a deployment. Page auto-reload is fix
 
 ---
 
-## 6. Source coverage (161 configured feeds & resilient scraper fallback)
+## 6. Source coverage (193 configured feeds & resilient scraper fallback)
 
 Defined in `scrapers/rss_collector.py:17-233` (`CRICKET_SOURCES`; `TOP_50_CRICKET_SOURCES` and `RSS_FEEDS` are aliases).
 
@@ -136,10 +136,13 @@ Defined in `scrapers/rss_collector.py:17-233` (`CRICKET_SOURCES`; `TOP_50_CRICKE
 | Player & coach topics | 12 | Google News: Abhishek, Cummins, Klaasen, Markram, Jansen, Brook, Stubbs, Ishan, Deepti, Litchfield, Coaches, Leeds Women Stars (filtered by roster matcher downstream) |
 | Ownership / business expansion | 6 | Google News: Sun TV Exact, Kavya Maran Exact, Sun Group, Sunrisers Valuation, IPL Valuation, Yorkshire Investment |
 | Women's game expansion | 4 | Google News: Global, England Women, India Women, WPL Auction |
-| Aggregators & community | 4 | Bing News: Sunrisers, SA20, The Hundred Exact; Reddit r/Cricket |
+| Aggregators & community | 1 | Reddit r/Cricket (real post dates; Bing mirrors removed — they re-surface evergreen pages with fresh timestamps) |
 | UK & SA direct feeds | 5 | BBC The Hundred, Sky 12040, Yorkshire Post, The Citizen SA, CricToday |
 | Business direct feeds | 4 | LiveMint Markets, Hindu BusinessLine, ET Top Stories, Business Today |
 | Telugu regional depth | 4 | Telangana Today General, Vaartha, Hans India, GreatAndhra |
+| Overseas depth (non-India) | 14 | SA: Daily Maverick, IOL, News24 + SuperSport mirrors; AUS: Cricket Australia + Fox mirrors; NZ: Stuff + Herald mirror; SL: ThePapare, AdaDerana; PK: Dawn Sport; BD: Daily Star mirror; SCO: Scotsman mirror; UK: Cricketer mirror |
+| National teams & overseas press | 12 | SABC Sport, Tribune PK Sport; national-team mirrors: England, Australia, Proteas, Black Caps, Pakistan, Bangladesh, Sri Lanka, Scotland; Dhaka Tribune + Daily Mirror LK mirrors |
+| SA depth + women's weight | 9 | HeraldLive; Proteas Women, SA domestic, ICC Women, England domestic, WBBL/Ashes, India Women stars, Hundred Women clubs, WPL stars mirrors |
 | Ownership filings & leadership | 5 | Google News: BSE filings, Moneycontrol, Kavya Maran Statements, Sun Group filings, Leeds Companies House |
 
 ### Resilient scraper & dead source recovery engine

@@ -8,7 +8,7 @@ This document outlines the architectural blueprints, data pipelines, ranking alg
 
 ```mermaid
 graph TD
-    A[161 Verified Cricket RSS Feeds] -->|XML / Atom Feeds| B[Scrapers: rss_collector.py]
+    A[193 Verified Cricket RSS Feeds] -->|XML / Atom Feeds| B[Scrapers: rss_collector.py]
     B -->|Entity Text Extraction| C[config/roster.py: Master Roster Matcher]
     C -->|Roster Hits + Aliases| E[(database/srh_tracker.db: SQLite Storage)]
     

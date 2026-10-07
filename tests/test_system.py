@@ -210,6 +210,7 @@ def test_source_count_dynamic():
     assert len(names) == len(set(names)), f"Duplicate source names found: {[n for n in names if names.count(n) > 1]}"
     urls = [s['url'] for s in CRICKET_SOURCES]
     assert len(urls) == len(set(urls)), f"Duplicate source URLs found"
+    assert not any("bing.com/news" in u for u in urls), "Bing News aggregator mirrors falsify dates and must stay out"
     print(f"✅ Source count dynamic: {len(CRICKET_SOURCES)} sources, no duplicates.")
 def test_schema_uses_target_aware_news_dedupe():
     """Schema must not globally unique-constrain article links."""

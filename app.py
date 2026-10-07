@@ -46,7 +46,7 @@ except Exception:
         total_polled = 0
     def fetch_and_filter_rss():
         return _FakeResult()
-    _source_count = 161
+    _source_count = 193
 _player_count = len({p["name"] for data in MASTER_ROSTER.values() for p in data["players"]})
 st.set_page_config(
     page_title="SRHXtra — Squad Telemetry & Matchday Intelligence Engine",

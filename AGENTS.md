@@ -18,7 +18,7 @@ python scripts/update_squads.py   # or: make sync-squads — rewrites roster Exc
 ## Architecture (ingest pipeline)
 
 ```
-161 RSS feeds (scrapers/rss_collector.py: CRICKET_SOURCES)
+193 RSS feeds (scrapers/rss_collector.py: CRICKET_SOURCES)
 → config/roster.py: match_player_or_franchise_in_text()
 → database/db_manager.py → SQLite → app.py (4 Streamlit tabs)
 ```
