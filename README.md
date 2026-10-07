@@ -1,67 +1,81 @@
-# 🧡 @SRHXtra — Premium Obsidian Command Center
+# SRHXtra — Sunrisers Cricket Intelligence Platform
 
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-Cloud-FF4B4B.svg?style=for-the-badge&logo=streamlit&logoColor=white)](https://srhtrack.streamlit.app/)
 [![Live](https://img.shields.io/badge/Live-srhtrack.streamlit.app-orange.svg?style=for-the-badge)](https://srhtrack.streamlit.app/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
-> **@SRHXtra** is a real-time cricket intelligence platform tracking the live Excel roster across all 4 Sunrisers global franchises — **Sunrisers Hyderabad (IPL)**, **Sunrisers Eastern Cape (SA20)**, **Sunrisers Leeds Men (The Hundred)**, and **Sunrisers Leeds Women (The Hundred)**.
+Real-time cricket news intelligence over the active Excel roster for all 4 Sunrisers franchises — **Sunrisers Hyderabad (IPL)**, **Sunrisers Eastern Cape (SA20)**, **Sunrisers Leeds Men (The Hundred)**, and **Sunrisers Leeds Women (The Hundred)**.
 
-🔗 **Live:** [https://srhtrack.streamlit.app/](https://srhtrack.streamlit.app/)
-
----
-
-## 🌟 Features
-
-| Feature | Details |
-|---------|---------|
-| 📡 **48-Source RSS Engine** | Polls 48 fully verified, live-tested global & hyper-local cricket outlets every 15 minutes — zero dead feeds |
-| 👥 **Dynamic Roster Tracking** | Loaded from `squadofsunrisers.xlsx` with regex word-boundary matching |
-| 📋 **Match Day Fixture Breakdown** | Live fixture cards with player rosters, countdown timers (IST) |
-| 📰 **Live Pulse News Feed** | Real-time news cards with exact source headlines, click-to-open links |
-| 🗓️ **On This Day** | Curated historical Sunrisers moments auto-filtered to today's date |
-| 🔍 **Live Search** | Search across all rostered players, franchises and keywords instantly |
-| ⚡ **Auto-Ingest** | Background RSS ingestion every 15 min with JS page reload every 5 min |
-| 🧹 **Auto-Sanitization** | Startup purge removes expired (>24h) and misattributed articles |
+Live: [https://srhtrack.streamlit.app/](https://srhtrack.streamlit.app/)
 
 ---
 
-## 📁 Repository Structure
+## 1. How it works
 
 ```
-srhtrack/
-├── app.py                      # Main Streamlit UI (Squad Telemetry & Matchday Intelligence Hub)
-├── squadofsunrisers.xlsx       # Master Excel Squad Roster (4 Franchises, 88 Members)
+156 RSS feeds → scrapers/rss_collector.py → config/roster.py matcher
+    → SQLite → app.py (Streamlit)
+```
+
+1. **Poll** — `fetch_feed_with_retry()` fetches each feed in `CRICKET_SOURCES` (3s timeout, 2 attempts). Articles older than 24h are discarded at ingest.
+2. **Match** — `match_player_or_franchise_in_text()` keeps only articles mentioning a rostered player (word-boundary match + single-name aliases) or one of the 4 franchise names. US-sports false positives (`nfl`, `mlb`, etc.) are rejected.
+3. **Store** — `insert_news()` writes to SQLite with target-aware dedupe (same URL/title can exist once *per player/franchise*, not once globally). `purge_expired_24h_news()` deletes rows older than 24h on startup.
+4. **Serve** — `app.py` renders 4 tabs: Live Pulse news, fixture breakdown, On-This-Day archive, squad directory. Background ingest runs every 15 min; the page reloads every 5 min; query cache TTL is 60s.
+
+---
+
+## 2. Features
+
+| Area | Behavior |
+|------|----------|
+| Live Pulse news feed | Hero card + list cards + 10-item timeline, newest first by `pub_timestamp`; click-through to source URL |
+| Live search | Full-text search over title, summary, player name (`search_news`) |
+| Franchise filter | Sidebar filter across all 4 squads; applies to news, fixtures, history |
+| Fixture breakdown | `config/schedule.py` (July–September 2026) with LIVE / UPCOMING / COMPLETED status, countdowns, broadcast tags |
+| On This Day | Curated milestone DB with date picker, category filter, and keyword search |
+| Squad directory | Roster cards grouped by franchise; filters for role, coach, captain, wicket-keeper, overseas |
+| Retention | 24h rolling window for news (`purge_expired_24h_news`); notifications pruned after 7 days |
+| Logging | `logs/rss.log`, `logs/database.log` plus error log via `utils/logger.py` |
+
+---
+
+## 3. Repository structure
+
+```
+srhtrack/                         # v14.1.0, Python >= 3.9
+├── app.py                        # Streamlit UI: 4 tabs, ingest scheduling, sidebar controls
+├── data/squadofsunrisers.xlsx    # Master roster: 88 rows, 86 distinct players, 4 squads
+├── squadofsunrisers.xlsx         # Legacy fallback copy at repo root
 ├── scrapers/
-│   ├── rss_collector.py        # 48-source verified RSS engine (dead feeds removed 2026-07-31)
-│   └── web_scraper.py          # Utility web scraper (supplementary)
+│   ├── rss_collector.py          # CRICKET_SOURCES (156 feeds), fetch + filter pipeline
+│   └── web_scraper.py            # scrape_match_highlights() helper (no feeds)
 ├── config/
-│   ├── roster.py               # Master Roster Engine & player/franchise matcher
-│   ├── schedule.py             # Fixture schedule data (July–September 2026)
-│   └── theme.py                # Daylight athletic styling, design tokens & card components
-├── database/
-│   ├── db_manager.py           # SQLite CRUD, target-aware deduplication, analytics, metadata
-│   └── schema.sql              # Database schema
+│   ├── roster.py                 # Excel loader, word-boundary matcher, aliases
+│   ├── schedule.py               # July–September 2026 fixture list
+│   └── theme.py                  # CSS tokens + card render helpers
 ├── agents/
-│   └── ranker.py               # Importance scorer & news categoriser
+│   └── __init__.py               # Agents package (per-article scoring removed)
+├── database/
+│   ├── db_manager.py             # SQLite CRUD, dedupe, search, analytics, metadata
+│   └── schema.sql                # Tables: news, players, notifications, metadata
 ├── scheduler/
-│   ├── __init__.py             # Scheduler module package
-│   └── worker.py               # Background collector worker (manual trigger)
+│   └── worker.py                 # Manual one-shot collector cycle (no init_db)
 ├── scripts/
-│   ├── __init__.py             # Scripts package
-│   └── update_squads.py        # Automated Excel squad roster builder and migration tool
+│   └── update_squads.py          # Excel roster builder / migration
 ├── utils/
-│   ├── logger.py               # Rotating file loggers
-│   └── time_utils.py           # IST date parsing & formatting
+│   ├── logger.py                 # Rotating file loggers
+│   └── time_utils.py             # RSS date → IST parsing and formatting
 ├── tests/
-│   └── test_system.py          # Full pytest verification suite
+│   └── test_system.py            # Pytest suite (roster, dedupe, search, defaults, schema)
+├── .streamlit/config.toml        # Port 8501, light theme (#F26522 / #F8FAFC)
 ├── requirements.txt
-└── .streamlit/config.toml      # Streamlit Cloud configuration
+└── .env.example                  # SRH_DB_PATH, Streamlit + ingest-interval overrides
 ```
 
 ---
 
-## 🚀 Quick Start
+## 4. Quick start
 
 ```bash
 git clone https://github.com/Snohith/srhtrack.git
@@ -70,26 +84,81 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Dashboard available at `http://localhost:8501`.
+Open `http://localhost:8501`.
+
+Makefile shortcuts:
+
+```bash
+make install      # pip install -r requirements.txt
+make run          # streamlit run app.py
+make test         # pytest tests/
+make sync-squads  # python scripts/update_squads.py
+make clean        # remove bytecode / caches
+```
+
+Dependencies: `streamlit`, `feedparser`, `beautifulsoup4`, `requests`, `pandas`, `openpyxl`, `pillow`, `pytest`.
 
 ---
 
-## 📡 Source Coverage (48 verified feeds)
+## 5. Configuration
 
-| Region | Sources |
-|--------|---------|
-| Global Officials | ESPNcricinfo (5 country feeds), Cricbuzz, IPL, SA20, ICC, BCCI, Cricket Australia |
-| 🇮🇳 India / IPL / Trade | Sportskeeda, InsideSport, KhelNow, ABP Live, **Sportstar (The Hindu)**, NDTV, Times of India, Hindustan Times, Indian Express, The Hindu, Deccan Chronicle, RevSportz, Sakshi Telugu, + 10 more |
-| 🇬🇧 UK / The Hundred | BBC Sport, Sky Sports, Wisden, ECB, Telegraph, Guardian, Yorkshire CCC, Yorkshire Post, + 5 more |
-| 🇿🇦 South Africa / SA20 | SuperSport, Cricket SA, IOL, News24, TimesLIVE |
-| 🇦🇺 Australia | Fox Sports, Nine WWOS, ABC, Sydney Morning Herald |
-| 🟠 Hyderabad Local | Telangana Today, Siasat Daily, Munsif Daily, Namasthe Telangana, V6 Velugu, NTV Telugu, JioCinema/Sports18 |
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `SRH_DB_PATH` | `database/srh_tracker.db` | Override SQLite file location (tests use a temp file) |
+| `AUTO_INGEST_INTERVAL_SECS` | `900` | Seconds between background ingest cycles |
+| `STREAMLIT_SERVER_PORT` | `8501` | Local server port (see `.env.example`, `.streamlit/config.toml`) |
+
+Copy `.env.example` to `.env` to customize a deployment. Page auto-reload is fixed at 5 min (`app.py`, JS `setTimeout 300000`); news query cache TTL is 60s.
+
+---
+
+## 6. Source coverage (156 configured feeds & resilient scraper fallback)
+
+Defined in `scrapers/rss_collector.py:17-226` (`CRICKET_SOURCES`; `TOP_50_CRICKET_SOURCES` and `RSS_FEEDS` are aliases).
+
+| Group | Count | Outlets |
+|-------|------:|---------|
+| Global / specialist | 11 | ESPNcricinfo England, Australia, South Africa, India, Sri Lanka; Cricbuzz; CricTracker; Sportskeeda; OneCricket; Cricket Addictor; Cricket Times |
+| SRH / India regional | 24 | Google News SRH + Telangana Today, Siasat, Munsif, Namasthe Telangana, V6 Velugu, NTV Telugu, Sakshi, JioCinema/Sports18, Sportstar, Hindu, NDTV, TOI, HT, Indian Express, News18, Deccan Chronicle + Business Standard, LiveMint, Zee News, RevSportz, InsideSport, KhelNow, ABP Live mirrors |
+| SEC / SA20 | 3 | Google News SEC, Google News SA20 League, SA Cricket Mag |
+| Leeds Men / The Hundred | 10 | Google News Leeds Men + The Hundred, BBC, Sky, Yorkshire CCC, Guardian, Independent, Daily Mail, Evening Standard, TalkSPORT |
+| Leeds Women / Women's | 3 | Google News Leeds Women + Women's Cricket World, Female Cricket |
+| Premium editorial | 1 | Wisden Cricket |
+| Official league/board/franchise channels | 7 | Google News mirrors: IPL, SRH, BCCI, SA20, SEC, The Hundred, ECB official sites |
+| Women's game depth | 1 | Google News England Women's Cricket |
+| Ownership / business / leadership | 4 | Economic Times Cricket + Sun TV Network, Kavya Maran, Leeds Business mirrors |
+| Australia & international | 2 | ABC News Australia Sport, SMH Sport |
+| ESPNcricinfo feed expansion | 18 | ESPNcricinfo Feeds 4, 5, 7, 9, 11, 15, 17, 19, 20, 25, 27–30, 33, 35, 37, 40 |
+| League & domestic topics | 15 | Google News mirrors: SA20 Betway, CSA 4-Day, CSA T20, The Hundred Exact, County Championship, Vitality Blast, BBL, WBBL, CPL, PSL, ILT20, MLC, Duleep Trophy, IPL-wide, WPL |
+| Country topics | 10 | Google News mirrors: New Zealand, Pakistan, Bangladesh, Zimbabwe, Ireland, Scotland, Netherlands, Nepal, UAE, Afghanistan |
+| Franchise exact-phrase mirrors | 4 | Google News: SRH Exact, SEC Exact, Leeds Men Superchargers, Leeds Women Superchargers |
+| Site-restricted mirrors | 4 | Google News: ICC, Yorkshire CCC, ESPNcricinfo, Cricbuzz site searches |
+| Player & coach topics | 12 | Google News: Abhishek, Cummins, Klaasen, Markram, Jansen, Brook, Stubbs, Ishan, Deepti, Litchfield, Coaches, Leeds Women Stars (filtered by roster matcher downstream) |
+| Ownership / business expansion | 6 | Google News: Sun TV Exact, Kavya Maran Exact, Sun Group, Sunrisers Valuation, IPL Valuation, Yorkshire Investment |
+| Women's game expansion | 4 | Google News: Global, England Women, India Women, WPL Auction |
+| Aggregators & community | 4 | Bing News: Sunrisers, SA20, The Hundred Exact; Reddit r/Cricket |
+| UK & SA direct feeds | 5 | BBC The Hundred, Sky 12040, Yorkshire Post, The Citizen SA, CricToday |
+| Business direct feeds | 4 | LiveMint Markets, Hindu BusinessLine, ET Top Stories, Business Today |
+| Telugu regional depth | 4 | Telangana Today General, Vaartha, Hans India, GreatAndhra |
+
+### Resilient scraper & dead source recovery engine
+
+- **Dead feeds removed / upgraded:** Removed dead domain `CricketCountry` (NXDOMAIN) and replaced with `SA Cricket Mag`. Replaced broken `Deccan Chronicle`, paywalled `Telegraph UK`, and blocked `Zee News` with high-yield Google News site-search mirrors. Replaced `NDTV` with active FeedBurner XML feed.
+- **Resilient fallback scraper:** `scrapers/rss_collector.py` integrates `scrapers/web_scraper.py`. If any feed endpoint experiences HTTP errors, SSL failures, or returns 0 items, the collector automatically invokes `scrape_google_news_topic()` to recover articles seamlessly with 0% data loss.
+- **4-Franchise Scaling:** Balanced coverage across all 4 Sunrisers teams (SRH, SEC, Leeds Men, Leeds Women) with dedicated intelligence channels and complete single-name alias patterns in `config/roster.py`.
 
 ---
 
-## 📄 License
+## 7. Verification
 
-Distributed under the MIT License. See [`LICENSE`](LICENSE) for details.
+```bash
+pytest tests/          # or: make test
+```
+
+`tests/test_system.py` covers: roster seeding vs Excel, URL/title dedupe, multi-target inserts, search, analytics summary, insert defaults (5.0 / 'General News'), player + franchise matching (incl. case-insensitivity and single-name aliases), log files, source-count/dedupe invariants, schema dedupe indexes, category-default alignment, and scheduler isolation (`worker.py` must not call `init_db()`).
 
 ---
-*Maintained by [Chiluveru Snohith](https://github.com/Snohith)*
+
+## 8. License
+
+MIT — see [`LICENSE`](LICENSE). Maintained by [Chiluveru Snohith](https://github.com/Snohith).
