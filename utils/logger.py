@@ -29,6 +29,7 @@ def get_logger(name, filename):
     return logger
 rss_logger       = get_logger("RSS",       "rss.log")
 db_logger        = get_logger("DB",        "database.log")
+app_logger       = get_logger("App",       "app.log")
 graphics_logger  = get_logger("Graphics",  "graphics.log")
 scheduler_logger = get_logger("Scheduler", "scheduler.log")
 error_logger     = get_logger("Error",     "errors.log")

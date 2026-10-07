@@ -40,3 +40,6 @@ def parse_rss_date_to_ist(entry):
     dt_ist = get_current_ist()
     current_ts = float(time.time())
     return dt_ist.strftime("%b %d, %Y @ %I:%M %p IST"), 0.5, current_ts
+
+# Alias for backwards compatibility
+parse_to_ist = parse_rss_date_to_ist
