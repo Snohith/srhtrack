@@ -46,7 +46,7 @@ except Exception:
         total_polled = 0
     def fetch_and_filter_rss():
         return _FakeResult()
-    _source_count = 66
+    _source_count = 161
 _player_count = len({p["name"] for data in MASTER_ROSTER.values() for p in data["players"]})
 st.set_page_config(
     page_title="SRHXtra — Squad Telemetry & Matchday Intelligence Engine",
@@ -510,6 +510,49 @@ with tab_otd:
 with tab_squads:
     st.markdown("<h3 style='font-family:Inter,sans-serif;font-weight:800;color:#0F172A;margin-bottom:0.4rem;'>👥 Official Squad Database & Roster Directory</h3>", unsafe_allow_html=True)
     st.markdown("<div style='color:#475569;margin-bottom:1.2rem;font-weight:500;'>Official active squads, coaching leadership, player roles, and national representation across the Sunrisers network.</div>", unsafe_allow_html=True)
+
+    if franchise_filter in ("All", "Sunrisers Hyderabad"):
+        st.markdown("<h4 style='font-family:Inter,sans-serif;font-weight:800;color:#0F172A;margin-bottom:0.8rem;'>🏢 Ownership & Business — Sun Group</h4>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style='display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:0.8rem;margin-bottom:1rem;'>
+            <div style='background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:0.8rem 1rem;'>
+                <div style='font-size:1rem;font-weight:800;color:#0F172A;'>Kalanithi Maran</div>
+                <div style='font-size:0.8rem;color:#64748B;font-weight:600;'>Founder & Chairman, Sun Group</div>
+            </div>
+            <div style='background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:0.8rem 1rem;'>
+                <div style='font-size:1rem;font-weight:800;color:#0F172A;'>Kavya Maran</div>
+                <div style='font-size:0.8rem;color:#64748B;font-weight:600;'>CEO — SRH & Sunrisers Eastern Cape</div>
+            </div>
+            <div style='background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:0.8rem 1rem;'>
+                <div style='font-size:1rem;font-weight:800;color:#0F172A;'>Sun TV Network Ltd</div>
+                <div style='font-size:0.8rem;color:#64748B;font-weight:600;'>Listed — NSE: SUNTVNET / BSE: 532733. Exchange filings disclose franchise deals first.</div>
+            </div>
+        </div>
+        <div style='margin-bottom:1rem;font-size:0.88rem;'>
+            <a href='https://www.suntv.in/financial-information.html' target='_blank' rel='noopener'>📄 Sun TV Investor Relations</a> &nbsp;·&nbsp;
+            <a href='https://www.bseindia.com/' target='_blank' rel='noopener'>📈 BSE Filings</a> &nbsp;·&nbsp;
+            <a href='https://www.nseindia.com/' target='_blank' rel='noopener'>📉 NSE Filings</a> &nbsp;·&nbsp;
+            <a href='https://find-and-update.company-information.service.gov.uk/search?q=Sunrisers+Leeds' target='_blank' rel='noopener'>🏛️ Companies House: Sunrisers Leeds</a> &nbsp;·&nbsp;
+            <a href='https://en.wikipedia.org/wiki/Sun_Group' target='_blank' rel='noopener'>📚 Sun Group — Wikipedia</a>
+        </div>
+        """, unsafe_allow_html=True)
+        try:
+            _biz_pool = cached_get_recent_news(limit=150)
+        except Exception:
+            _biz_pool = []
+        _biz_keywords = ("kavya maran", "kalanithi", "sun tv", "sun group", "acquisition", "stake",
+                         "valuation", "rebrand", "filing", "companies house", "investor")
+        _biz_news = [
+            _n for _n in _biz_pool
+            if _n.get("player_name") in ("Kavya Maran", "Kalanithi Maran")
+            or any(_k in f"{_n.get('title', '')} {_n.get('summary', '')}".lower() for _k in _biz_keywords)
+        ][:8]
+        if _biz_news:
+            st.markdown(f"<div style='font-weight:700;color:#0F172A;margin-bottom:0.5rem;'>📰 Latest ownership & business news ({len(_biz_news)})</div>", unsafe_allow_html=True)
+            for _bn in _biz_news:
+                st.markdown(render_telemetry_news_card(_bn), unsafe_allow_html=True)
+        else:
+            st.caption("No ownership or business stories in the last 24 hours — exchange filings and business wires are polled with every ingest cycle.")
 
     col_sq_f, col_sq_role, col_sq_search = st.columns([1.5, 1.2, 2])
     with col_sq_f:

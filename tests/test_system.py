@@ -181,6 +181,18 @@ def test_tilly_kesteven_tracking():
     m_names = [m["player_name"] for m in matches]
     assert "Tilly Kesteven" in m_names, f"Expected Tilly Kesteven match, got {m_names}"
     print("✅ Tilly Kesteven tracking: verified successfully.")
+def test_ownership_entity_matching():
+    """Kavya/Kalanithi Maran, Sun Group and Sun TV Network must match as ownership entities."""
+    kavya = {m["player_name"] for m in match_player_or_franchise_in_text("Kavya Maran on SRH auction plans")}
+    assert "Kavya Maran" in kavya, kavya
+    kalanithi = {m["player_name"] for m in match_player_or_franchise_in_text("Kalanithi Maran on Sun Group results")}
+    assert "Kalanithi Maran" in kalanithi, kalanithi
+    group = match_player_or_franchise_in_text("Sun Group discloses stake filing")
+    assert group and group[0]["franchise"] == "Sunrisers Hyderabad", group
+    suntv = match_player_or_franchise_in_text("Sun TV Network quarterly results")
+    assert suntv and suntv[0]["franchise"] == "Sunrisers Hyderabad", suntv
+    assert match_player_or_franchise_in_text("Sunrise breakfast menu launched") == []
+    print("✅ Ownership entity matching: verified successfully.")
 def test_logging_files_exist():
     """Logger must have created rss.log and database.log files."""
     rss_logger.info("Test RSS logger verification entry")
@@ -315,5 +327,6 @@ if __name__ == "__main__":
     test_single_name_alias_matching()
     test_four_franchises_alias_matching()
     test_sakib_hussain_retention()
+    test_ownership_entity_matching()
     test_web_scraper_fallback_availability()
     print("\n🎉 ALL SYSTEM VERIFICATION TESTS PASSED CLEANLY!")

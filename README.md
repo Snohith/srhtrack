@@ -14,7 +14,7 @@ Live: [https://srhtrack.streamlit.app/](https://srhtrack.streamlit.app/)
 ## 1. How it works
 
 ```
-156 RSS feeds → scrapers/rss_collector.py → config/roster.py matcher
+161 RSS feeds → scrapers/rss_collector.py → config/roster.py matcher
     → SQLite → app.py (Streamlit)
 ```
 
@@ -34,7 +34,7 @@ Live: [https://srhtrack.streamlit.app/](https://srhtrack.streamlit.app/)
 | Franchise filter | Sidebar filter across all 4 squads; applies to news, fixtures, history |
 | Fixture breakdown | `config/schedule.py` (July–September 2026) with LIVE / UPCOMING / COMPLETED status, countdowns, broadcast tags |
 | On This Day | Curated milestone DB with date picker, category filter, and keyword search |
-| Squad directory | Roster cards grouped by franchise; filters for role, coach, captain, wicket-keeper, overseas |
+| Squad directory | Roster cards grouped by franchise; filters for role, coach, captain, wicket-keeper, overseas; Ownership & Business section with live business news and exchange/registry links |
 | Retention | 24h rolling window for news (`purge_expired_24h_news`); notifications pruned after 7 days |
 | Logging | `logs/rss.log`, `logs/database.log` plus error log via `utils/logger.py` |
 
@@ -48,7 +48,7 @@ srhtrack/                         # v14.1.0, Python >= 3.9
 ├── data/squadofsunrisers.xlsx    # Master roster: 88 rows, 86 distinct players, 4 squads
 ├── squadofsunrisers.xlsx         # Legacy fallback copy at repo root
 ├── scrapers/
-│   ├── rss_collector.py          # CRICKET_SOURCES (156 feeds), fetch + filter pipeline
+│   ├── rss_collector.py          # CRICKET_SOURCES (161 feeds), fetch + filter pipeline
 │   └── web_scraper.py            # scrape_match_highlights() helper (no feeds)
 ├── config/
 │   ├── roster.py                 # Excel loader, word-boundary matcher, aliases
@@ -112,9 +112,9 @@ Copy `.env.example` to `.env` to customize a deployment. Page auto-reload is fix
 
 ---
 
-## 6. Source coverage (156 configured feeds & resilient scraper fallback)
+## 6. Source coverage (161 configured feeds & resilient scraper fallback)
 
-Defined in `scrapers/rss_collector.py:17-226` (`CRICKET_SOURCES`; `TOP_50_CRICKET_SOURCES` and `RSS_FEEDS` are aliases).
+Defined in `scrapers/rss_collector.py:17-233` (`CRICKET_SOURCES`; `TOP_50_CRICKET_SOURCES` and `RSS_FEEDS` are aliases).
 
 | Group | Count | Outlets |
 |-------|------:|---------|
@@ -140,6 +140,7 @@ Defined in `scrapers/rss_collector.py:17-226` (`CRICKET_SOURCES`; `TOP_50_CRICKE
 | UK & SA direct feeds | 5 | BBC The Hundred, Sky 12040, Yorkshire Post, The Citizen SA, CricToday |
 | Business direct feeds | 4 | LiveMint Markets, Hindu BusinessLine, ET Top Stories, Business Today |
 | Telugu regional depth | 4 | Telangana Today General, Vaartha, Hans India, GreatAndhra |
+| Ownership filings & leadership | 5 | Google News: BSE filings, Moneycontrol, Kavya Maran Statements, Sun Group filings, Leeds Companies House |
 
 ### Resilient scraper & dead source recovery engine
 

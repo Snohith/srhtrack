@@ -83,6 +83,11 @@ FRANCHISE_PATTERNS = [
         "full_patterns": [r'\bsunrisers leeds men\b', r'\bsunrisers leeds\b'],
         "abbreviations": [],
     },
+    {
+        "name": "Sunrisers Hyderabad",
+        "full_patterns": [r'\bsun tv network\b', r'\bsun group\b'],
+        "abbreviations": [],
+    },
 ]
 PLAYER_ALIASES = [
     # ── Sunrisers Hyderabad (IPL) ───────────────────────────────────────────
@@ -156,6 +161,10 @@ PLAYER_ALIASES = [
     {"name": "Darcey Carter", "pattern": r'\b(darcey carter)\b', "team_key": "Leeds_Women", "franchise": "Sunrisers Leeds Women", "country": "Scotland", "role": "Batter / All-rounder"},
     {"name": "Chloe Skelton", "pattern": r'\b(chloe skelton)\b', "team_key": "Leeds_Women", "franchise": "Sunrisers Leeds Women", "country": "England", "role": "Spin bowler"},
     {"name": "Claudie Cooper", "pattern": r'\b(claudie cooper)\b', "team_key": "Leeds_Women", "franchise": "Sunrisers Leeds Women", "country": "England", "role": "Spin bowler"},
+
+    # ── Ownership & Leadership (Sun Group) ────────────────────────────────────
+    {"name": "Kavya Maran", "pattern": r'\b(kavya maran|kavya)\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "India", "role": "CEO / Owner"},
+    {"name": "Kalanithi Maran", "pattern": r'\b(kalanithi maran)\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "India", "role": "Chairman / Founder"},
 ]
 def match_player_or_franchise_in_text(text):
     """

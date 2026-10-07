@@ -223,6 +223,13 @@ CRICKET_SOURCES = [
     {"name": "Vaartha Telugu",              "url": "https://www.vaartha.com/feed/"},
     {"name": "Hans India Sports",           "url": "https://www.thehansindia.com/rss/sports"},
     {"name": "GreatAndhra Telugu",          "url": "https://www.greatandhra.com/feed"},
+
+    # ── Ownership Filings & Leadership (exchange disclosures surface here first)
+    {"name": "Google News: BSE Filings Sun TV", "url": "https://news.google.com/rss/search?q=site:bseindia.com+Sun+TV+Network&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Moneycontrol Sun TV", "url": "https://news.google.com/rss/search?q=site:moneycontrol.com+Sun+TV+Network+Sunrisers&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Kavya Maran Statements", "url": "https://news.google.com/rss/search?q=%22Kavya+Maran%22&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Sun Group Filings", "url": "https://news.google.com/rss/search?q=%22Sun+Group%22+Kalanithi+Maran+filing+or+stake+or+acquisition&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Leeds Companies House", "url": "https://news.google.com/rss/search?q=Sunrisers+Leeds+Companies+House+or+filing&hl=en-GB&gl=GB&ceid=GB:en"},
 ]
 TOP_50_CRICKET_SOURCES = CRICKET_SOURCES
 RSS_FEEDS = CRICKET_SOURCES
