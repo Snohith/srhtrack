@@ -46,7 +46,7 @@ except Exception:
         total_polled = 0
     def fetch_and_filter_rss():
         return _FakeResult()
-    _source_count = 68
+    _source_count = 66
 _player_count = len({p["name"] for data in MASTER_ROSTER.values() for p in data["players"]})
 st.set_page_config(
     page_title="SRHXtra — Squad Telemetry & Matchday Intelligence Engine",
@@ -244,6 +244,8 @@ with tab_schedule:
         def _fixture_matches_filter(s):
             if franchise_filter in s["squad"]:
                 return True
+            if franchise_filter == "Sunrisers Leeds Men" and s["squad"] == "Sunrisers Leeds":
+                return True
             if any(pname in s["players"] for pname in franchise_players):
                 return True
             return False
@@ -382,10 +384,11 @@ ON_THIS_DAY_DB = [
 with tab_otd:
     st.markdown("<h3 style='font-family:Inter,sans-serif;font-weight:800;color:#0F172A;margin-bottom:0.3rem;'>🗓️ On This Day — Historical Telemetry Engine</h3>", unsafe_allow_html=True)
     st.markdown("<div style='color:#475569;margin-bottom:1.2rem;font-weight:500;'>Explore player birthdays, batting/bowling masterclasses, team score records, and championship titles across Sunrisers history.</div>", unsafe_allow_html=True)
-    st.markdown("""
+    _bday_count = len([m for m in ON_THIS_DAY_DB if m.get("category") == "Birthdays"])
+    st.markdown(f"""
     <div style='display:grid;grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));gap:0.8rem;margin-bottom:1.5rem;'>
         <div style='background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:0.8rem 1rem;box-shadow:0 2px 6px rgba(0,0,0,0.02);'>
-            <div style='font-size:1.3rem;font-weight:800;color:#0F172A;'>83 Roster</div>
+            <div style='font-size:1.3rem;font-weight:800;color:#0F172A;'>{_player_count} Roster</div>
             <div style='font-size:0.78rem;color:#64748B;font-weight:600;'>Strict Excel Players</div>
         </div>
         <div style='background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:0.8rem 1rem;box-shadow:0 2px 6px rgba(0,0,0,0.02);'>
@@ -397,7 +400,7 @@ with tab_otd:
             <div style='font-size:0.78rem;color:#64748B;font-weight:600;'>IPL Record Team Totals</div>
         </div>
         <div style='background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:0.8rem 1rem;box-shadow:0 2px 6px rgba(0,0,0,0.02);'>
-            <div style='font-size:1.3rem;font-weight:800;color:#0284C7;'>10 Squad</div>
+            <div style='font-size:1.3rem;font-weight:800;color:#0284C7;'>{_bday_count} Squad</div>
             <div style='font-size:0.78rem;color:#64748B;font-weight:600;'>Player Birthdays Tracked</div>
         </div>
     </div>

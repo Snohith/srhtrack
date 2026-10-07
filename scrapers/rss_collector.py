@@ -2,84 +2,227 @@
 Expanded RSS Feed Collector for @SRHXtra V10.0 — Hyper-Local Expansion.
 Polls the configured Top-Tier Global & Hyper-Local outlets for all rostered squad members & 4 Franchise Team Names.
 Stores EXACT raw source titles and descriptions for direct ESPNcricinfo-style cards.
-V9.0 changes (Phase 1):
-  - Wired agents/ranker.py into ingestion pipeline (was defined but never called)
-  - calculate_importance_score() called per article — real scores stored (not hardcoded 5.0)
-  - categorize_news() called per article — real categories stored (not hardcoded 'General')
-  - get_source_tier_boost() passed as source_name to ranker for Tier 1/2/3 quality weighting
-  - insert_news() now receives importance_score= and category= kwargs
-  - Log line includes category + score for every inserted article
-  - player_info dict built from MASTER_ROSTER for captain-aware scoring
+Scoring removed: articles are stored with database defaults (importance_score=5.0,
+category='General News'); no per-article scoring or categorization is performed.
 """
 import time
 import requests
 import feedparser
 import bs4
 import html
-from config.roster import match_player_or_franchise_in_text, MASTER_ROSTER
+from config.roster import match_player_or_franchise_in_text
 from database.db_manager import insert_news, insert_notification
-from agents.ranker import calculate_importance_score, categorize_news
 from utils.logger import rss_logger, error_logger
 from utils.time_utils import parse_rss_date_to_ist, format_ist_12hr
-_PLAYER_INFO_CACHE: dict = {}
-def get_player_info(player_name):
-    if not _PLAYER_INFO_CACHE or player_name not in _PLAYER_INFO_CACHE:
-        for _team_info in MASTER_ROSTER.values():
-            for _p in _team_info["players"]:
-                _PLAYER_INFO_CACHE[_p["name"]] = {
-                    "captain": bool(_p.get("captain")),
-                    "role": _p.get("role", ""),
-                }
-    return _PLAYER_INFO_CACHE.get(player_name, {"captain": False, "role": ""})
 CRICKET_SOURCES = [
+    # ── Global & Multi-National Cricket Coverage ───────────────────────────
     {"name": "ESPNcricinfo England",        "url": "https://www.espncricinfo.com/rss/content/story/feeds/1.xml"},  
     {"name": "ESPNcricinfo Australia",      "url": "https://www.espncricinfo.com/rss/content/story/feeds/2.xml"},  
     {"name": "ESPNcricinfo South Africa",   "url": "https://www.espncricinfo.com/rss/content/story/feeds/3.xml"},  
     {"name": "ESPNcricinfo India",          "url": "https://www.espncricinfo.com/rss/content/story/feeds/6.xml"},  
     {"name": "ESPNcricinfo Sri Lanka",      "url": "https://www.espncricinfo.com/rss/content/story/feeds/8.xml"},  
     {"name": "Cricbuzz (FeedBurner)",       "url": "https://feeds.feedburner.com/cricbuzz"},                       
-    {"name": "ABC News Australia Sport",    "url": "https://www.abc.net.au/news/feed/51120/rss.xml"},              
-    {"name": "Telangana Today Sport",       "url": "https://telanganatoday.com/sport/feed"},
-    {"name": "The Siasat Daily Hyderabad",  "url": "https://www.siasat.com/feed/"},
-    {"name": "Munsif Daily Sports",         "url": "https://munsifdaily.com/category/sports/feed/"},
-    {"name": "JioCinema / Sports18 News",   "url": "https://www.news18.com/rss/sports.xml"},
-    {"name": "Namasthe Telangana",          "url": "https://www.ntnews.com/feed"},              
-    {"name": "V6 Velugu Telangana",         "url": "https://www.v6velugu.com/feed"},
-    {"name": "NTV Telugu Sports",           "url": "https://ntvtelugu.com/feed"},
-    {"name": "Sakshi Telugu Sports",        "url": "https://www.sakshi.com/rss.xml"},           
-    {"name": "BBC Sport Cricket",           "url": "https://feeds.bbci.co.uk/sport/cricket/rss.xml"},
-    {"name": "Sky Sports Cricket",          "url": "https://www.skysports.com/rss/12123"},
-    {"name": "Yorkshire CCC Official",      "url": "https://yorkshireccc.com/feed/"},
-    {"name": "Yorkshire Post Sport",        "url": "https://www.yorkshirepost.co.uk/sport/cricket/rss"},
-    {"name": "The Guardian Cricket",        "url": "https://www.theguardian.com/sport/cricket/rss"},
-    {"name": "Telegraph UK Sport",          "url": "https://www.telegraph.co.uk/cricket/rss.xml"},
-    {"name": "Independent UK Cricket",      "url": "https://www.independent.co.uk/sport/cricket/rss"},
-    {"name": "Daily Mail Sport",            "url": "https://www.dailymail.co.uk/sport/cricket/index.rss"},
-    {"name": "Evening Standard Sport",      "url": "https://www.standard.co.uk/sport/rss"},
-    {"name": "TalkSPORT Cricket",           "url": "https://talksport.com/sport/cricket/feed/"},
-    {"name": "Sportstar (The Hindu)",       "url": "https://sportstar.thehindu.com/feeder/default.rss"},  
-    {"name": "The Hindu Sports",            "url": "https://www.thehindu.com/sport/cricket/feeder/default.rss"},
-    {"name": "NDTV Sports Cricket",         "url": "https://sports.ndtv.com/rss/cricket"},                
-    {"name": "Times of India Cricket",      "url": "https://timesofindia.indiatimes.com/rssfeeds/4719148.cms"},
-    {"name": "Hindustan Times Cricket",     "url": "https://www.hindustantimes.com/feeds/rss/cricket/rssfeed.xml"},
-    {"name": "Indian Express Cricket",      "url": "https://indianexpress.com/section/sports/cricket/feed/"},
-    {"name": "News18 CricketNext",          "url": "https://www.news18.com/rss/cricketnext.xml"},
     {"name": "CricTracker Global",          "url": "https://www.crictracker.com/feed/"},
     {"name": "Sportskeeda Cricket",         "url": "https://www.sportskeeda.com/feed/cricket"},
     {"name": "OneCricket News",             "url": "https://onecricket.news/feed"},
     {"name": "Cricket Addictor",            "url": "https://cricketaddictor.com/feed/"},
-    {"name": "Deccan Chronicle Sports",     "url": "https://www.deccanchronicle.com/rss/sports"},
+    {"name": "Cricket Times",               "url": "https://crickettimes.com/feed/"},
+
+    # ── Franchise 1: Sunrisers Hyderabad (IPL & Regional Media) ─────────────
+    {"name": "Google News: Sunrisers Hyderabad", "url": "https://news.google.com/rss/search?q=Sunrisers+Hyderabad+cricket&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Telangana Today Sport",       "url": "https://telanganatoday.com/sport/feed"},
+    {"name": "The Siasat Daily Hyderabad",  "url": "https://www.siasat.com/feed/"},
+    {"name": "Munsif Daily Sports",         "url": "https://munsifdaily.com/category/sports/feed/"},
+    {"name": "Namasthe Telangana",          "url": "https://www.ntnews.com/feed"},              
+    {"name": "V6 Velugu Telangana",         "url": "https://www.v6velugu.com/feed"},
+    {"name": "NTV Telugu Sports",           "url": "https://ntvtelugu.com/feed"},
+    {"name": "Sakshi Telugu Sports",        "url": "https://www.sakshi.com/rss.xml"},           
+    {"name": "JioCinema / Sports18 News",   "url": "https://www.news18.com/rss/sports.xml"},
+    {"name": "Sportstar (The Hindu)",       "url": "https://sportstar.thehindu.com/feeder/default.rss"},  
+    {"name": "The Hindu Sports",            "url": "https://www.thehindu.com/sport/cricket/feeder/default.rss"},
+    {"name": "NDTV Sports Cricket",         "url": "https://feeds.feedburner.com/ndtvsports-cricket"},                
+    {"name": "Times of India Cricket",      "url": "https://timesofindia.indiatimes.com/rssfeeds/4719148.cms"},
+    {"name": "Hindustan Times Cricket",     "url": "https://www.hindustantimes.com/feeds/rss/cricket/rssfeed.xml"},
+    {"name": "Indian Express Cricket",      "url": "https://indianexpress.com/section/sports/cricket/feed/"},
+    {"name": "News18 CricketNext",          "url": "https://www.news18.com/rss/cricketnext.xml"},
+    {"name": "Deccan Chronicle Sports",     "url": "https://news.google.com/rss/search?q=site:deccanchronicle.com+sports&hl=en-IN&gl=IN&ceid=IN:en"},
     {"name": "Business Standard Sports",    "url": "https://www.business-standard.com/rss/sports-108.rss"},
     {"name": "LiveMint Sports",             "url": "https://www.livemint.com/rss/sports"},
-    {"name": "Cricket Times",               "url": "https://crickettimes.com/feed/"},
-    {"name": "CricketCountry",             "url": "https://www.cricketcountry.com/feed/"},
-    {"name": "Zee News Sports",             "url": "https://zeenews.india.com/rss/sports-news.xml"},
+    {"name": "Zee News Sports",             "url": "https://news.google.com/rss/search?q=site:zeenews.india.com+sports&hl=en-IN&gl=IN&ceid=IN:en"},
     {"name": "RevSportz India",             "url": "https://revsportz.in/feed/"},
     {"name": "InsideSport India",           "url": "https://www.insidesport.in/feed/"},        
     {"name": "KhelNow Cricket",             "url": "https://khelnow.com/feed"},
     {"name": "ABP Live Sports",             "url": "https://news.abplive.com/sports/feed"},
-    {"name": "SMH Sport",                   "url": "https://www.smh.com.au/rss/sport.xml"},    
+
+    # ── Franchise 2: Sunrisers Eastern Cape (SA20 & South African Media) ────
+    {"name": "Google News: Sunrisers Eastern Cape", "url": "https://news.google.com/rss/search?q=Sunrisers+Eastern+Cape+SA20&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    {"name": "Google News: SA20 Cricket League",   "url": "https://news.google.com/rss/search?q=SA20+cricket&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    {"name": "SA Cricket Mag",              "url": "https://www.sacricketmag.com/feed/"},
+
+    # ── Franchise 3: Sunrisers Leeds Men (The Hundred & UK Media) ───────────
+    {"name": "Google News: Sunrisers Leeds Men", "url": "https://news.google.com/rss/search?q=Sunrisers+Leeds+The+Hundred&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: The Hundred Cricket", "url": "https://news.google.com/rss/search?q=The+Hundred+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "BBC Sport Cricket",           "url": "https://feeds.bbci.co.uk/sport/cricket/rss.xml"},
+    {"name": "Sky Sports Cricket",          "url": "https://www.skysports.com/rss/12123"},
+    {"name": "Yorkshire CCC Official",      "url": "https://yorkshireccc.com/feed/"},
+    {"name": "The Guardian Cricket",        "url": "https://www.theguardian.com/sport/cricket/rss"},
+    {"name": "Independent UK Cricket",      "url": "https://www.independent.co.uk/sport/cricket/rss"},
+    {"name": "Daily Mail Sport",            "url": "https://www.dailymail.co.uk/sport/cricket/index.rss"},
+    {"name": "Evening Standard Sport",      "url": "https://www.standard.co.uk/sport/rss"},
+    {"name": "TalkSPORT Cricket",           "url": "https://talksport.com/sport/cricket/feed/"},
+
+    # ── Franchise 4: Sunrisers Leeds Women (The Hundred Women & Women's Cricket) ─
+    {"name": "Google News: Sunrisers Leeds Women", "url": "https://news.google.com/rss/search?q=Sunrisers+Leeds+Women+The+Hundred&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Women's Cricket World", "url": "https://news.google.com/rss/search?q=womens+cricket+The+Hundred+or+IPL&hl=en-GB&gl=GB&ceid=GB:en"},
     {"name": "Female Cricket",              "url": "https://femalecricket.com/feed"},
+
+    # ── Premium Editorial & Long-Form ────────────────────────────────────
+    {"name": "Wisden Cricket",              "url": "https://www.wisden.com/feed"},
+
+    # ── Official League, Board & Franchise Channels (search mirrors) ──────
+    # These publishers expose no public RSS/Atom feed (verified 2026-10-07:
+    # /feed and /rss return 404 on iplt20.com, bcci.tv, sa20.co.za,
+    # thehundred.com, sunrisershyderabad.in, sunriserseasterncape.co), so each
+    # is polled via a site-restricted Google News RSS mirror — the same pattern
+    # already used for Deccan Chronicle / Zee News above.
+    {"name": "Google News: IPL Official",   "url": "https://news.google.com/rss/search?q=site:iplt20.com&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: SRH Official Site", "url": "https://news.google.com/rss/search?q=site:sunrisershyderabad.in&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: BCCI Official",  "url": "https://news.google.com/rss/search?q=site:bcci.tv&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: SA20 Official",  "url": "https://news.google.com/rss/search?q=site:sa20.co.za&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    {"name": "Google News: SEC Official Site", "url": "https://news.google.com/rss/search?q=site:sunriserseasterncape.co&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    {"name": "Google News: The Hundred Official", "url": "https://news.google.com/rss/search?q=site:thehundred.com&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: ECB Official",   "url": "https://news.google.com/rss/search?q=site:ecb.co.uk&hl=en-GB&gl=GB&ceid=GB:en"},
+
+    # ── Women's Game Depth ───────────────────────────────────────────────
+    {"name": "Google News: England Women's Cricket", "url": "https://news.google.com/rss/search?q=England+women+cricket+Hundred+or+WPL&hl=en-GB&gl=GB&ceid=GB:en"},
+
+    # ── Ownership, Business & Leadership (Sun Group umbrella) ────────────
+    # Sun TV Network IR pages, Companies House filings and Wikipedia are
+    # reference sources with no news RSS, so business/leadership coverage is
+    # tracked via targeted topic mirrors: exchange-disclosure reporting, the
+    # Leeds Companies House / rebrand paper trail, and CEO Kavya Maran.
+    {"name": "Economic Times Cricket",      "url": "https://news.google.com/rss/search?q=site:economictimes.indiatimes.com+cricket&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Sun TV Network Business", "url": "https://news.google.com/rss/search?q=Sun+TV+Network+revenue+or+valuation+or+filings+cricket&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Kavya Maran",    "url": "https://news.google.com/rss/search?q=Kavya+Maran+Sunrisers&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Sunrisers Leeds Business", "url": "https://news.google.com/rss/search?q=Sunrisers+Leeds+Companies+House+or+stake+or+rebrand&hl=en-GB&gl=GB&ceid=GB:en"},
+
+    # ── Australia & International (Cummins, Head, Sutherland, Marsh) ───────
+    {"name": "ABC News Australia Sport",    "url": "https://www.abc.net.au/news/feed/51120/rss.xml"},
+    {"name": "SMH Sport",                   "url": "https://www.smh.com.au/rss/sport.xml"},
+
+    # ── ESPNcricinfo Feed Expansion (IDs beyond the core 5) ───────────────
+    {"name": "ESPNcricinfo Feed 4",         "url": "https://www.espncricinfo.com/rss/content/story/feeds/4.xml"},
+    {"name": "ESPNcricinfo Feed 5",         "url": "https://www.espncricinfo.com/rss/content/story/feeds/5.xml"},
+    {"name": "ESPNcricinfo Feed 7",         "url": "https://www.espncricinfo.com/rss/content/story/feeds/7.xml"},
+    {"name": "ESPNcricinfo Feed 9",         "url": "https://www.espncricinfo.com/rss/content/story/feeds/9.xml"},
+    {"name": "ESPNcricinfo Feed 11",        "url": "https://www.espncricinfo.com/rss/content/story/feeds/11.xml"},
+    {"name": "ESPNcricinfo Feed 15",        "url": "https://www.espncricinfo.com/rss/content/story/feeds/15.xml"},
+    {"name": "ESPNcricinfo Feed 17",        "url": "https://www.espncricinfo.com/rss/content/story/feeds/17.xml"},
+    {"name": "ESPNcricinfo Feed 19",        "url": "https://www.espncricinfo.com/rss/content/story/feeds/19.xml"},
+    {"name": "ESPNcricinfo Feed 20",        "url": "https://www.espncricinfo.com/rss/content/story/feeds/20.xml"},
+    {"name": "ESPNcricinfo Feed 25",        "url": "https://www.espncricinfo.com/rss/content/story/feeds/25.xml"},
+    {"name": "ESPNcricinfo Feed 27",        "url": "https://www.espncricinfo.com/rss/content/story/feeds/27.xml"},
+    {"name": "ESPNcricinfo Feed 28",        "url": "https://www.espncricinfo.com/rss/content/story/feeds/28.xml"},
+    {"name": "ESPNcricinfo Feed 29",        "url": "https://www.espncricinfo.com/rss/content/story/feeds/29.xml"},
+    {"name": "ESPNcricinfo Feed 30",        "url": "https://www.espncricinfo.com/rss/content/story/feeds/30.xml"},
+    {"name": "ESPNcricinfo Feed 33",        "url": "https://www.espncricinfo.com/rss/content/story/feeds/33.xml"},
+    {"name": "ESPNcricinfo Feed 35",        "url": "https://www.espncricinfo.com/rss/content/story/feeds/35.xml"},
+    {"name": "ESPNcricinfo Feed 37",        "url": "https://www.espncricinfo.com/rss/content/story/feeds/37.xml"},
+    {"name": "ESPNcricinfo Feed 40",        "url": "https://www.espncricinfo.com/rss/content/story/feeds/40.xml"},
+
+    # ── League & Domestic Topics (Google News mirrors) ────────────────────
+    {"name": "Google News: SA20 Betway",    "url": "https://news.google.com/rss/search?q=SA20+OR+Betway+SA20&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    {"name": "Google News: CSA Provincial 4-Day", "url": "https://news.google.com/rss/search?q=CSA+OR+provincial+OR+4-Day+Series+cricket&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    {"name": "Google News: CSA T20 Challenge", "url": "https://news.google.com/rss/search?q=CSA+T20+Challenge&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    {"name": "Google News: The Hundred Exact", "url": "https://news.google.com/rss/search?q=%22The+Hundred%22+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: County Championship", "url": "https://news.google.com/rss/search?q=County+Championship+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Vitality Blast", "url": "https://news.google.com/rss/search?q=Vitality+Blast+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Big Bash League", "url": "https://news.google.com/rss/search?q=Big+Bash+League+cricket&hl=en-AU&gl=AU&ceid=AU:en"},
+    {"name": "Google News: WBBL",           "url": "https://news.google.com/rss/search?q=WBBL+OR+Women%27s+Big+Bash&hl=en-AU&gl=AU&ceid=AU:en"},
+    {"name": "Google News: Caribbean Premier League", "url": "https://news.google.com/rss/search?q=Caribbean+Premier+League&hl=en-US&gl=US&ceid=US:en"},
+    {"name": "Google News: PSL",            "url": "https://news.google.com/rss/search?q=PSL+OR+Pakistan+Super+League&hl=en-PK&gl=PK&ceid=PK:en"},
+    {"name": "Google News: ILT20",          "url": "https://news.google.com/rss/search?q=ILT20+OR+International+League+T20&hl=en-AE&gl=AE&ceid=AE:en"},
+    {"name": "Google News: Major League Cricket", "url": "https://news.google.com/rss/search?q=Major+League+Cricket&hl=en-US&gl=US&ceid=US:en"},
+    {"name": "Google News: Duleep Trophy Domestic", "url": "https://news.google.com/rss/search?q=Duleep+Trophy+OR+Syed+Mushtaq+Ali+OR+state+T20&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: IPL League Wide", "url": "https://news.google.com/rss/search?q=Indian+Premier+League+OR+IPL&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: WPL League",     "url": "https://news.google.com/rss/search?q=WPL+OR+Women%27s+Premier+League&hl=en-IN&gl=IN&ceid=IN:en"},
+
+    # ── Country Topics (Google News mirrors) ──────────────────────────────
+    {"name": "Google News: New Zealand Cricket", "url": "https://news.google.com/rss/search?q=New+Zealand+cricket&hl=en-NZ&gl=NZ&ceid=NZ:en"},
+    {"name": "Google News: Pakistan Cricket", "url": "https://news.google.com/rss/search?q=Pakistan+cricket&hl=en-PK&gl=PK&ceid=PK:en"},
+    {"name": "Google News: Bangladesh Cricket", "url": "https://news.google.com/rss/search?q=Bangladesh+cricket&hl=en-BD&gl=BD&ceid=BD:en"},
+    {"name": "Google News: Zimbabwe Cricket", "url": "https://news.google.com/rss/search?q=Zimbabwe+cricket&hl=en-ZW&gl=ZW&ceid=ZW:en"},
+    {"name": "Google News: Ireland Cricket", "url": "https://news.google.com/rss/search?q=Ireland+cricket&hl=en-IE&gl=IE&ceid=IE:en"},
+    {"name": "Google News: Scotland Cricket", "url": "https://news.google.com/rss/search?q=Scotland+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Netherlands Cricket", "url": "https://news.google.com/rss/search?q=Netherlands+cricket&hl=en-NL&gl=NL&ceid=NL:en"},
+    {"name": "Google News: Nepal Cricket",  "url": "https://news.google.com/rss/search?q=Nepal+cricket&hl=en-NP&gl=NP&ceid=NP:en"},
+    {"name": "Google News: UAE Cricket",    "url": "https://news.google.com/rss/search?q=UAE+cricket&hl=en-AE&gl=AE&ceid=AE:en"},
+    {"name": "Google News: Afghanistan Cricket", "url": "https://news.google.com/rss/search?q=Afghanistan+cricket&hl=en-AF&gl=AF&ceid=AF:en"},
+
+    # ── Franchise Exact-Phrase Mirrors ────────────────────────────────────
+    {"name": "Google News: SRH Exact",      "url": "https://news.google.com/rss/search?q=%22Sunrisers+Hyderabad%22+OR+%22SRH%22&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: SEC Exact",      "url": "https://news.google.com/rss/search?q=%22Sunrisers+Eastern+Cape%22&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    {"name": "Google News: Leeds Men Superchargers", "url": "https://news.google.com/rss/search?q=%22Sunrisers+Leeds%22+OR+%22Northern+Superchargers%22+men&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Leeds Women Superchargers", "url": "https://news.google.com/rss/search?q=%22Sunrisers+Leeds%22+OR+%22Northern+Superchargers%22+women&hl=en-GB&gl=GB&ceid=GB:en"},
+
+    # ── Site-Restricted Mirrors (no public RSS on these domains) ──────────
+    {"name": "Google News: ICC Official",  "url": "https://news.google.com/rss/search?q=site:icc-cricket.com&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Yorkshire CCC Site", "url": "https://news.google.com/rss/search?q=site:yorkshireccc.com&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: ESPNcricinfo Site", "url": "https://news.google.com/rss/search?q=site:espncricinfo.com&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Cricbuzz Site",  "url": "https://news.google.com/rss/search?q=site:cricbuzz.com&hl=en-IN&gl=IN&ceid=IN:en"},
+
+    # ── Player & Coach Topics (filtered by roster matcher downstream) ─────
+    {"name": "Google News: Abhishek Sharma", "url": "https://news.google.com/rss/search?q=Abhishek+Sharma+cricket&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Pat Cummins",    "url": "https://news.google.com/rss/search?q=Pat+Cummins+cricket&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Heinrich Klaasen", "url": "https://news.google.com/rss/search?q=Heinrich+Klaasen&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Aiden Markram",  "url": "https://news.google.com/rss/search?q=Aiden+Markram&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    {"name": "Google News: Marco Jansen",   "url": "https://news.google.com/rss/search?q=Marco+Jansen+cricket&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    {"name": "Google News: Harry Brook",    "url": "https://news.google.com/rss/search?q=Harry+Brook+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Tristan Stubbs", "url": "https://news.google.com/rss/search?q=Tristan+Stubbs+cricket&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    {"name": "Google News: Ishan Kishan",   "url": "https://news.google.com/rss/search?q=Ishan+Kishan+cricket&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Deepti Sharma",  "url": "https://news.google.com/rss/search?q=Deepti+Sharma+cricket&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Phoebe Litchfield", "url": "https://news.google.com/rss/search?q=Phoebe+Litchfield&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Coaches Vettori Birrell Bond", "url": "https://news.google.com/rss/search?q=%22Daniel+Vettori%22+OR+%22Adrian+Birrell%22+OR+%22Shane+Bond%22+cricket&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Leeds Women Stars", "url": "https://news.google.com/rss/search?q=%22Deepti+Sharma%22+OR+%22Phoebe+Litchfield%22+OR+%22Annabel+Sutherland%22+OR+%22Kate+Cross%22&hl=en-GB&gl=GB&ceid=GB:en"},
+
+    # ── Ownership, Business & Leadership ─────────────────────────────────
+    {"name": "Google News: Sun TV Network Exact", "url": "https://news.google.com/rss/search?q=%22Sun+TV+Network%22&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Kavya Maran Exact", "url": "https://news.google.com/rss/search?q=Kavya+Maran&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Sun Group Cricket", "url": "https://news.google.com/rss/search?q=%22Sun+Group%22+cricket&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Sunrisers Valuation", "url": "https://news.google.com/rss/search?q=Sunrisers+valuation+OR+demerger+OR+acquisition&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: IPL Valuation",  "url": "https://news.google.com/rss/search?q=IPL+franchise+valuation+OR+revenue+OR+stake&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Yorkshire Investment", "url": "https://news.google.com/rss/search?q=Yorkshire+cricket+OR+Headingley+investment+OR+stake&hl=en-GB&gl=GB&ceid=GB:en"},
+
+    # ── Women's Game Expansion ────────────────────────────────────────────
+    {"name": "Google News: Womens Cricket Global", "url": "https://news.google.com/rss/search?q=women%27s+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: England Women",  "url": "https://news.google.com/rss/search?q=England+women+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: India Women Cricket", "url": "https://news.google.com/rss/search?q=women+cricket+India&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: WPL Auction",    "url": "https://news.google.com/rss/search?q=WPL+auction+OR+retention&hl=en-IN&gl=IN&ceid=IN:en"},
+
+    # ── Aggregators & Community ───────────────────────────────────────────
+    {"name": "Bing News: Sunrisers",        "url": "https://www.bing.com/news/search?q=Sunrisers&format=RSS"},
+    {"name": "Bing News: SA20",             "url": "https://www.bing.com/news/search?q=SA20+cricket&format=RSS"},
+    {"name": "Bing News: The Hundred Exact", "url": "https://www.bing.com/news/search?q=%22The+Hundred%22+cricket&format=RSS"},
+    {"name": "Reddit r/Cricket",            "url": "https://www.reddit.com/r/Cricket/.rss"},
+
+    # ── UK & SA Direct Feeds ─────────────────────────────────────────────
+    {"name": "BBC Sport The Hundred",       "url": "https://feeds.bbci.co.uk/sport/cricket/the-hundred/rss.xml"},
+    {"name": "Sky Sports Feed 12040",       "url": "https://www.skysports.com/rss/12040"},
+    {"name": "Yorkshire Post Sport",        "url": "https://www.yorkshirepost.co.uk/rss"},
+    {"name": "The Citizen SA",              "url": "https://www.citizen.co.za/feed/"},
+    {"name": "CricToday",                   "url": "https://crictoday.com/feed"},
+
+    # ── Business Direct Feeds ─────────────────────────────────────────────
+    {"name": "LiveMint Markets",            "url": "https://www.livemint.com/rss/markets"},
+    {"name": "Hindu BusinessLine Markets",  "url": "https://www.thehindubusinessline.com/markets/feeder/default.rss"},
+    {"name": "Economic Times Top Stories",  "url": "https://economictimes.indiatimes.com/rssfeedstopstories.cms"},
+    {"name": "Business Today",              "url": "https://www.businesstoday.in/rss/home"},
+
+    # ── Telugu Regional Depth ─────────────────────────────────────────────
+    {"name": "Telangana Today General",     "url": "https://telanganatoday.com/feed"},
+    {"name": "Vaartha Telugu",              "url": "https://www.vaartha.com/feed/"},
+    {"name": "Hans India Sports",           "url": "https://www.thehansindia.com/rss/sports"},
+    {"name": "GreatAndhra Telugu",          "url": "https://www.greatandhra.com/feed"},
 ]
 TOP_50_CRICKET_SOURCES = CRICKET_SOURCES
 RSS_FEEDS = CRICKET_SOURCES
@@ -99,14 +242,20 @@ def clean_text(raw):
     pass1 = html.unescape(pass1)
     pass2 = bs4.BeautifulSoup(pass1, "html.parser").get_text()
     return " ".join(pass2.split()).strip()
-def fetch_feed_with_retry(url, retries=2, delay=1):
-    """Fetches RSS feed with exponential backoff. Makes up to `retries` attempts (default 2)."""
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+def fetch_feed_with_retry(url, retries=2, delay=1, timeout=6):
+    """Fetches RSS feed with exponential backoff and browser-grade User-Agent."""
+    user_agents = [
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+    ]
     for attempt in range(1, retries + 1):
         try:
-            response = requests.get(url, headers=headers, timeout=3)
+            ua = user_agents[(attempt - 1) % len(user_agents)]
+            response = requests.get(url, headers={"User-Agent": ua}, timeout=timeout)
             if response.status_code == 200:
-                return feedparser.parse(response.content)
+                feed = feedparser.parse(response.content)
+                if feed and feed.entries:
+                    return feed
         except Exception:
             pass
         time.sleep(delay * attempt)
@@ -116,8 +265,7 @@ def fetch_and_filter_rss():
     Polls all sources in CRICKET_SOURCES, filters for rostered players OR 4 franchise team names.
     STRICTLY DISCARDS any article older than 24 hours.
     Stores EXACT raw headline and description from sources.
-    V9.0: Every article is now scored by agents/ranker.py before insertion.
-    importance_score (1.0–10.0) and category are stored in the DB.
+    Articles are stored with database defaults (no per-article scoring).
     Returns:
         _RssResult — int subclass with .inserted, .failed_feeds, .total_polled
     """
@@ -126,15 +274,27 @@ def fetch_and_filter_rss():
     rss_logger.info(
         f"Starting 24-Hour Ingestion Cycle across {len(CRICKET_SOURCES)} sources..."
     )
+    from scrapers.web_scraper import scrape_google_news_topic
+
     for feed_info in CRICKET_SOURCES:
         feed = fetch_feed_with_retry(feed_info["url"])
-        if not feed or not feed.entries:
-            failed_feeds.append(feed_info["name"])
-            error_logger.error(
-                f"Failed to fetch RSS feed '{feed_info['url']}' after 3 attempts."
-            )
-            continue
-        for entry in feed.entries:
+        entries = feed.entries if feed and feed.entries else []
+        if not entries:
+            # Resilient fallback: attempt search mirror when primary RSS endpoint fails
+            source_name = feed_info["name"]
+            fallback_entries = scrape_google_news_topic(f"{source_name} cricket")
+            if fallback_entries:
+                entries = fallback_entries
+                rss_logger.info(
+                    f"Recovered {len(entries)} articles for '{source_name}' via resilient fallback."
+                )
+            else:
+                failed_feeds.append(source_name)
+                error_logger.warning(
+                    f"Feed '{feed_info['url']}' unavailable and fallback yielded 0 items."
+                )
+                continue
+        for entry in entries:
             title   = clean_text(entry.get("title", ""))
             summary = clean_text(entry.get("summary", "") or entry.get("description", ""))
             link    = entry.get("link", "")
@@ -143,14 +303,6 @@ def fetch_and_filter_rss():
                 continue
             matched_targets = match_player_or_franchise_in_text(f"{title} {summary}")
             for mt in matched_targets:
-                player_info = get_player_info(mt["player_name"])
-                score    = calculate_importance_score(
-                    title=title,
-                    summary=summary,
-                    player_info=player_info,
-                    source_name=feed_info["name"],
-                )
-                category = categorize_news(title=title, summary=summary)
                 news_id = insert_news(
                     title=title,
                     source=feed_info["name"],
@@ -160,20 +312,17 @@ def fetch_and_filter_rss():
                     player_name=mt["player_name"],
                     franchise=mt["franchise"],
                     pub_timestamp=pub_ts,
-                    importance_score=score,
-                    category=category,
                 )
                 if news_id:
                     total_inserted += 1
                     insert_notification(
                         message=(
-                            f"⚡ {category} | {mt['player_name']} ({mt['franchise']}) "
-                            f"[score={score}]"
+                            f"⚡ {mt['player_name']} ({mt['franchise']})"
                         ),
                         type_str="INFO",
                     )
                     rss_logger.info(
-                        f"  ↳ [{score:>5}] [{category}] {mt['player_name']} — {title[:60]}"
+                        f"  ↳ {mt['player_name']} — {title[:60]}"
                     )
     rss_logger.info(
         f"Ingestion Cycle complete. {total_inserted} fresh items stored. "

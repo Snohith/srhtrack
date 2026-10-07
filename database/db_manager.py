@@ -138,7 +138,7 @@ def init_db():
             conn.commit()
             try:
                 cursor.execute(
-                    "DELETE FROM news WHERE title LIKE '%Pranav, Irfan, Shashank%' OR player_name = 'Sakib Hussain'"
+                    "DELETE FROM news WHERE title LIKE '%Pranav, Irfan, Shashank%'"
                 )
                 conn.commit()
             except Exception:
@@ -176,8 +176,8 @@ def insert_news(title, source, summary, link, published_at, player_name, franchi
     Inserts exact raw RSS headline & summary for rostered players and 4 franchises.
     Deduplicates on URL or exact title per tracked target. Coerces empty/# links
     to NULL so placeholder URLs do not collapse unrelated articles.
-    Phase 1 upgrade: importance_score and category are now real parameters
-    (no longer hardcoded to 5.0 / 'General'). Defaults maintain backwards compat.
+    importance_score and category always take database defaults (5.0 / 'General News');
+    per-article scoring was removed.
     """
     clean_link = link.strip() if link and link.strip() and link.strip() != "#" else None
     try:

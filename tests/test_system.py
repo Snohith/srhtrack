@@ -20,7 +20,6 @@ from database.db_manager import (
     init_db, get_all_players, insert_news, search_news,
     get_recent_news, get_analytics_summary
 )
-from agents.ranker import calculate_importance_score, categorize_news
 from utils.logger import rss_logger, db_logger
 @pytest.fixture(scope="module", autouse=True)
 def setup_db():
@@ -131,23 +130,23 @@ def test_analytics_summary():
     assert metrics["total_news"] > 0,    "Analytics: total_news should be > 0"
     assert metrics["total_players"] > 0, "Analytics: total_players should be > 0"
     print(f"✅ Analytics: {metrics['total_news']} news, {metrics['total_players']} players.")
-def test_ranker_importance_score():
-    """Importance score for century article should be above baseline (5.0)."""
-    score = calculate_importance_score(
-        title="Abhishek Sharma scores stunning century",
-        summary="He hit 100 runs off 55 balls in the T20I.",
-        player_info={"captain": False}
+def test_insert_news_uses_database_defaults():
+    """insert_news() without score/category must store 5.0 / 'General News' (no ranker)."""
+    nid = insert_news(
+        title="Default Fields Test Article — Unique String QWE123",
+        source="Test Source",
+        summary="No scoring is performed at ingest.",
+        link="https://example.com/default-fields-test-001",
+        published_at="Jul 24, 2026 @ 10:20 AM IST",
+        player_name="Abhishek Sharma",
+        franchise="Sunrisers Hyderabad",
     )
-    assert score > 5.0, f"Expected score > 5.0, got {score}"
-    print(f"✅ Ranker importance score: {score}")
-def test_ranker_categorize():
-    """categorize_news() must correctly categorise a batting headline."""
-    category = categorize_news(
-        title="Abhishek Sharma hits fifty in T20I",
-        summary="He scored 50 runs in the first innings."
-    )
-    assert category == "Batting Performance", f"Unexpected category: {category}"
-    print(f"✅ Ranker category: {category}")
+    assert nid is not None, "Insert should succeed"
+    res = search_news("Default Fields Test Article")
+    assert len(res) == 1, f"Expected 1 row, got {len(res)}"
+    assert res[0]["importance_score"] == 5.0, res[0]
+    assert res[0]["category"] == "General News", res[0]
+    print("✅ Insert defaults (5.0 / 'General News'): passed.")
 def test_match_player_function():
     """match_player_or_franchise_in_text must match a known player name."""
     results = match_player_or_franchise_in_text("Heinrich Klaasen played brilliantly today")
@@ -173,30 +172,6 @@ def test_head_coach_phrase_matching():
     non_cricket_text = "Abhishek Sharma in padres trade baseball update"
     assert match_player_or_franchise_in_text(non_cricket_text) == [], "Non-cricket false positive should return empty list"
     print("✅ Head coach & false-positive phrase filtering: passed.")
-def test_hyperlocal_source_tier_boost():
-    """Telangana Today & Yorkshire CCC Tier 1 sources must receive a +1.5 tier boost."""
-    score_local = calculate_importance_score(
-        title="Abhishek Sharma hit a fifty",
-        summary="Match update at Uppal stadium",
-        player_info={"captain": False},
-        source_name="Telangana Today Sport"
-    )
-    score_regular = calculate_importance_score(
-        title="Abhishek Sharma hit a fifty",
-        summary="Match update at Uppal stadium",
-        player_info={"captain": False},
-        source_name="Unknown Source"
-    )
-    assert score_local - score_regular == 1.5, f"Expected Tier 1 +1.5 boost, got diff {score_local - score_regular}"
-    print("✅ Hyper-local source tier boost: passed.")
-def test_current_feed_names_receive_source_tier_boosts():
-    """Premium feed names used by CRICKET_SOURCES must align with ranker source tiers."""
-    from agents.ranker import get_source_tier_boost
-    assert get_source_tier_boost("ESPNcricinfo India") == 1.5
-    assert get_source_tier_boost("Cricbuzz (FeedBurner)") == 1.5
-    assert get_source_tier_boost("Sportstar (The Hindu)") == 1.5
-    assert get_source_tier_boost("SMH Sport") == 0.5
-    print("✅ Current feed source tier boosts: passed.")
 def test_tilly_kesteven_tracking():
     """Verify Tilly Kesteven is loaded into roster and tracked cleanly."""
     players = get_all_players(franchise_filter="Sunrisers Leeds Women")
@@ -264,6 +239,63 @@ def test_single_name_alias_matching():
     p_names = [m["player_name"] for m in matches]
     assert "Salil Arora" in p_names, f"Expected Salil Arora in matches, got {p_names}"
     print("✅ Single-name alias matching ('Salil' -> 'Salil Arora'): verified successfully.")
+
+def test_four_franchises_alias_matching():
+    """Verify player aliases match correctly across all 4 Sunrisers franchises."""
+    # Sunrisers Hyderabad
+    srh_text = "Abhishek and Ishan starred in thrilling win"
+    srh_matches = {m["player_name"] for m in match_player_or_franchise_in_text(srh_text)}
+    assert "Abhishek Sharma" in srh_matches
+    assert "Ishan Kishan" in srh_matches
+
+    # Sunrisers Eastern Cape
+    sec_text = "Stubbs and Jansen lead the attack with Nortje"
+    sec_matches = {m["player_name"] for m in match_player_or_franchise_in_text(sec_text)}
+    assert "Tristan Stubbs" in sec_matches
+    assert "Marco Jansen" in sec_matches
+    assert "Anrich Nortje" in sec_matches
+
+    # Sunrisers Leeds Men
+    leeds_men_text = "Brook and Crawley hit rapid fifties for Leeds"
+    lm_matches = {m["player_name"] for m in match_player_or_franchise_in_text(leeds_men_text)}
+    assert "Harry Brook" in lm_matches
+    assert "Zak Crawley" in lm_matches
+
+    # Sunrisers Leeds Women
+    leeds_women_text = "Gibson, Litchfield, and Deepti spark victory"
+    lw_matches = {m["player_name"] for m in match_player_or_franchise_in_text(leeds_women_text)}
+    assert "Dani Gibson" in lw_matches
+    assert "Phoebe Litchfield" in lw_matches
+    assert "Deepti Sharma" in lw_matches
+    print("✅ 4-Franchise alias matching: verified for SRH, SEC, Leeds Men, and Leeds Women.")
+
+def test_sakib_hussain_retention():
+    """Legitimate Sakib Hussain news must NOT be purged by init_db()."""
+    test_link = "https://example.com/sakib-hussain-test-retention"
+    nid = insert_news(
+        title="Sakib Hussain bowls match-winning spell",
+        source="Test Source",
+        summary="Sakib took 3 wickets in domestic match.",
+        link=test_link,
+        published_at="Jul 24, 2026 @ 12:00 PM IST",
+        player_name="Sakib Hussain",
+        franchise="Sunrisers Hyderabad",
+    )
+    assert nid is not None
+    init_db()
+    res = search_news("Sakib")
+    names = [r["player_name"] for r in res]
+    assert "Sakib Hussain" in names, "Sakib Hussain article must be retained after init_db()"
+    print("✅ Sakib Hussain news retention: passed.")
+
+def test_web_scraper_fallback_availability():
+    """Verify web scraper fallback functions are imported and callable."""
+    from scrapers.web_scraper import scrape_google_news_topic, scrape_web_headlines, scrape_match_highlights
+    assert callable(scrape_google_news_topic)
+    assert callable(scrape_web_headlines)
+    assert callable(scrape_match_highlights)
+    print("✅ Web scraper fallback availability: verified.")
+
 if __name__ == "__main__":
     print("🧪 Starting @SRHXtra System Verification Suite...\n")
     init_db()
@@ -272,15 +304,16 @@ if __name__ == "__main__":
     test_deduplication_by_title()
     test_search_news()
     test_analytics_summary()
-    test_ranker_importance_score()
-    test_ranker_categorize()
+    test_insert_news_uses_database_defaults()
     test_match_player_function()
     test_head_coach_phrase_matching()
-    test_hyperlocal_source_tier_boost()
     test_tilly_kesteven_tracking()
     test_logging_files_exist()
     test_source_count_dynamic()
     test_category_default_alignment()
     test_scheduler_no_init_db()
     test_single_name_alias_matching()
+    test_four_franchises_alias_matching()
+    test_sakib_hussain_retention()
+    test_web_scraper_fallback_availability()
     print("\n🎉 ALL SYSTEM VERIFICATION TESTS PASSED CLEANLY!")
