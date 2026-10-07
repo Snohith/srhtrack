@@ -91,6 +91,8 @@ sec_men = [
     {"Team": "Sunrisers Eastern Cape SA20 2026", "Player": "CJ King", "Role": "All-rounder (U23)", "Country": "South Africa", "Notes": ""},
     {"Team": "Sunrisers Eastern Cape SA20 2026", "Player": "JP King", "Role": "All-rounder (U23)", "Country": "South Africa", "Notes": ""},
     {"Team": "Sunrisers Eastern Cape SA20 2026", "Player": "Lewis Gregory", "Role": "All-rounder", "Country": "England", "Notes": "Overseas"},
+    {"Team": "Sunrisers Eastern Cape SA20 2026", "Player": "Nandre Burger", "Role": "Bowler", "Country": "South Africa", "Notes": ""},
+    {"Team": "Sunrisers Eastern Cape SA20 2026", "Player": "Craig Overton", "Role": "All-rounder", "Country": "England", "Notes": "Overseas"},
 ]
 
 df_leeds_men = pd.DataFrame(leeds_men)
@@ -100,6 +102,11 @@ df_sec = pd.DataFrame(sec_men)
 # Combine: Leeds Men, Leeds Women, SRH, SEC
 combined_df = pd.concat([df_leeds_men, womens_data, df_srh, df_sec], ignore_index=True)
 
-# Write to Excel
+# Write to both data/squadofsunrisers.xlsx and root squadofsunrisers.xlsx
+data_dir = os.path.join(REPO_ROOT, "data")
+os.makedirs(data_dir, exist_ok=True)
+data_excel_path = os.path.join(data_dir, "squadofsunrisers.xlsx")
+
+combined_df.to_excel(data_excel_path, index=False)
 combined_df.to_excel(EXCEL_PATH, index=False)
-print(f"Successfully updated {EXCEL_PATH} with {len(combined_df)} total squad entries.")
+print(f"Successfully updated {data_excel_path} and {EXCEL_PATH} with {len(combined_df)} total squad entries.")
