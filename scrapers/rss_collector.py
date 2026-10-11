@@ -6,10 +6,12 @@ Scoring removed: articles are stored with database defaults (importance_score=5.
 category='General News'); no per-article scoring or categorization is performed.
 """
 import time
+import concurrent.futures
 import requests
 import feedparser
 import bs4
 import html
+from urllib.parse import urlparse, parse_qs
 from config.roster import match_player_or_franchise_in_text
 from database.db_manager import insert_news, insert_notification
 from utils.logger import rss_logger, error_logger
@@ -289,11 +291,17 @@ def clean_text(raw):
     pass2 = bs4.BeautifulSoup(pass1, "html.parser").get_text()
     return " ".join(pass2.split()).strip()
 def fetch_feed_with_retry(url, retries=2, delay=1, timeout=6):
-    """Fetches RSS feed with exponential backoff and browser-grade User-Agent."""
+    """Fetches RSS feed with exponential backoff and browser-grade User-Agent.
+
+    Failures are logged with their root cause (HTTP status / exception type)
+    so dead or blocked feeds are diagnosable instead of failing silently.
+    Returns the parsed feed on success, else None.
+    """
     user_agents = [
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
     ]
+    last_reason = "unknown"
     for attempt in range(1, retries + 1):
         try:
             ua = user_agents[(attempt - 1) % len(user_agents)]
@@ -302,10 +310,77 @@ def fetch_feed_with_retry(url, retries=2, delay=1, timeout=6):
                 feed = feedparser.parse(response.content)
                 if feed and feed.entries:
                     return feed
-        except Exception:
-            pass
+                last_reason = (
+                    f"HTTP 200 but 0 entries"
+                    + (f" (bozo: {feed.bozo_exception})" if getattr(feed, "bozo", False) and getattr(feed, "bozo_exception", None) else "")
+                )
+            else:
+                last_reason = f"HTTP {response.status_code}"
+        except Exception as exc:
+            last_reason = f"{type(exc).__name__}: {exc}"
         time.sleep(delay * attempt)
+    error_logger.warning(f"Feed unavailable '{url}' after {retries} attempts ({last_reason}).")
     return None
+
+
+def _gl_hl_from_url(url):
+    """Extracts (hl, gl) locale params from a Google News RSS mirror URL.
+
+    Falls back to ("en-IN", "IN") for direct publisher feeds that carry
+    no locale params.
+    """
+    try:
+        qs = parse_qs(urlparse(url).query)
+        hl = qs.get("hl", ["en-IN"])[0]
+        gl = qs.get("gl", ["IN"])[0]
+        return hl, gl
+    except Exception:
+        return "en-IN", "IN"
+
+
+def _fallback_query_for_source(feed_info):
+    """Builds an honest fallback query for a dead feed.
+
+    Google News mirror feeds already encode a precise site/topic query in
+    their URL — re-issuing a mangled "{mirror label} cricket" query would
+    return unrelated results and mask the outage. For those, the caller
+    should record the failure honestly instead of using a fallback.
+    Returns None when no meaningful fallback query exists.
+    """
+    url = feed_info.get("url", "")
+    if "news.google.com/rss" in url:
+        return None
+    return f"{feed_info.get('name', '')} cricket"
+
+
+def _poll_one_source(feed_info):
+    """Polls a single source (primary + conditional fallback).
+
+    Runs in worker threads: performs network I/O only, no DB writes.
+    Returns (feed_info, entries, fetch_error_or_None).
+    Never raises: one malformed source must not abort the whole cycle.
+    """
+    try:
+        from scrapers.web_scraper import scrape_google_news_topic
+
+        feed = fetch_feed_with_retry(feed_info["url"])
+        if feed and feed.entries:
+            return feed_info, feed.entries, None
+        fallback_query = _fallback_query_for_source(feed_info)
+        if fallback_query is None:
+            # Precise Google News mirror legitimately returned 0 results
+            # (e.g. a site: query with no fresh stories) — report honestly.
+            return feed_info, [], f"mirror returned 0 items for '{feed_info['name']}'"
+        hl, gl = _gl_hl_from_url(feed_info["url"])
+        fallback_entries = scrape_google_news_topic(fallback_query, lang=hl, gl=gl)
+        if fallback_entries:
+            rss_logger.info(
+                f"Recovered {len(fallback_entries)} articles for '{feed_info['name']}' via resilient fallback."
+            )
+            return feed_info, fallback_entries, None
+        return feed_info, [], f"primary and fallback yielded 0 items for '{feed_info['name']}'"
+    except Exception as exc:
+        return feed_info, [], f"poll crashed: {type(exc).__name__}: {exc}"
 def fetch_and_filter_rss():
     """
     Polls all sources in CRICKET_SOURCES, filters for rostered players OR 4 franchise team names.
@@ -317,37 +392,40 @@ def fetch_and_filter_rss():
     """
     total_inserted = 0
     failed_feeds   = []
+    matched_articles = 0
+    stale_discarded  = 0
     rss_logger.info(
         f"Starting 24-Hour Ingestion Cycle across {len(CRICKET_SOURCES)} sources..."
     )
-    from scrapers.web_scraper import scrape_google_news_topic
 
-    for feed_info in CRICKET_SOURCES:
-        feed = fetch_feed_with_retry(feed_info["url"])
-        entries = feed.entries if feed and feed.entries else []
+    # Phase 1 — fetch all feeds concurrently (network-bound). A sequential
+    # sweep of ~193 feeds takes several minutes and overlaps with the next
+    # auto-ingest tick; 20 workers bring a full cycle down to ~20-30s.
+    # DB writes stay in the main thread below (SQLite + deterministic order).
+    polled = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as pool:
+        for result in pool.map(_poll_one_source, CRICKET_SOURCES):
+            polled.append(result)
+
+    # Phase 2 — match + store, in source order.
+    for feed_info, entries, fetch_error in polled:
         if not entries:
-            # Resilient fallback: attempt search mirror when primary RSS endpoint fails
-            source_name = feed_info["name"]
-            fallback_entries = scrape_google_news_topic(f"{source_name} cricket")
-            if fallback_entries:
-                entries = fallback_entries
-                rss_logger.info(
-                    f"Recovered {len(entries)} articles for '{source_name}' via resilient fallback."
-                )
-            else:
-                failed_feeds.append(source_name)
-                error_logger.warning(
-                    f"Feed '{feed_info['url']}' unavailable and fallback yielded 0 items."
-                )
-                continue
+            failed_feeds.append(feed_info["name"])
+            error_logger.warning(
+                f"Feed '{feed_info['url']}' unavailable: {fetch_error}."
+            )
+            continue
         for entry in entries:
             title   = clean_text(entry.get("title", ""))
             summary = clean_text(entry.get("summary", "") or entry.get("description", ""))
             link    = entry.get("link", "")
             pub_date, age_hours, pub_ts = parse_rss_date_to_ist(entry)
             if age_hours > 24.0:
+                stale_discarded += 1
                 continue
             matched_targets = match_player_or_franchise_in_text(f"{title} {summary}")
+            if matched_targets:
+                matched_articles += 1
             for mt in matched_targets:
                 news_id = insert_news(
                     title=title,
@@ -371,7 +449,8 @@ def fetch_and_filter_rss():
                         f"  ↳ {mt['player_name']} — {title[:60]}"
                     )
     rss_logger.info(
-        f"Ingestion Cycle complete. {total_inserted} fresh items stored. "
+        f"Ingestion Cycle complete. {total_inserted} fresh items stored "
+        f"({matched_articles} matched, {stale_discarded} stale >24h discarded). "
         f"{len(failed_feeds)}/{len(CRICKET_SOURCES)} feeds failed."
     )
     return _RssResult(total_inserted, failed_feeds, len(CRICKET_SOURCES))

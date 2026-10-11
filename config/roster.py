@@ -95,8 +95,13 @@ PLAYER_ALIASES = [
     {"name": "Heinrich Klaasen", "pattern": r'\bklaasen\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "South Africa", "role": "Wicket-keeper batter"},
     {"name": "Pat Cummins", "pattern": r'\bcummins\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "Australia", "role": "All-rounder / Captain"},
     {"name": "Travis Head", "pattern": r'\btravis head\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "Australia", "role": "Opening batter"},
-    {"name": "Abhishek Sharma", "pattern": r'\b(abhishek sharma|abhishek)\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "India", "role": "All-rounder"},
-    {"name": "Ishan Kishan", "pattern": r'\b(ishan kishan|ishan)\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "India", "role": "Wicket-keeper batter"},
+    # NOTE: bare first-name aliases below use negative lookaheads to avoid
+    # surname collisions with unrelated cricketers sharing the first name:
+    # Abhishek Porel (Bengal), Abhishek Nayar (coach), Ishan Porel (Bengal
+    # pacer). E.g. "Bengal Pick Abhishek Porel" must NOT match Abhishek
+    # Sharma, while "Abhishek and Ishan starred" still matches both SRH stars.
+    {"name": "Abhishek Sharma", "pattern": r'\b(abhishek sharma|abhishek(?!\s+(porel|nayar)))\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "India", "role": "All-rounder"},
+    {"name": "Ishan Kishan", "pattern": r'\b(ishan kishan|ishan(?!\s+porel))\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "India", "role": "Wicket-keeper batter"},
     {"name": "Nitish Kumar Reddy", "pattern": r'\b(nitish kumar reddy|nitish reddy)\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "India", "role": "All-rounder"},
     {"name": "Harshal Patel", "pattern": r'\b(harshal patel|harshal)\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "India", "role": "All-rounder / Pace bowler"},
     {"name": "Liam Livingstone", "pattern": r'\blivingstone\b', "team_key": "SRH", "franchise": "Sunrisers Hyderabad", "country": "England", "role": "All-rounder"},

@@ -216,6 +216,13 @@ def insert_news(title, source, summary, link, published_at, player_name, franchi
             f"for {player_name} from {source}."
         )
         return news_id
+    except sqlite3.IntegrityError as e:
+        # Expected concurrent-dedupe hit: two overlapping ingest cycles (or a
+        # retry) raced past the SELECT check above. The row is already stored
+        # for this target, so report "already present" quietly instead of
+        # spamming errors.log with UNIQUE constraint noise.
+        db_logger.debug(f"Concurrent dedupe hit for '{title}' ({player_name}): {e}")
+        return None
     except Exception as e:
         error_logger.error(f"Database insert error: {e}")
         return None

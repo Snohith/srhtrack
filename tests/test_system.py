@@ -203,9 +203,10 @@ def test_logging_files_exist():
     print("✅ Logging files: rss.log and database.log confirmed.")
 def test_source_count_dynamic():
     """CRICKET_SOURCES must have >= 48 verified entries (audited 2026-07-31 — dead feeds removed)."""
-    from scrapers.rss_collector import CRICKET_SOURCES, TOP_50_CRICKET_SOURCES
+    from scrapers.rss_collector import CRICKET_SOURCES, TOP_50_CRICKET_SOURCES, RSS_FEEDS
     assert len(CRICKET_SOURCES) >= 48, f"Expected ≥ 48 sources, got {len(CRICKET_SOURCES)}"
     assert CRICKET_SOURCES is TOP_50_CRICKET_SOURCES, "TOP_50_CRICKET_SOURCES alias must point to CRICKET_SOURCES"
+    assert CRICKET_SOURCES is RSS_FEEDS, "RSS_FEEDS alias must point to CRICKET_SOURCES"
     names = [s['name'] for s in CRICKET_SOURCES]
     assert len(names) == len(set(names)), f"Duplicate source names found: {[n for n in names if names.count(n) > 1]}"
     urls = [s['url'] for s in CRICKET_SOURCES]
@@ -309,6 +310,131 @@ def test_web_scraper_fallback_availability():
     assert callable(scrape_match_highlights)
     print("✅ Web scraper fallback availability: verified.")
 
+
+def test_abhishek_porel_not_matched_to_sharma():
+    """'Abhishek Porel' (Bengal) must NOT match Abhishek Sharma (precision)."""
+    matches = match_player_or_franchise_in_text("Bengal Pick Abhishek Porel For Ranji Trophy Opener")
+    names = [m["player_name"] for m in matches]
+    assert "Abhishek Sharma" not in names, f"False positive: Abhishek Porel matched {names}"
+    print("✅ Abhishek Porel precision: no false match to Abhishek Sharma.")
+
+
+def test_ishan_porel_not_matched_to_kishan():
+    """'Ishan Porel' (Bengal pacer) must NOT match Ishan Kishan (precision)."""
+    matches = match_player_or_franchise_in_text("Ishan Porel takes five wickets for Bengal")
+    names = [m["player_name"] for m in matches]
+    assert "Ishan Kishan" not in names, f"False positive: Ishan Porel matched {names}"
+    print("✅ Ishan Porel precision: no false match to Ishan Kishan.")
+
+
+def test_bare_abhishek_ishan_still_match():
+    """Bare 'Abhishek and Ishan' (no colliding surname) must still match SRH stars."""
+    matches = {m["player_name"] for m in match_player_or_franchise_in_text("Abhishek and Ishan starred in thrilling win")}
+    assert "Abhishek Sharma" in matches, matches
+    assert "Ishan Kishan" in matches, matches
+    full = {m["player_name"] for m in match_player_or_franchise_in_text("Abhishek Sharma smashes fifty")}
+    assert "Abhishek Sharma" in full, full
+    print("✅ Bare Abhishek/Ishan recall preserved.")
+
+
+def test_insert_news_duplicate_race_is_silent():
+    """A UNIQUE race past the SELECT check must return None, not raise."""
+    import sqlite3
+    from unittest.mock import patch
+    from database import db_manager
+
+    title = "Race Condition Test Article — Unique String ZZZ999"
+    nid = db_manager.insert_news(
+        title=title, source="Test Source", summary="race test",
+        link="https://example.com/race-zzz999", published_at="Jul 24, 2026 @ 10:30 AM IST",
+        player_name="Abhishek Sharma", franchise="Sunrisers Hyderabad",
+    )
+    assert nid is not None
+    real_get = db_manager.get_connection
+
+    class _BoomCursor:
+        def __init__(self, cur):
+            self._c = cur
+        def execute(self, sql, params=()):
+            if sql.lstrip().upper().startswith("INSERT"):
+                raise sqlite3.IntegrityError(
+                    "UNIQUE constraint failed: news.title, news.player_name, news.franchise"
+                )
+            return self._c.execute(sql, params)
+        def fetchone(self):
+            return None  # pretend SELECT found nothing, forcing the INSERT path
+        @property
+        def lastrowid(self):
+            return self._c.lastrowid
+
+    class _BoomConn:
+        def __init__(self, conn):
+            self._c = conn
+        def cursor(self):
+            return _BoomCursor(self._c.cursor())
+        def commit(self):
+            self._c.commit()
+        def close(self):
+            self._c.close()
+
+    with patch.object(db_manager, "get_connection", lambda: _BoomConn(real_get())):
+        assert db_manager.insert_news(
+            title=title, source="Test Source", summary="race test",
+            link="https://example.com/race-zzz999", published_at="Jul 24, 2026 @ 10:30 AM IST",
+            player_name="Abhishek Sharma", franchise="Sunrisers Hyderabad",
+        ) is None
+    print("✅ insert_news UNIQUE race handled silently.")
+
+
+def test_fetch_feed_retry_returns_none_on_http_error():
+    """fetch_feed_with_retry must return None (not raise) on HTTP 403."""
+    from unittest.mock import patch, MagicMock
+    from scrapers import rss_collector
+    resp = MagicMock(status_code=403, content=b"forbidden")
+    with patch.object(rss_collector.requests, "get", return_value=resp):
+        assert rss_collector.fetch_feed_with_retry("https://example.com/feed", retries=1, delay=0) is None
+    print("✅ fetch_feed_with_retry handles HTTP errors without raising.")
+
+
+def test_fetch_feed_retry_returns_feed_on_200():
+    """fetch_feed_with_retry must return parsed entries on HTTP 200."""
+    from unittest.mock import patch, MagicMock
+    from scrapers import rss_collector
+    rss = (b'<?xml version="1.0"?><rss version="2.0"><channel><title>T</title>'
+           b'<item><title>Abhishek Sharma fifty</title><link>https://example.com/x</link>'
+           b'<pubDate>Sat, 11 Oct 2026 10:00:00 +0530</pubDate></item>'
+           b'</channel></rss>')
+    resp = MagicMock(status_code=200, content=rss)
+    with patch.object(rss_collector.requests, "get", return_value=resp):
+        feed = rss_collector.fetch_feed_with_retry("https://example.com/feed", retries=1, delay=0)
+    assert feed is not None and len(feed.entries) == 1
+    print("✅ fetch_feed_with_retry parses HTTP 200 feeds.")
+
+
+def test_fallback_query_none_for_google_mirror():
+    """Google News mirrors have no meaningful fallback query (avoids garbage results)."""
+    from scrapers.rss_collector import _fallback_query_for_source
+    mirror = {"name": "Google News: SEC Official Site",
+              "url": "https://news.google.com/rss/search?q=site:sunriserseasterncape.co&hl=en-ZA&gl=ZA&ceid=ZA:en"}
+    assert _fallback_query_for_source(mirror) is None
+    direct = {"name": "The Citizen SA", "url": "https://www.citizen.co.za/feed/"}
+    assert _fallback_query_for_source(direct) == "The Citizen SA cricket"
+    print("✅ Fallback query derivation: mirrors report honestly, direct feeds fall back.")
+
+
+def test_poll_one_source_skips_garbage_fallback():
+    """A dead Google mirror must NOT trigger an unrelated fallback search."""
+    from unittest.mock import patch
+    from scrapers import rss_collector
+    mirror = {"name": "Google News: SEC Official Site",
+              "url": "https://news.google.com/rss/search?q=site:sunriserseasterncape.co&hl=en-ZA&gl=ZA&ceid=ZA:en"}
+    with patch.object(rss_collector, "fetch_feed_with_retry", return_value=None), \
+         patch("scrapers.web_scraper.scrape_google_news_topic") as fb:
+        _, entries, err = rss_collector._poll_one_source(mirror)
+    assert entries == [] and err is not None
+    fb.assert_not_called()
+    print("✅ Dead mirror yields honest failure with no garbage fallback.")
+
 if __name__ == "__main__":
     print("🧪 Starting @SRHXtra System Verification Suite...\n")
     init_db()
@@ -330,4 +456,12 @@ if __name__ == "__main__":
     test_sakib_hussain_retention()
     test_ownership_entity_matching()
     test_web_scraper_fallback_availability()
+    test_abhishek_porel_not_matched_to_sharma()
+    test_ishan_porel_not_matched_to_kishan()
+    test_bare_abhishek_ishan_still_match()
+    test_insert_news_duplicate_race_is_silent()
+    test_fetch_feed_retry_returns_none_on_http_error()
+    test_fetch_feed_retry_returns_feed_on_200()
+    test_fallback_query_none_for_google_mirror()
+    test_poll_one_source_skips_garbage_fallback()
     print("\n🎉 ALL SYSTEM VERIFICATION TESTS PASSED CLEANLY!")
