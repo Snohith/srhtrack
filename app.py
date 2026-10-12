@@ -102,7 +102,7 @@ if _secs_since_auto >= AUTO_INGEST_INTERVAL_SECS:
     st.session_state["last_refreshed"] = format_ist_12hr()
     st.session_state["last_refresh_ts"] = _now
 if len(cached_get_recent_news(limit=1)) == 0:
-    with st.spinner(f"🧡 Initializing SRHXtra Telemetry Engine (scanning {_source_count} feeds...)..."):
+    with st.spinner(f"Loading matchday intelligence (scanning {_source_count} feeds)..."):
         fetch_and_filter_rss()
         set_metadata("last_auto_ingest_ts", str(time.time()))
         cached_get_recent_news.clear()
@@ -116,24 +116,24 @@ def get_bulletproof_sort_key(n):
         return datetime.strptime(pub_str, "%b %d, %Y @ %I:%M %p IST").timestamp()
     except Exception:
         return 0.0
-st.sidebar.markdown("<h2 style='font-family:Inter,sans-serif;font-weight:900;color:#0F172A;margin-bottom:0.2rem;'>🧡 SRHXtra</h2>", unsafe_allow_html=True)
+st.sidebar.markdown("<h2 style='font-family:Inter,sans-serif;font-weight:800;letter-spacing:-0.01em;color:#0F172A;margin-bottom:0.2rem;'>SRHXtra</h2>", unsafe_allow_html=True)
 st.sidebar.markdown("<div style='color:#E05600;font-family:Inter,sans-serif;font-size:0.82rem;font-weight:800;margin-bottom:1rem;'>SQUAD TELEMETRY V15 · LIVE CREX MATCHDAY</div>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
-st.sidebar.markdown(f"👥 **Roster Coverage:** `{_player_count} Players & 4 Squads`")
-st.sidebar.markdown(f"🕒 **Last Refreshed IST:**\n`{st.session_state['last_refreshed']}`")
+st.sidebar.markdown(f"<span class='srh-side-label'>Roster</span>\n`{_player_count} players · 4 squads`")
+st.sidebar.markdown(f"<span class='srh-side-label'>Last refreshed · IST</span>\n`{st.session_state['last_refreshed']}`")
 _auto_secs_remaining = max(0, int(AUTO_INGEST_INTERVAL_SECS - _secs_since_auto))
 _auto_mins = _auto_secs_remaining // 60
 _auto_s = _auto_secs_remaining % 60
 if _auto_secs_remaining > 0:
-    st.sidebar.caption(f"⏳ Next Auto-Sync: **{_auto_mins}m {_auto_s:02d}s**")
+    st.sidebar.caption(f"Next auto-sync {_auto_mins}m {_auto_s:02d}s")
 else:
-    st.sidebar.caption("⚡ Ingestion Sync Running...")
+    st.sidebar.caption("Sync running…")
 st.sidebar.markdown("---")
 franchise_filter = st.sidebar.selectbox(
-    "Filter Squad Domain",
+    "Squad",
     ["All", "Sunrisers Hyderabad", "Sunrisers Eastern Cape", "Sunrisers Leeds Men", "Sunrisers Leeds Women"]
 )
-if st.sidebar.button(f"⚡ Live Refresh {_source_count} Feeds", use_container_width=True):
+if st.sidebar.button(f"Refresh feeds ({_source_count})", use_container_width=True):
     with st.spinner(f"Polling {_source_count} global sources..."):
         result = fetch_and_filter_rss()
         _now = time.time()
@@ -148,7 +148,7 @@ if st.sidebar.button(f"⚡ Live Refresh {_source_count} Feeds", use_container_wi
         if failed:
             st.sidebar.warning(f"{len(failed)} feeds unavailable.")
     st.rerun()
-with st.sidebar.expander("📋 Squad Roster Breakdown", expanded=False):
+with st.sidebar.expander("Squad roster", expanded=False):
     for fkey, fdata in MASTER_ROSTER.items():
         fname = fdata.get("franchise_name", fkey)
         p_list = fdata.get("players", [])
@@ -156,9 +156,9 @@ with st.sidebar.expander("📋 Squad Roster Breakdown", expanded=False):
         captain = next((p["name"] for p in p_list if p.get("captain")), None)
         st.markdown(f"**{fname}**: `{len(p_list)} members`")
         if coach:
-            st.caption(f"👔 Coach: **{coach}**")
+            st.caption(f"Coach · **{coach}**")
         if captain:
-            st.caption(f"👑 Captain: **{captain}**")
+            st.caption(f"Captain · **{captain}**")
 st.markdown(render_header_banner(_player_count, 4), unsafe_allow_html=True)
 @st.cache_data(ttl=900)
 def cached_get_matchday_fixtures():
@@ -197,12 +197,12 @@ if hero_fixture:
 live_count = len(cached_get_recent_news(limit=150))
 st.markdown(render_telemetry_metrics(_source_count, _player_count, live_count), unsafe_allow_html=True)
 tab_news, tab_schedule, tab_squads = st.tabs([
-    f"📡 LIVE PULSE & NEWS RECON FEED ({live_count})",
-    "📋 MATCH DAY FIXTURE BREAKDOWN",
-    f"👥 SQUAD DATABASE & DIRECTORY ({_player_count})",
+    f"Live feed ({live_count})",
+    "Matchday",
+    f"Squads ({_player_count})",
 ])
 with tab_news:
-    st.markdown("<h3 style='font-family:Inter,sans-serif;font-weight:800;color:#0F172A;margin-bottom:0.8rem;'>📡 Real-Time Intelligence & News Feed</h3>", unsafe_allow_html=True)
+    st.markdown("<div class='srh-section-title'>Live feed</div><div class='srh-section-sub'>Real-time squad intelligence from every ingestion cycle.</div>", unsafe_allow_html=True)
     col_search, col_stats = st.columns([3, 1])
     with col_search:
         search_query = st.text_input(
@@ -212,7 +212,7 @@ with tab_news:
         )
     if search_query.strip():
         news_list = cached_search_news(search_query.strip())
-        st.caption(f"🔍 Showing **{len(news_list)}** intelligence records for *\"{search_query}\"*")
+        st.caption(f"{len(news_list)} results for *\"{search_query}\"*")
     else:
         news_list = cached_get_recent_news(limit=150)
     if franchise_filter != "All":
@@ -228,7 +228,7 @@ with tab_news:
             st.markdown("""
             <div class='pulse-panel'>
                 <div class='pulse-panel-title'>
-                    <span>LIVE PULSE TIMELINE</span>
+                    <span>Live timeline</span>
                     <span class='srh-live-pulse-dot'></span>
                 </div>
             """, unsafe_allow_html=True)
@@ -239,20 +239,19 @@ with tab_news:
         if search_query.strip():
             st.info(f"No intelligence records found matching \"{search_query}\". Try a different player name or keyword.")
         else:
-            st.info(f"No player updates recorded in the last 24 hours. Click '⚡ Live Refresh {_source_count} Feeds' in the sidebar to run a full sweep!")
+            st.info(f"No player updates in the last 24 hours. Use 'Refresh feeds' in the sidebar for a full sweep.")
 with tab_schedule:
-    st.markdown("<h3 style='font-family:Inter,sans-serif;font-weight:800;color:#0F172A;margin-bottom:0.4rem;'>📋 Match Day Breakdown & Roster Coverage</h3>", unsafe_allow_html=True)
+    st.markdown("<div class='srh-section-title'>Matchday</div>", unsafe_allow_html=True)
     st.markdown(
-        f"<div style='color:#475569;margin-bottom:1.0rem;font-weight:500;'>"
-        f"Live from <a href='{CREX_SCHEDULE_URL}' target='_blank' rel='noopener'>crex.com/schedule</a> — "
+        f"<div class='srh-section-sub'>"
+        f"Live from <a href='{CREX_SCHEDULE_URL}' target='_blank' rel='noopener'>crex.com/schedule</a> · "
         f"today through the next 4 days. "
-        f"Every Squad / Playing XI checked against the Excel roster. "
-        f"Only fixtures with Sunrisers players are listed. LIVE first, finished matches removed.</div>",
+        f"Every squad checked against the roster — Sunrisers fixtures only, live first.</div>",
         unsafe_allow_html=True,
     )
     col_ctrl, col_m1, col_m2, col_m3 = st.columns([1.5, 1, 1, 1])
     with col_ctrl:
-        if st.button("🔄 Refresh Matchday (Crex)", use_container_width=True):
+        if st.button("Refresh matchday", use_container_width=True):
             clear_matchday_cache()
             cached_get_matchday_fixtures.clear()
             st.rerun()
@@ -266,7 +265,7 @@ with tab_schedule:
         st.metric("Live Now", live_now)
     with col_m3:
         st.metric("Leagues Tracked", active_leagues)
-    st.caption(f"📅 Next fixture: **{next_match_date}** · Source: Crex live schedule (auto-refreshes every 15 min)")
+    st.caption(f"Next fixture · **{next_match_date}** · Crex live schedule, refreshes every 15 min")
     if franchise_filter != "All":
         franchise_key_map = {
             "Sunrisers Hyderabad": "SRH",
@@ -302,39 +301,38 @@ with tab_schedule:
         for item in filtered_sched:
             grouped_dates.setdefault(item["date_str"], []).append(item)
         for date_str, items in grouped_dates.items():
-            st.markdown(f"<h4 style='color:#E05600;font-family:Inter,sans-serif;font-weight:800;margin-top:1.5rem;margin-bottom:0.8rem;'>📅 {date_str}</h4>", unsafe_allow_html=True)
+            st.markdown(f"<div class='srh-date-group'>{date_str}</div>", unsafe_allow_html=True)
             for item in items:
                 status = _fixture_live_status(item)
                 st.markdown(render_broadcast_match_card(item, status=status), unsafe_allow_html=True)
     else:
-        st.info(f"No upcoming Sunrisers fixtures for **{franchise_filter}** right now. Crex squads show no rostered players — hit '🔄 Refresh Matchday' to re-check live.")
+        st.info(f"No upcoming Sunrisers fixtures for **{franchise_filter}** right now. Refresh matchday to re-check live.")
 with tab_squads:
-    st.markdown("<h3 style='font-family:Inter,sans-serif;font-weight:800;color:#0F172A;margin-bottom:0.4rem;'>👥 Official Squad Database & Roster Directory</h3>", unsafe_allow_html=True)
-    st.markdown("<div style='color:#475569;margin-bottom:1.2rem;font-weight:500;'>Official active squads, coaching leadership, player roles, and national representation across the Sunrisers network.</div>", unsafe_allow_html=True)
+    st.markdown("<div class='srh-section-title'>Squads</div><div class='srh-section-sub'>Active rosters, staff and national representation across the Sunrisers network.</div>", unsafe_allow_html=True)
 
     if franchise_filter in ("All", "Sunrisers Hyderabad"):
-        st.markdown("<h4 style='font-family:Inter,sans-serif;font-weight:800;color:#0F172A;margin-bottom:0.8rem;'>🏢 Ownership & Business — Sun Group</h4>", unsafe_allow_html=True)
+        st.markdown("<div class='srh-date-group'>Ownership & business · Sun Group</div>", unsafe_allow_html=True)
         st.markdown("""
-        <div style='display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:0.8rem;margin-bottom:1rem;'>
-            <div style='background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:0.8rem 1rem;'>
-                <div style='font-size:1rem;font-weight:800;color:#0F172A;'>Kalanithi Maran</div>
-                <div style='font-size:0.8rem;color:#64748B;font-weight:600;'>Founder & Chairman, Sun Group</div>
+        <div class='srh-stat-grid'>
+            <div class='srh-stat'>
+                <div class='srh-stat-num'>Kalanithi Maran</div>
+                <div class='srh-stat-lbl'>Founder & Chairman, Sun Group</div>
             </div>
-            <div style='background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:0.8rem 1rem;'>
-                <div style='font-size:1rem;font-weight:800;color:#0F172A;'>Kavya Maran</div>
-                <div style='font-size:0.8rem;color:#64748B;font-weight:600;'>CEO — SRH & Sunrisers Eastern Cape</div>
+            <div class='srh-stat'>
+                <div class='srh-stat-num'>Kavya Maran</div>
+                <div class='srh-stat-lbl'>CEO — SRH & Sunrisers Eastern Cape</div>
             </div>
-            <div style='background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:0.8rem 1rem;'>
-                <div style='font-size:1rem;font-weight:800;color:#0F172A;'>Sun TV Network Ltd</div>
-                <div style='font-size:0.8rem;color:#64748B;font-weight:600;'>Listed — NSE: SUNTVNET / BSE: 532733. Exchange filings disclose franchise deals first.</div>
+            <div class='srh-stat'>
+                <div class='srh-stat-num'>Sun TV Network Ltd</div>
+                <div class='srh-stat-lbl'>NSE: SUNTVNET / BSE: 532733</div>
             </div>
         </div>
-        <div style='margin-bottom:1rem;font-size:0.88rem;'>
-            <a href='https://www.suntv.in/financial-information.html' target='_blank' rel='noopener'>📄 Sun TV Investor Relations</a> &nbsp;·&nbsp;
-            <a href='https://www.bseindia.com/' target='_blank' rel='noopener'>📈 BSE Filings</a> &nbsp;·&nbsp;
-            <a href='https://www.nseindia.com/' target='_blank' rel='noopener'>📉 NSE Filings</a> &nbsp;·&nbsp;
-            <a href='https://find-and-update.company-information.service.gov.uk/search?q=Sunrisers+Leeds' target='_blank' rel='noopener'>🏛️ Companies House: Sunrisers Leeds</a> &nbsp;·&nbsp;
-            <a href='https://en.wikipedia.org/wiki/Sun_Group' target='_blank' rel='noopener'>📚 Sun Group — Wikipedia</a>
+        <div class='srh-section-sub'>
+            <a href='https://www.suntv.in/financial-information.html' target='_blank' rel='noopener'>Sun TV Investor Relations</a> ·
+            <a href='https://www.bseindia.com/' target='_blank' rel='noopener'>BSE Filings</a> ·
+            <a href='https://www.nseindia.com/' target='_blank' rel='noopener'>NSE Filings</a> ·
+            <a href='https://find-and-update.company-information.service.gov.uk/search?q=Sunrisers+Leeds' target='_blank' rel='noopener'>Companies House</a> ·
+            <a href='https://en.wikipedia.org/wiki/Sun_Group' target='_blank' rel='noopener'>Sun Group</a>
         </div>
         """, unsafe_allow_html=True)
         try:
@@ -349,7 +347,7 @@ with tab_squads:
             or any(_k in f"{_n.get('title', '')} {_n.get('summary', '')}".lower() for _k in _biz_keywords)
         ][:8]
         if _biz_news:
-            st.markdown(f"<div style='font-weight:700;color:#0F172A;margin-bottom:0.5rem;'>📰 Latest ownership & business news ({len(_biz_news)})</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='srh-note' style='margin-bottom:0.5rem;'>Ownership & business · {len(_biz_news)}</div>", unsafe_allow_html=True)
             for _bn in _biz_news:
                 st.markdown(render_telemetry_news_card(_bn), unsafe_allow_html=True)
         else:
@@ -359,15 +357,15 @@ with tab_squads:
     with col_sq_f:
         squad_team_options = ["All Franchises"] + [fdata["franchise_name"] for fdata in MASTER_ROSTER.values()]
         def_idx = squad_team_options.index(franchise_filter) if franchise_filter in squad_team_options else 0
-        squad_team_filter = st.selectbox("Franchise Team", squad_team_options, index=def_idx, key="squad_team_sel")
+        squad_team_filter = st.selectbox("Team", squad_team_options, index=def_idx, key="squad_team_sel")
     with col_sq_role:
         squad_role_filter = st.selectbox(
-            "Filter Role",
+            "Role",
             ["All Roles", "Head Coach", "Captains & Leaders", "Wicket-keepers", "Batters", "All-rounders", "Bowlers", "Overseas Players"],
             key="squad_role_sel"
         )
     with col_sq_search:
-        squad_search_query = st.text_input("🔍 Search Player / Coach / Country", placeholder="e.g. Vettori, Head, Cummins, Klaasen, Australia...", key="squad_search_input")
+        squad_search_query = st.text_input("Search", placeholder="Player, coach or country…", key="squad_search_input")
 
     filtered_members = []
     for fkey, fdata in MASTER_ROSTER.items():
@@ -413,22 +411,22 @@ with tab_squads:
     distinct_countries = len({p["country"] for p in filtered_members if p.get("country")})
 
     st.markdown(f"""
-    <div style='display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:0.8rem;margin-top:0.8rem;margin-bottom:1.5rem;'>
-        <div style='background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:0.75rem 1rem;'>
-            <div style='font-size:1.3rem;font-weight:800;color:#0F172A;'>{total_found}</div>
-            <div style='font-size:0.78rem;color:#64748B;font-weight:600;'>Members Displayed</div>
+    <div class='srh-stat-grid'>
+        <div class='srh-stat'>
+            <div class='srh-stat-num'>{total_found}</div>
+            <div class='srh-stat-lbl'>Members shown</div>
         </div>
-        <div style='background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:0.75rem 1rem;'>
-            <div style='font-size:1.3rem;font-weight:800;color:#E05600;'>{coach_count}</div>
-            <div style='font-size:0.78rem;color:#64748B;font-weight:600;'>Coaching Leaders</div>
+        <div class='srh-stat'>
+            <div class='srh-stat-num'>{coach_count}</div>
+            <div class='srh-stat-lbl'>Coaches</div>
         </div>
-        <div style='background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:0.75rem 1rem;'>
-            <div style='font-size:1.3rem;font-weight:800;color:#B45309;'>{cap_count}</div>
-            <div style='font-size:0.78rem;color:#64748B;font-weight:600;'>Captains</div>
+        <div class='srh-stat'>
+            <div class='srh-stat-num'>{cap_count}</div>
+            <div class='srh-stat-lbl'>Captains</div>
         </div>
-        <div style='background:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:0.75rem 1rem;'>
-            <div style='font-size:1.3rem;font-weight:800;color:#0284C7;'>{distinct_countries} Nations</div>
-            <div style='font-size:0.78rem;color:#64748B;font-weight:600;'>Global Representation</div>
+        <div class='srh-stat'>
+            <div class='srh-stat-num'>{distinct_countries}</div>
+            <div class='srh-stat-lbl'>Nations</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -439,7 +437,7 @@ with tab_squads:
             for p in filtered_members:
                 teams_in_results.setdefault(p["franchise"], []).append(p)
             for tname, plist in teams_in_results.items():
-                st.markdown(f"<h4 style='color:#E05600;font-family:Inter,sans-serif;font-weight:800;margin-top:1.5rem;margin-bottom:0.8rem;'>🧡 {tname} ({len(plist)} members)</h4>", unsafe_allow_html=True)
+                st.markdown(f"<div class='srh-date-group'>{tname} · {len(plist)}</div>", unsafe_allow_html=True)
                 cols = st.columns(3)
                 for idx, player in enumerate(plist):
                     with cols[idx % 3]:

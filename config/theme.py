@@ -43,613 +43,805 @@ def get_fixture_status(item):
 def get_custom_css():
     return """
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-    /* Global High-Legibility Inter Font Reset */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    :root {
+        --srh-bg: #F7F7F5;
+        --srh-surface: #FFFFFF;
+        --srh-surface-soft: #FCFBFA;
+        --srh-ink: #191C22;
+        --srh-body: #3F4753;
+        --srh-muted: #5F6B7A;
+        --srh-faint: #8A94A3;
+        --srh-line: #E7E4E0;
+        --srh-line-soft: #F0EEEB;
+        --srh-accent: #EA580C;
+        --srh-accent-ink: #C2410C;
+        --srh-accent-soft: #FDF0E7;
+        --srh-green: #15803D;
+        --srh-green-soft: #EAF5EE;
+        --srh-red: #D92D20;
+        --srh-red-soft: #FDECEC;
+        --srh-amber-bg: #F7EFDC;
+        --srh-amber-ink: #7C5A10;
+        --srh-r: 10px;
+        --srh-r-sm: 7px;
+        --srh-shadow: 0 1px 2px rgba(22, 24, 29, 0.05);
+        --srh-shadow-hover: 0 6px 16px rgba(22, 24, 29, 0.08);
+    }
+    /* Base */
     html, body, [class*="css"] {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-        background-color: #F8FAFC !important;
-        color: #0F172A !important;
+        background-color: var(--srh-bg) !important;
+        color: var(--srh-ink) !important;
     }
     .stApp {
-        background: #F8FAFC !important;
+        background: var(--srh-bg) !important;
     }
-    /* Streamlit Sidebar Overrides */
+    ::selection {
+        background: #FBD9BE;
+    }
+    :focus-visible {
+        outline: 2px solid var(--srh-accent);
+        outline-offset: 2px;
+    }
+    .block-container {
+        max-width: 72rem;
+        padding-top: 2rem;
+    }
+    /* Sidebar */
     section[data-testid="stSidebar"] {
-        background-color: #F1F5F9 !important;
-        border-right: 1px solid #E2E8F0 !important;
+        background-color: var(--srh-surface-soft) !important;
+        border-right: 1px solid var(--srh-line) !important;
     }
     section[data-testid="stSidebar"] .stMarkdown h1,
     section[data-testid="stSidebar"] .stMarkdown h2,
     section[data-testid="stSidebar"] .stMarkdown h3 {
         font-family: 'Inter', sans-serif !important;
         font-weight: 800 !important;
-        letter-spacing: -0.5px;
-        color: #0F172A !important;
+        letter-spacing: -0.01em;
+        color: var(--srh-ink) !important;
     }
-    /* Streamlit Tabs Styling — Clean Daylight Controls */
+    .srh-side-label {
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--srh-faint);
+    }
+    /* Tabs — quiet segmented control; color reserved for content */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 0.5rem;
-        background-color: #E2E8F0;
-        padding: 0.4rem;
-        border-radius: 12px;
-        border: 1px solid #CBD5E1;
+        gap: 4px;
+        background-color: #ECEAE6;
+        padding: 4px;
+        border-radius: 11px;
+        border: 1px solid var(--srh-line);
         margin-bottom: 1.5rem;
     }
     .stTabs [data-baseweb="tab"] {
         height: auto;
-        padding: 0.65rem 1.3rem;
-        border-radius: 8px;
-        color: #475569;
+        padding: 0.55rem 1.05rem;
+        border-radius: 7px;
+        color: var(--srh-muted);
         font-family: 'Inter', sans-serif !important;
-        font-weight: 700 !important;
-        font-size: 0.95rem;
+        font-weight: 600 !important;
+        font-size: 0.88rem;
         border: none !important;
         background-color: transparent !important;
-        transition: all 0.2s ease;
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        color: var(--srh-ink);
     }
     .stTabs [aria-selected="true"] {
-        background-color: #F26522 !important;
-        color: #FFFFFF !important;
-        box-shadow: 0 4px 14px rgba(242, 101, 34, 0.35);
+        background-color: #FFFFFF !important;
+        color: var(--srh-ink) !important;
+        font-weight: 700 !important;
+        box-shadow: var(--srh-shadow);
     }
     .stTabs [data-baseweb="tab-border"] {
         display: none !important;
     }
-    /* Search & Inputs */
+    /* Inputs */
     .stTextInput input {
         background-color: #FFFFFF !important;
-        border: 1px solid #CBD5E1 !important;
-        color: #0F172A !important;
-        border-radius: 10px !important;
+        border: 1px solid var(--srh-line) !important;
+        color: var(--srh-ink) !important;
+        border-radius: 8px !important;
         font-family: 'Inter', sans-serif !important;
-        font-size: 0.95rem !important;
-        padding: 0.7rem 1rem !important;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02) !important;
+        font-size: 0.92rem !important;
+        padding: 0.6rem 0.9rem !important;
+        box-shadow: none !important;
     }
     .stTextInput input:focus {
-        border-color: #F26522 !important;
-        box-shadow: 0 0 0 2px rgba(242, 101, 34, 0.25) !important;
+        border-color: var(--srh-accent) !important;
+        box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.14) !important;
     }
-    /* Brand Header Banner */
+    .stTextInput label, .stSelectbox label, .stCheckbox label {
+        font-size: 0.78rem !important;
+        font-weight: 600 !important;
+        color: var(--srh-muted) !important;
+    }
+    .stSelectbox div[data-baseweb="select"] > div {
+        border-radius: 8px !important;
+        border-color: var(--srh-line) !important;
+    }
+    .stCheckbox input {
+        accent-color: var(--srh-accent);
+    }
+    /* Buttons — neutral by default */
+    .stButton button {
+        border-radius: 8px !important;
+        border: 1px solid var(--srh-line) !important;
+        background: #FFFFFF !important;
+        color: var(--srh-ink) !important;
+        font-weight: 600 !important;
+        font-size: 0.88rem !important;
+        box-shadow: none !important;
+    }
+    .stButton button:hover {
+        border-color: var(--srh-ink) !important;
+        color: var(--srh-ink) !important;
+    }
+    /* Metrics */
+    [data-testid="stMetricLabel"] {
+        font-size: 0.72rem !important;
+        font-weight: 700 !important;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--srh-faint) !important;
+    }
+    [data-testid="stMetricValue"] {
+        font-variant-numeric: tabular-nums;
+    }
+    /* Section scaffolding */
+    .srh-section-title {
+        font-family: 'Inter', sans-serif;
+        font-weight: 750;
+        font-size: 1.2rem;
+        letter-spacing: -0.01em;
+        color: var(--srh-ink);
+        margin: 0 0 0.25rem 0;
+    }
+    .srh-section-sub {
+        color: var(--srh-muted);
+        font-size: 0.86rem;
+        margin-bottom: 1.1rem;
+        line-height: 1.55;
+    }
+    .srh-section-sub a {
+        color: var(--srh-accent-ink);
+        font-weight: 600;
+        text-decoration: none;
+    }
+    .srh-section-sub a:hover {
+        text-decoration: underline;
+    }
+    .srh-date-group {
+        font-family: 'Inter', sans-serif;
+        font-size: 0.76rem;
+        font-weight: 750;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--srh-muted);
+        margin: 1.4rem 0 0.65rem 0;
+        padding-bottom: 0.45rem;
+        border-bottom: 1px solid var(--srh-line);
+    }
+    .srh-note {
+        font-size: 0.8rem;
+        color: var(--srh-faint);
+    }
+    .srh-empty {
+        background: var(--srh-surface);
+        border: 1px solid var(--srh-line);
+        border-radius: var(--srh-r);
+        padding: 1.6rem 1.4rem;
+        text-align: center;
+        color: var(--srh-muted);
+        font-size: 0.9rem;
+    }
+    .srh-stat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 0.7rem;
+        margin: 0.8rem 0 1.4rem 0;
+    }
+    .srh-stat {
+        background: var(--srh-surface);
+        border: 1px solid var(--srh-line);
+        border-radius: var(--srh-r);
+        padding: 0.7rem 0.9rem;
+        box-shadow: var(--srh-shadow);
+    }
+    .srh-stat-num {
+        font-size: 1.25rem;
+        font-weight: 750;
+        color: var(--srh-ink);
+        font-variant-numeric: tabular-nums;
+        line-height: 1.2;
+    }
+    .srh-stat-lbl {
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--srh-faint);
+        margin-top: 0.15rem;
+    }
+    /* Brand header */
     .srh-brand-header {
         display: flex;
         justify-content: space-between;
         align-items: flex-end;
-        border-bottom: 2px solid #E2E8F0;
-        padding-bottom: 1.2rem;
-        margin-bottom: 1.5rem;
+        border-bottom: 1px solid var(--srh-line);
+        padding-bottom: 1.1rem;
+        margin-bottom: 1.4rem;
         flex-wrap: wrap;
-        gap: 1rem;
+        gap: 0.8rem;
     }
     .srh-brand-title {
         font-family: 'Inter', sans-serif;
-        font-size: 2.4rem;
-        font-weight: 900;
-        letter-spacing: -0.8px;
-        color: #0F172A;
-        line-height: 1.15;
+        font-size: 1.65rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        color: var(--srh-ink);
+        line-height: 1.2;
     }
     .srh-brand-title span.highlight {
-        color: #F26522;
+        color: var(--srh-accent);
     }
     .srh-brand-subtitle {
-        color: #475569;
-        font-size: 1rem;
+        color: var(--srh-muted);
+        font-size: 0.86rem;
         font-weight: 500;
-        margin-top: 0.4rem;
+        margin-top: 0.25rem;
     }
     .srh-live-badge {
         display: inline-flex;
         align-items: center;
         gap: 0.5rem;
-        background: #ECFDF5;
-        border: 1px solid #A7F3D0;
-        color: #047857;
+        background: var(--srh-surface);
+        border: 1px solid var(--srh-line);
+        color: var(--srh-muted);
         font-family: 'Inter', sans-serif;
-        font-size: 0.8rem;
+        font-size: 0.72rem;
         font-weight: 700;
-        padding: 0.45rem 0.9rem;
-        border-radius: 20px;
-        box-shadow: 0 2px 6px rgba(4, 120, 87, 0.08);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 0.42rem 0.8rem;
+        border-radius: 999px;
     }
     .srh-live-pulse-dot {
-        width: 8px;
-        height: 8px;
-        background-color: #10B981;
+        width: 7px;
+        height: 7px;
+        background-color: var(--srh-green);
         border-radius: 50%;
-        box-shadow: 0 0 8px #10B981;
-        animation: live-pulse 1.8s infinite;
+        animation: live-pulse 2.4s ease-in-out infinite;
     }
     @keyframes live-pulse {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.4; transform: scale(0.85); }
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.35; }
     }
-    /* Next Match Hero Telemetry Bar */
+    /* Hero — next/live fixture */
     .hero-fixture-card {
-        background: #FFFFFF;
-        border: 1px solid #E2E8F0;
-        border-left: 5px solid #F26522;
-        border-radius: 14px;
-        padding: 1.4rem 1.7rem;
-        margin-bottom: 1.8rem;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+        background: var(--srh-surface);
+        border: 1px solid var(--srh-line);
+        box-shadow: var(--srh-shadow);
+        border-radius: var(--srh-r);
+        padding: 1.25rem 1.4rem;
+        margin-bottom: 1.4rem;
         display: flex;
         justify-content: space-between;
         align-items: center;
         flex-wrap: wrap;
-        gap: 1.2rem;
+        gap: 1rem;
     }
     .hero-fixture-card-live {
-        border-left: 5px solid #DC2626 !important;
-        background: linear-gradient(135deg, #FFFFFF 0%, #FEF2F2 100%) !important;
-        box-shadow: 0 6px 20px rgba(220, 38, 38, 0.12) !important;
+        box-shadow: inset 3px 0 0 var(--srh-red), var(--srh-shadow);
     }
-    .hero-fixture-left { flex: 1; min-width: 280px; }
+    .hero-fixture-card:not(.hero-fixture-card-live) {
+        box-shadow: inset 3px 0 0 var(--srh-accent), var(--srh-shadow);
+    }
+    .hero-fixture-left { flex: 1; min-width: 260px; }
     .hero-fixture-tag {
         font-family: 'Inter', sans-serif;
-        font-size: 0.78rem;
-        font-weight: 800;
+        font-size: 0.7rem;
+        font-weight: 750;
         text-transform: uppercase;
-        color: #E05600;
-        letter-spacing: 0.5px;
-        margin-bottom: 0.3rem;
+        color: var(--srh-accent-ink);
+        letter-spacing: 0.08em;
+        margin-bottom: 0.35rem;
     }
     .hero-fixture-tag-live {
-        color: #DC2626 !important;
+        color: var(--srh-red);
     }
     .hero-fixture-vs {
         font-family: 'Inter', sans-serif;
-        font-size: 1.65rem;
-        font-weight: 800;
-        color: #0F172A;
+        font-size: 1.35rem;
+        font-weight: 750;
+        letter-spacing: -0.01em;
+        color: var(--srh-ink);
         margin-bottom: 0.4rem;
-        line-height: 1.25;
+        line-height: 1.3;
     }
     .hero-fixture-details {
         display: flex;
-        gap: 1.2rem;
-        font-size: 0.92rem;
-        color: #475569;
-        font-weight: 600;
+        gap: 0.5rem 1rem;
+        font-size: 0.84rem;
+        color: var(--srh-muted);
+        font-weight: 500;
         flex-wrap: wrap;
+    }
+    .hero-fixture-details strong {
+        color: var(--srh-body);
+        font-weight: 600;
     }
     .hero-fixture-right {
         text-align: right;
-        background: #FFF7ED;
-        border: 1px solid #FFEDD5;
-        padding: 0.85rem 1.35rem;
-        border-radius: 10px;
-    }
-    .hero-fixture-right-live {
-        background: #FEE2E2 !important;
-        border-color: #FCA5A5 !important;
+        padding-left: 1.1rem;
+        border-left: 1px solid var(--srh-line);
     }
     .hero-countdown-val {
         font-family: 'Inter', sans-serif;
-        font-size: 1.3rem;
-        font-weight: 900;
-        color: #F26522;
+        font-size: 1.05rem;
+        font-weight: 750;
+        color: var(--srh-ink);
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.45rem;
+    }
+    .hero-countdown-val::before {
+        content: '';
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--srh-accent);
     }
     .hero-countdown-val-live {
-        color: #DC2626 !important;
-        animation: live-pulse 1.8s infinite;
+        color: var(--srh-red);
+    }
+    .hero-countdown-val-live::before {
+        background: var(--srh-red);
+        animation: live-pulse 2.4s ease-in-out infinite;
     }
     .hero-countdown-lbl {
-        font-size: 0.75rem;
-        color: #9A3412;
+        font-size: 0.72rem;
+        color: var(--srh-faint);
         text-transform: uppercase;
-        font-weight: 700;
-        letter-spacing: 0.5px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        margin-top: 0.15rem;
     }
-    .hero-countdown-lbl-live {
-        color: #991B1B !important;
-    }
-    /* Telemetry Metric Strip */
+    /* Metric strip */
     .telemetry-strip {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-        gap: 0.9rem;
-        margin-bottom: 1.8rem;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 0.7rem;
+        margin-bottom: 1.4rem;
     }
     .telemetry-metric-pill {
-        background: #FFFFFF;
-        border: 1px solid #E2E8F0;
-        border-radius: 12px;
-        padding: 0.95rem 1.15rem;
-        display: flex;
-        align-items: center;
-        gap: 0.85rem;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);
-        transition: all 0.2s ease;
-    }
-    .telemetry-metric-pill:hover {
-        border-color: #F26522;
-        box-shadow: 0 6px 18px rgba(242, 101, 34, 0.12);
-    }
-    .telemetry-metric-icon {
-        width: 40px;
-        height: 40px;
-        border-radius: 10px;
-        background: rgba(242, 101, 34, 0.1);
-        color: #F26522;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.2rem;
-        font-weight: 800;
+        background: var(--srh-surface);
+        border: 1px solid var(--srh-line);
+        border-radius: var(--srh-r);
+        padding: 0.8rem 1rem;
+        box-shadow: var(--srh-shadow);
     }
     .telemetry-metric-num {
         font-family: 'Inter', sans-serif;
-        font-size: 1.4rem;
-        font-weight: 800;
-        color: #0F172A;
-        line-height: 1.1;
+        font-size: 1.2rem;
+        font-weight: 750;
+        color: var(--srh-ink);
+        line-height: 1.15;
+        font-variant-numeric: tabular-nums;
     }
     .telemetry-metric-lbl {
-        font-size: 0.8rem;
-        color: #64748B;
+        font-size: 0.72rem;
+        color: var(--srh-faint);
         font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
-    /* News Feed — Featured Hero Story Layout */
-    a.featured-story-link { text-decoration: none !important; color: inherit !important; display: block; margin-bottom: 1.5rem; }
+    /* Featured story */
+    a.featured-story-link { text-decoration: none !important; color: inherit !important; display: block; margin-bottom: 1.1rem; }
     .featured-story-card {
-        background: #FFFFFF;
-        border: 1px solid #CBD5E1;
-        border-radius: 16px;
-        padding: 1.8rem;
-        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
-        position: relative;
-        overflow: hidden;
-    }
-    .featured-story-card::before {
-        content: '';
-        position: absolute;
-        top: 0; left: 0; width: 100%; height: 4px;
-        background: linear-gradient(90deg, #F26522, #FF7A38);
+        background: var(--srh-surface);
+        border: 1px solid var(--srh-line);
+        border-radius: var(--srh-r);
+        padding: 1.4rem 1.5rem;
+        box-shadow: var(--srh-shadow);
     }
     .featured-story-card:hover {
-        transform: translateY(-2px);
-        border-color: #F26522;
-        box-shadow: 0 12px 32px rgba(242, 101, 34, 0.15);
+        border-color: #D8D4CE;
+        box-shadow: var(--srh-shadow-hover);
     }
     .featured-badge-bar {
         display: flex;
-        gap: 0.6rem;
+        gap: 0.45rem;
         align-items: center;
         flex-wrap: wrap;
-        margin-bottom: 1rem;
+        margin-bottom: 0.7rem;
     }
     .badge-hero-top {
-        background: #F26522;
-        color: #FFFFFF;
+        color: var(--srh-accent-ink);
         font-family: 'Inter', sans-serif;
-        font-size: 0.76rem;
-        font-weight: 800;
-        padding: 4px 10px;
-        border-radius: 6px;
-        letter-spacing: 0.5px;
+        font-size: 0.7rem;
+        font-weight: 750;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
     }
     .featured-story-title {
         font-family: 'Inter', sans-serif;
-        font-size: 1.65rem;
-        font-weight: 800;
-        color: #0F172A;
-        line-height: 1.35;
-        margin-bottom: 0.8rem;
-        transition: color 0.2s ease;
+        font-size: 1.3rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: var(--srh-ink);
+        line-height: 1.4;
+        margin-bottom: 0.55rem;
     }
     .featured-story-card:hover .featured-story-title {
-        color: #E05600;
+        color: var(--srh-accent-ink);
     }
     .featured-story-desc {
-        color: #334155;
-        font-size: 1.05rem;
+        color: var(--srh-body);
+        font-size: 0.92rem;
         line-height: 1.65;
-        margin-bottom: 1.2rem;
+        margin-bottom: 1rem;
         font-weight: 400;
     }
     .featured-story-footer {
         display: flex;
         align-items: center;
-        gap: 1rem;
-        border-top: 1px solid #F1F5F9;
-        padding-top: 1rem;
-        font-size: 0.88rem;
-        color: #64748B;
+        gap: 0.9rem;
+        border-top: 1px solid var(--srh-line-soft);
+        padding-top: 0.8rem;
+        font-size: 0.78rem;
+        color: var(--srh-faint);
         flex-wrap: wrap;
-        font-weight: 600;
+        font-weight: 500;
     }
-    /* Standard Telemetry News Matrix Card */
-    a.telemetry-card-link { text-decoration: none !important; color: inherit !important; display: block; margin-bottom: 1rem; }
+    /* News cards */
+    a.telemetry-card-link { text-decoration: none !important; color: inherit !important; display: block; margin-bottom: 0.7rem; }
     .telemetry-news-card {
-        background: #FFFFFF;
-        border: 1px solid #E2E8F0;
-        border-radius: 12px;
-        padding: 1.35rem 1.55rem;
-        transition: all 0.2s ease;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);
+        background: var(--srh-surface);
+        border: 1px solid var(--srh-line);
+        border-radius: var(--srh-r);
+        padding: 1.05rem 1.2rem;
+        box-shadow: var(--srh-shadow);
     }
     .telemetry-news-card:hover {
-        border-color: #F26522;
-        background: #FFFFFF;
-        transform: translateY(-2px);
-        box-shadow: 0 8px 24px rgba(242, 101, 34, 0.12);
+        border-color: #D8D4CE;
+        box-shadow: var(--srh-shadow-hover);
     }
     .telemetry-news-card:hover .telemetry-card-title {
-        color: #E05600;
+        color: var(--srh-accent-ink);
     }
     .telemetry-card-tags {
         display: flex;
-        gap: 0.5rem;
+        gap: 0.4rem;
         align-items: center;
         flex-wrap: wrap;
-        margin-bottom: 0.6rem;
+        margin-bottom: 0.5rem;
     }
     .chip-player {
-        background: rgba(242, 101, 34, 0.1);
-        color: #E05600;
-        border: 1px solid rgba(242, 101, 34, 0.25);
-        padding: 3px 10px;
+        background: var(--srh-accent-soft);
+        color: var(--srh-accent-ink);
+        padding: 2px 8px;
         border-radius: 6px;
-        font-size: 0.82rem;
+        font-size: 0.72rem;
         font-weight: 700;
     }
     .chip-squad {
-        background: #F1F5F9;
-        color: #334155;
-        border: 1px solid #E2E8F0;
-        padding: 3px 10px;
+        background: var(--srh-line-soft);
+        color: var(--srh-muted);
+        padding: 2px 8px;
         border-radius: 6px;
-        font-size: 0.82rem;
-        font-weight: 700;
+        font-size: 0.72rem;
+        font-weight: 600;
     }
     .chip-league {
-        background: rgba(2, 132, 199, 0.08);
-        color: #0284C7;
-        border: 1px solid rgba(2, 132, 199, 0.25);
-        padding: 3px 10px;
+        background: var(--srh-line-soft);
+        color: var(--srh-muted);
+        padding: 2px 8px;
         border-radius: 6px;
-        font-size: 0.82rem;
-        font-weight: 700;
+        font-size: 0.72rem;
+        font-weight: 600;
     }
     .chip-new-live {
-        background: #FEE2E2;
-        color: #DC2626;
-        border: 1px solid #FCA5A5;
-        padding: 3px 9px;
+        background: var(--srh-red-soft);
+        color: var(--srh-red);
+        padding: 2px 8px;
         border-radius: 6px;
-        font-size: 0.78rem;
-        font-weight: 800;
+        font-size: 0.7rem;
+        font-weight: 750;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+    }
+    .chip-new-live::before {
+        content: '';
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: currentColor;
     }
     .telemetry-card-title {
         font-family: 'Inter', sans-serif;
-        font-size: 1.25rem;
-        font-weight: 700;
-        color: #0F172A;
-        margin: 0 0 0.5rem 0;
-        line-height: 1.35;
-        transition: color 0.2s ease;
+        font-size: 1.02rem;
+        font-weight: 650;
+        letter-spacing: -0.005em;
+        color: var(--srh-ink);
+        margin: 0 0 0.35rem 0;
+        line-height: 1.45;
     }
     .telemetry-card-desc {
-        color: #334155;
-        font-size: 0.98rem;
+        color: var(--srh-body);
+        font-size: 0.87rem;
         line-height: 1.6;
-        margin: 0 0 0.9rem 0;
+        margin: 0 0 0.8rem 0;
         font-weight: 400;
     }
     .telemetry-card-footer {
         display: flex;
         align-items: center;
-        gap: 0.8rem;
-        font-size: 0.84rem;
-        color: #64748B;
-        border-top: 1px solid #F1F5F9;
-        padding-top: 0.75rem;
+        gap: 0.7rem;
+        font-size: 0.76rem;
+        color: var(--srh-faint);
+        border-top: 1px solid var(--srh-line-soft);
+        padding-top: 0.65rem;
         flex-wrap: wrap;
-        font-weight: 600;
+        font-weight: 500;
     }
     .source-tag {
-        color: #0284C7;
-        font-weight: 700;
-        background: rgba(2, 132, 199, 0.08);
-        padding: 3px 9px;
-        border-radius: 4px;
+        color: var(--srh-muted);
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
     }
     .time-tag {
-        color: #E05600;
-        font-weight: 700;
+        color: var(--srh-faint);
+        font-weight: 500;
+        font-variant-numeric: tabular-nums;
     }
     .link-action {
         margin-left: auto;
-        color: #F26522;
-        font-weight: 800;
+        color: var(--srh-accent-ink);
+        font-weight: 650;
+        font-size: 0.78rem;
     }
-    /* Live Pulse Side Panel */
+    /* Pulse timeline */
     .pulse-panel {
-        background: #FFFFFF;
-        border: 1px solid #E2E8F0;
-        border-radius: 14px;
-        padding: 1.3rem;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);
+        background: var(--srh-surface);
+        border: 1px solid var(--srh-line);
+        border-radius: var(--srh-r);
+        padding: 1.1rem 1.15rem;
+        box-shadow: var(--srh-shadow);
     }
     .pulse-panel-title {
         font-family: 'Inter', sans-serif;
-        font-size: 1.18rem;
-        font-weight: 800;
-        color: #0F172A;
-        margin-bottom: 1.1rem;
+        font-size: 0.72rem;
+        font-weight: 750;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--srh-muted);
+        margin-bottom: 0.9rem;
         display: flex;
         align-items: center;
         justify-content: space-between;
     }
     .pulse-item-dark {
-        border-left: 3px solid rgba(242, 101, 34, 0.4);
-        padding-left: 0.85rem;
-        margin-bottom: 1.1rem;
-        transition: border-color 0.2s ease;
-    }
-    .pulse-item-dark:hover {
-        border-left-color: #F26522;
+        border-left: 2px solid var(--srh-line);
+        padding-left: 0.7rem;
+        margin-bottom: 0.85rem;
     }
     .pulse-time-dark {
-        font-size: 0.78rem;
-        color: #E05600;
-        font-weight: 700;
-        margin-bottom: 0.2rem;
+        font-size: 0.7rem;
+        color: var(--srh-faint);
+        font-weight: 600;
+        margin-bottom: 0.15rem;
+        font-variant-numeric: tabular-nums;
     }
     .pulse-headline-dark {
-        font-size: 0.92rem;
-        color: #1E293B;
-        font-weight: 600;
-        line-height: 1.4;
+        font-size: 0.83rem;
+        color: var(--srh-body);
+        font-weight: 550;
+        line-height: 1.5;
         text-decoration: none;
         display: block;
     }
     .pulse-headline-dark:hover {
-        color: #E05600;
+        color: var(--srh-accent-ink);
     }
-    /* Broadcast Matchday Cards (Tab 1) */
+    /* Matchday cards */
     .broadcast-match-card {
-        background: #FFFFFF;
-        border: 1px solid #E2E8F0;
-        border-radius: 14px;
-        padding: 1.4rem 1.6rem;
-        margin-bottom: 1rem;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.03);
-        transition: all 0.2s ease;
+        background: var(--srh-surface);
+        border: 1px solid var(--srh-line);
+        border-radius: var(--srh-r);
+        padding: 1.15rem 1.3rem;
+        margin-bottom: 0.7rem;
+        box-shadow: var(--srh-shadow);
     }
     .broadcast-match-card-live {
-        border-left: 5px solid #DC2626 !important;
-        background: linear-gradient(135deg, #FFFFFF 0%, #FEF2F2 100%) !important;
+        box-shadow: inset 3px 0 0 var(--srh-red), var(--srh-shadow);
     }
     .broadcast-match-card:hover {
-        border-color: #F26522;
-        box-shadow: 0 8px 24px rgba(242, 101, 34, 0.12);
+        border-color: #D8D4CE;
+        box-shadow: var(--srh-shadow-hover);
     }
     .broadcast-match-header {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        margin-bottom: 0.8rem;
+        gap: 0.5rem;
+        margin-bottom: 0.6rem;
         flex-wrap: wrap;
-        gap: 0.6rem;
     }
     .match-versus {
         font-family: 'Inter', sans-serif;
-        font-size: 1.55rem;
-        font-weight: 800;
-        color: #0F172A;
-        margin-bottom: 0.5rem;
+        font-size: 1.2rem;
+        font-weight: 750;
+        letter-spacing: -0.01em;
+        color: var(--srh-ink);
+        margin-bottom: 0.45rem;
+        line-height: 1.35;
+    }
+    .match-meta {
+        color: var(--srh-muted);
+        font-size: 0.83rem;
+        font-weight: 500;
+    }
+    .match-meta strong {
+        color: var(--srh-body);
+        font-weight: 600;
+    }
+    .match-players {
+        color: var(--srh-body);
+        font-size: 0.84rem;
+        margin-top: 0.45rem;
+    }
+    .match-players strong {
+        font-weight: 650;
+        color: var(--srh-ink);
     }
     .status-pill {
         font-family: 'Inter', sans-serif;
-        font-size: 0.78rem;
-        font-weight: 800;
-        padding: 4px 11px;
-        border-radius: 20px;
+        font-size: 0.68rem;
+        font-weight: 750;
         text-transform: uppercase;
+        letter-spacing: 0.06em;
+        padding: 3px 9px 3px 8px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
     }
-    .status-pill-live { background: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; animation: live-pulse 1.8s infinite; }
-    .status-pill-upcoming { background: #ECFDF5; color: #047857; border: 1px solid #A7F3D0; }
-    .status-pill-completed { background: #F1F5F9; color: #475569; border: 1px solid #CBD5E1; }
-    .broadcast-badge {
-        background: #EFF6FF;
-        color: #1D4ED8;
-        border: 1px solid #BFDBFE;
-        padding: 3px 10px;
-        border-radius: 6px;
-        font-size: 0.82rem;
-        font-weight: 700;
+    .status-pill::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
     }
-    .venue-badge {
-        background: #F8FAFC;
-        color: #334155;
-        border: 1px solid #E2E8F0;
-        padding: 3px 10px;
-        border-radius: 6px;
-        font-size: 0.82rem;
+    .status-pill-live { background: var(--srh-red-soft); color: var(--srh-red); }
+    .status-pill-live::before { animation: live-pulse 2.4s ease-in-out infinite; }
+    .status-pill-upcoming { background: var(--srh-line-soft); color: var(--srh-muted); }
+    .status-pill-completed { background: var(--srh-line-soft); color: var(--srh-faint); }
+    .match-league {
+        font-size: 0.76rem;
         font-weight: 600;
+        color: var(--srh-muted);
     }
-    /* Source Favicon */
+    .match-venue {
+        font-size: 0.76rem;
+        color: var(--srh-faint);
+    }
+    .srh-crex-link {
+        display: inline-block;
+        margin-top: 0.6rem;
+        color: var(--srh-accent-ink);
+        font-weight: 650;
+        font-size: 0.82rem;
+        text-decoration: none;
+    }
+    .srh-crex-link:hover {
+        text-decoration: underline;
+    }
+    /* Source favicon */
     .source-fav-icon {
         width: 14px;
         height: 14px;
-        vertical-align: middle;
+        vertical-align: -2px;
         border-radius: 3px;
         margin-right: 5px;
         display: inline-block;
     }
-    /* Official Squad Directory Telemetry Cards */
+    /* Squad directory */
     .squad-player-card {
-        background: #FFFFFF;
-        border: 1px solid #E2E8F0;
-        border-radius: 12px;
-        padding: 1.1rem 1.2rem;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
-        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+        background: var(--srh-surface);
+        border: 1px solid var(--srh-line);
+        border-radius: var(--srh-r);
+        padding: 1rem 1.1rem;
+        box-shadow: var(--srh-shadow);
         display: flex;
         flex-direction: column;
         justify-content: space-between;
-        min-height: 145px;
+        min-height: 138px;
     }
     .squad-player-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
-        border-color: #F26522;
+        border-color: #D8D4CE;
+        box-shadow: var(--srh-shadow-hover);
     }
     .squad-player-card-coach {
-        border-left: 4px solid #E05600 !important;
-        background: linear-gradient(135deg, #FFFFFF 0%, #FFF7ED 100%) !important;
+        box-shadow: inset 3px 0 0 var(--srh-accent), var(--srh-shadow);
     }
     .squad-player-card-captain {
-        border-left: 4px solid #F59E0B !important;
-        background: linear-gradient(135deg, #FFFFFF 0%, #FEF3C7 100%) !important;
+        box-shadow: inset 3px 0 0 #D9A013, var(--srh-shadow);
     }
     .squad-coach-badge {
-        background: #FFEDD5;
-        color: #C2410C;
-        border: 1px solid #FDBA74;
-        padding: 2px 8px;
-        border-radius: 6px;
-        font-size: 0.74rem;
-        font-weight: 800;
-        letter-spacing: 0.5px;
+        color: var(--srh-accent-ink);
+        background: var(--srh-accent-soft);
+        padding: 2px 7px;
+        border-radius: 5px;
+        font-size: 0.66rem;
+        font-weight: 750;
+        letter-spacing: 0.06em;
     }
     .squad-captain-badge {
-        background: #FEF3C7;
-        color: #B45309;
-        border: 1px solid #FCD34D;
-        padding: 2px 8px;
-        border-radius: 6px;
-        font-size: 0.74rem;
-        font-weight: 800;
+        color: var(--srh-amber-ink);
+        background: var(--srh-amber-bg);
+        padding: 2px 7px;
+        border-radius: 5px;
+        font-size: 0.66rem;
+        font-weight: 750;
+        letter-spacing: 0.06em;
+    }
+    .squad-tag {
+        color: var(--srh-muted);
+        background: var(--srh-line-soft);
+        padding: 2px 7px;
+        border-radius: 5px;
+        font-size: 0.66rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
     }
     .squad-card-name {
         font-family: 'Inter', sans-serif;
-        font-size: 1.12rem;
-        font-weight: 800;
-        color: #0F172A;
-        margin-bottom: 0.25rem;
+        font-size: 0.97rem;
+        font-weight: 700;
+        letter-spacing: -0.005em;
+        color: var(--srh-ink);
+        margin-bottom: 0.2rem;
     }
     .squad-card-role {
-        font-size: 0.88rem;
-        color: #475569;
-        font-weight: 600;
+        font-size: 0.8rem;
+        color: var(--srh-muted);
+        font-weight: 500;
         margin-bottom: 0.6rem;
     }
     .squad-card-footer {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-top: 1px solid #F1F5F9;
-        padding-top: 0.6rem;
-        font-size: 0.82rem;
+        border-top: 1px solid var(--srh-line-soft);
+        padding-top: 0.55rem;
+        font-size: 0.76rem;
+        color: var(--srh-faint);
     }
     @media (max-width: 768px) {
-        .srh-brand-title { font-size: 1.9rem; }
-        .hero-fixture-card { padding: 1rem; }
-        .featured-story-title { font-size: 1.3rem; }
+        .block-container { padding-top: 1.2rem; }
+        .srh-brand-title { font-size: 1.35rem; }
+        .hero-fixture-card { padding: 1rem 1.1rem; }
+        .hero-fixture-right { border-left: none; padding-left: 0; text-align: left; width: 100%; }
+        .hero-countdown-val { justify-content: flex-start; }
+        .featured-story-title { font-size: 1.1rem; }
+        .match-versus { font-size: 1.05rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .srh-live-pulse-dot,
+        .hero-countdown-val-live::before,
+        .status-pill-live::before {
+            animation: none;
+        }
     }
 </style>
 """
@@ -704,11 +896,11 @@ def render_header_banner(player_count, franchise_count=4):
     <div class='srh-brand-header'>
         <div>
             <div class='srh-brand-title'><span class='highlight'>SRHXtra</span> Telemetry Engine</div>
-            <div class='srh-brand-subtitle'>Matchday Reconnaissance & Squad Intelligence Hub | {player_count} Squad Members Across {franchise_count} Sunrisers Franchises</div>
+            <div class='srh-brand-subtitle'>Matchday reconnaissance &amp; squad intelligence · {player_count} players · {franchise_count} Sunrisers franchises</div>
         </div>
         <div class='srh-live-badge'>
             <span class='srh-live-pulse-dot'></span>
-            15-MIN AUTOMATED RSS INGESTION ACTIVE
+            Auto-ingest · 15 min
         </div>
     </div>
     """
@@ -723,34 +915,30 @@ def render_next_match_hero(next_fixture, status="UPCOMING"):
     date_str = html_lib.escape(next_fixture.get("date_str", ""))
     match_time = html_lib.escape(next_fixture.get("time", ""))
     venue = html_lib.escape(next_fixture.get("venue", "TBD"))
-    broadcast = html_lib.escape(next_fixture.get("broadcast", "Check Local Listings"))
+    broadcast = html_lib.escape(next_fixture.get("broadcast", "Check local listings"))
     if status == "LIVE":
         card_class = "hero-fixture-card hero-fixture-card-live"
-        tag_html = f"<div class='hero-fixture-tag hero-fixture-tag-live'>🔴 MATCHDAY LIVE NOW • {league}</div>"
-        right_class = "hero-fixture-right hero-fixture-right-live"
-        val_html = "<div class='hero-countdown-val hero-countdown-val-live'>🔴 LIVE NOW</div>"
-        lbl_html = "<div class='hero-countdown-lbl hero-countdown-lbl-live'>Match in Progress</div>"
+        tag_html = f"<div class='hero-fixture-tag hero-fixture-tag-live'>Live now · {league}</div>"
+        val_html = "<div class='hero-countdown-val hero-countdown-val-live'>Live</div>"
+        lbl_html = "<div class='hero-countdown-lbl'>Match in progress</div>"
     elif status == "COMPLETED":
         card_class = "hero-fixture-card"
-        tag_html = f"<div class='hero-fixture-tag'>COMPLETED FIXTURE • {league}</div>"
-        right_class = "hero-fixture-right"
-        val_html = "<div class='hero-countdown-val' style='color:#64748B;'>✅ FINAL</div>"
-        lbl_html = "<div class='hero-countdown-lbl'>Match Completed</div>"
+        tag_html = f"<div class='hero-fixture-tag'>Completed · {league}</div>"
+        val_html = "<div class='hero-countdown-val'>Final</div>"
+        lbl_html = "<div class='hero-countdown-lbl'>Match completed</div>"
     else:
         card_class = "hero-fixture-card"
-        tag_html = f"<div class='hero-fixture-tag'>NEXT UPCOMING FIXTURE • {league}</div>"
-        right_class = "hero-fixture-right"
-        val_html = "<div class='hero-countdown-val'>⏳ UPCOMING</div>"
-        lbl_html = "<div class='hero-countdown-lbl'>Matchday Status</div>"
+        tag_html = f"<div class='hero-fixture-tag'>Next fixture · {league}</div>"
+        val_html = "<div class='hero-countdown-val'>Upcoming</div>"
+        lbl_html = "<div class='hero-countdown-lbl'>Scheduled</div>"
     link_html = ""
     _hero_link = str(next_fixture.get("link", ""))
     if _hero_link.startswith("https://crex.com/cricket-live-score/"):
         link_attr = html_lib.escape(_hero_link, quote=True)
         link_html = (
-            f"<div style='margin-top:0.5rem;'>"
             f"<a href='{link_attr}' target='_blank' rel='noopener' "
-            f"style='color:#F26522;font-weight:800;font-size:0.9rem;text-decoration:none;'>"
-            f"🔗 View Squad & Live Score on Crex ↗</a></div>"
+            f"class='srh-crex-link'>"
+            f"Squad &amp; live score on Crex ↗</a>"
         )
     return f"""
     <div class='{card_class}'>
@@ -758,48 +946,44 @@ def render_next_match_hero(next_fixture, status="UPCOMING"):
             {tag_html}
             <div class='hero-fixture-vs'>{squad} vs {vs}</div>
             <div class='hero-fixture-details'>
-                <span>📅 {date_str} @ {match_time}</span>
-                <span>📍 {venue}</span>
-                <span>📺 {broadcast}</span>
+                <span><strong>{date_str}</strong> · {match_time}</span>
+                <span>{venue}</span>
+                <span>{broadcast}</span>
             </div>
             {link_html}
         </div>
-        <div class='{right_class}'>
+        <div class='hero-fixture-right'>
             {val_html}
             {lbl_html}
         </div>
     </div>
     """
 def render_telemetry_metrics(source_count, player_count, live_count):
-    """Renders top metric pills strip."""
+    """Renders top metric strip (number over label, no decoration)."""
     return f"""
     <div class='telemetry-strip'>
         <div class='telemetry-metric-pill'>
-            <div class='telemetry-metric-icon'>📡</div>
             <div>
                 <div class='telemetry-metric-num'>{source_count}</div>
-                <div class='telemetry-metric-lbl'>Global Feeds</div>
+                <div class='telemetry-metric-lbl'>Sources</div>
             </div>
         </div>
         <div class='telemetry-metric-pill'>
-            <div class='telemetry-metric-icon'>👥</div>
             <div>
                 <div class='telemetry-metric-num'>{player_count}</div>
-                <div class='telemetry-metric-lbl'>Roster Members</div>
+                <div class='telemetry-metric-lbl'>Players</div>
             </div>
         </div>
         <div class='telemetry-metric-pill'>
-            <div class='telemetry-metric-icon'>🧡</div>
             <div>
                 <div class='telemetry-metric-num'>4</div>
                 <div class='telemetry-metric-lbl'>Franchises</div>
             </div>
         </div>
         <div class='telemetry-metric-pill'>
-            <div class='telemetry-metric-icon'>📰</div>
             <div>
                 <div class='telemetry-metric-num'>{live_count}</div>
-                <div class='telemetry-metric-lbl'>Live Reports</div>
+                <div class='telemetry-metric-lbl'>Reports</div>
             </div>
         </div>
     </div>
@@ -823,18 +1007,18 @@ def render_featured_hero_news(n):
         f"<a href='{link_attr}' target='_blank' class='featured-story-link'>"
         f"<div class='featured-story-card'>"
         f"<div class='featured-badge-bar'>"
-        f"<span class='badge-hero-top'>TOP FEATURED STORY</span>"
-        f"<span class='chip-player'>👤 {player_name}</span>"
-        f"<span class='chip-squad'>🧡 {franchise}</span>"
-        f"<span class='chip-league'>🏏 {league}</span>"
+        f"<span class='badge-hero-top'>Top story</span>"
+        f"<span class='chip-player'>{player_name}</span>"
+        f"<span class='chip-squad'>{franchise}</span>"
+        f"<span class='chip-league'>{league}</span>"
         f"</div>"
         f"<div class='featured-story-title'>{clean_title}</div>"
         f"<div class='featured-story-desc'>{clean_summary}</div>"
         f"<div class='featured-story-footer'>"
-        f"<span class='time-tag'>🕒 {ago}</span>"
+        f"<span class='time-tag'>{ago}</span>"
         f"<span>{pub_at}</span>"
         f"<span class='source-tag'>{fav_html} {source}</span>"
-        f"<span class='link-action'>Open Article ↗</span>"
+        f"<span class='link-action'>Open ↗</span>"
         f"</div>"
         f"</div>"
         f"</a>"
@@ -846,7 +1030,7 @@ def render_telemetry_news_card(n):
     league = detect_league_badge(n.get("title", ""), n.get("summary", ""))
     pub_ts = n.get("pub_timestamp", 0)
     ago = time_ago(pub_ts)
-    new_badge = "<span class='chip-new-live'>● NEW</span>" if is_new_article(pub_ts) else ""
+    new_badge = "<span class='chip-new-live'>New</span>" if is_new_article(pub_ts) else ""
     favicon = get_favicon_url(link)
     fav_html = f"<img src='{favicon}' class='source-fav-icon' onerror='this.style.display=\"none\"'>" if favicon else ""
     clean_title = html_lib.escape(str(n.get("title", "")).replace("\n", " ").strip())
@@ -858,11 +1042,11 @@ def render_telemetry_news_card(n):
     return (
         f"<a href='{link_attr}' target='_blank' class='telemetry-card-link'>"
         f"<div class='telemetry-news-card'>"
-        f"<div class='telemetry-card-tags'>{new_badge}<span class='chip-player'>👤 {player_name}</span><span class='chip-squad'>{franchise}</span><span class='chip-league'>{league}</span></div>"
+        f"<div class='telemetry-card-tags'>{new_badge}<span class='chip-player'>{player_name}</span><span class='chip-squad'>{franchise}</span><span class='chip-league'>{league}</span></div>"
         f"<div class='telemetry-card-title'>{clean_title}</div>"
         f"<div class='telemetry-card-desc'>{clean_summary}</div>"
         f"<div class='telemetry-card-footer'>"
-        f"<span class='time-tag'>🕒 {ago}</span>"
+        f"<span class='time-tag'>{ago}</span>"
         f"<span>{pub_at}</span>"
         f"<span class='source-tag'>{fav_html} {source}</span>"
         f"<span class='link-action'>Read ↗</span>"
@@ -881,7 +1065,7 @@ def render_telemetry_pulse_item(n):
     player_name = html_lib.escape(str(n.get("player_name", "")).strip())
     return (
         f"<div class='pulse-item-dark'>"
-        f"<div class='pulse-time-dark'>🕒 {ago} • {player_name}</div>"
+        f"<div class='pulse-time-dark'>{ago} · {player_name}</div>"
         f"<a href='{link_attr}' target='_blank' class='pulse-headline-dark'>{headline}</a>"
         f"</div>"
     )
@@ -893,19 +1077,24 @@ def render_broadcast_match_card(item, status="UPCOMING"):
     """
     status = item.get("status", status) or status
     if status == "LIVE":
-        status_html = "<span class='status-pill status-pill-live'>🔴 LIVE NOW</span>"
+        status_html = "<span class='status-pill status-pill-live'>Live now</span>"
         card_extra_class = " broadcast-match-card-live"
     elif status == "COMPLETED":
-        status_html = "<span class='status-pill status-pill-completed'>✅ COMPLETED</span>"
+        status_html = "<span class='status-pill status-pill-completed'>Completed</span>"
         card_extra_class = ""
     else:
-        status_html = "<span class='status-pill status-pill-upcoming'>⏳ UPCOMING</span>"
+        status_html = "<span class='status-pill status-pill-upcoming'>Upcoming</span>"
         card_extra_class = ""
-    venue_html = f"<span class='venue-badge'>📍 {html_lib.escape(str(item.get('venue', '')))}</span>" if item.get("venue") else ""
-    broadcast_html = f"<span class='broadcast-badge'>📺 {html_lib.escape(str(item.get('broadcast', '')))}</span>" if item.get("broadcast") else ""
+    meta_bits = []
+    if item.get("league"):
+        meta_bits.append(f"<span class='match-league'>{html_lib.escape(str(item['league']))}</span>")
+    if item.get("venue"):
+        meta_bits.append(f"<span class='match-venue'>{html_lib.escape(str(item['venue']))}</span>")
+    if item.get("broadcast"):
+        meta_bits.append(f"<span class='match-venue'>{html_lib.escape(str(item['broadcast']))}</span>")
+    meta_html = " · ".join(meta_bits)
     squad = html_lib.escape(str(item.get("squad", "")))
     vs = html_lib.escape(str(item.get("vs", "")))
-    league = html_lib.escape(str(item.get("league", "")))
     match_time = html_lib.escape(str(item.get("time", "")))
     date_str = html_lib.escape(str(item.get("date_str", "")))
     players = html_lib.escape(str(item.get("players", "")))
@@ -914,15 +1103,14 @@ def render_broadcast_match_card(item, status="UPCOMING"):
     if _link.startswith("https://crex.com/cricket-live-score/"):
         link_attr = html_lib.escape(_link, quote=True)
         link_html = (
-            f"<div style='margin-top:0.6rem;'>"
             f"<a href='{link_attr}' target='_blank' rel='noopener' "
-            f"style='color:#F26522;font-weight:800;font-size:0.9rem;text-decoration:none;'>"
-            f"🔗 View Squad & Live Score on Crex ↗</a></div>"
+            f"class='srh-crex-link'>"
+            f"Squad &amp; live score on Crex ↗</a>"
         )
     franchise_html = ""
     if item.get("franchises"):
         chips = "".join(
-            f"<span class='chip-squad'>🧡 {html_lib.escape(str(f))}</span>"
+            f"<span class='chip-squad'>{html_lib.escape(str(f))}</span>"
             for f in item["franchises"]
         )
         franchise_html = f"<div style='margin-top:0.5rem;display:flex;gap:0.4rem;flex-wrap:wrap;'>{chips}</div>"
@@ -930,14 +1118,12 @@ def render_broadcast_match_card(item, status="UPCOMING"):
         f"<div class='broadcast-match-card{card_extra_class}'>"
         f"<div class='broadcast-match-header'>"
         f"{status_html}"
-        f"<span class='chip-squad'>{squad}</span>"
-        f"<span class='chip-league'>🏏 {league}</span>"
-        f"{venue_html}"
-        f"{broadcast_html}"
+        f"<span class='match-league'>{squad}</span>"
         f"</div>"
         f"<div class='match-versus'>{squad} vs {vs}</div>"
-        f"<div style='color:#475569;font-size:0.92rem;font-weight:600;'>⏰ <strong>Match Time:</strong> {match_time} | <strong>Date:</strong> {date_str}</div>"
-        f"<div style='color:#334155;font-size:0.92rem;margin-top:0.5rem;'><strong>🧡 Sunrisers in Squad:</strong> {players}</div>"
+        f"<div class='match-meta'><strong>{date_str}</strong> · {match_time}</div>"
+        f"<div class='match-meta'>{meta_html}</div>"
+        f"<div class='match-players'><strong>Sunrisers in squad:</strong> {players}</div>"
         f"{franchise_html}"
         f"{link_html}"
         f"</div>"
@@ -972,13 +1158,13 @@ def render_squad_member_card(member, franchise_name=None):
 
     if is_coach:
         card_classes.append("squad-player-card-coach")
-        badges.append("<span class='squad-coach-badge'>👔 HEAD COACH</span>")
+        badges.append("<span class='squad-coach-badge'>Head coach</span>")
     elif is_captain:
         card_classes.append("squad-player-card-captain")
-        badges.append("<span class='squad-captain-badge'>👑 CAPTAIN</span>")
+        badges.append("<span class='squad-captain-badge'>Captain</span>")
 
     if is_wk:
-        badges.append("<span class='chip-league' style='padding:2px 7px;font-size:0.74rem;'>🧤 WK</span>")
+        badges.append("<span class='squad-tag'>WK</span>")
 
     # Overseas detection based on franchise home country
     is_overseas = False
@@ -991,38 +1177,24 @@ def render_squad_member_card(member, franchise_name=None):
         is_overseas = (country != "England" and not is_coach)
 
     if is_overseas:
-        badges.append("<span class='chip-squad' style='padding:2px 7px;font-size:0.74rem;'>✈️ OVERSEAS</span>")
+        badges.append("<span class='squad-tag'>Overseas</span>")
 
     badges_html = f"<div style='display:flex;gap:0.35rem;flex-wrap:wrap;'>{''.join(badges)}</div>" if badges else "<div></div>"
 
-    role_lower = role.lower()
-    if is_coach:
-        role_icon = "👔"
-    elif "wicket-keeper" in role_lower:
-        role_icon = "🧤"
-    elif "all-rounder" in role_lower:
-        role_icon = "🔥"
-    elif "batter" in role_lower:
-        role_icon = "🏏"
-    elif "bowler" in role_lower or "pace" in role_lower or "spin" in role_lower:
-        role_icon = "⚡"
-    else:
-        role_icon = "👤"
-
-    notes_html = f"<span style='color:#E05600;font-size:0.75rem;font-weight:700;'>{notes}</span>" if notes else ""
+    notes_html = f"<span style='color:var(--srh-accent-ink);font-size:0.75rem;font-weight:600;'>{notes}</span>" if notes else ""
 
     return (
         f"<div class='{' '.join(card_classes)}'>"
         f"  <div>"
         f"    <div style='display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.5rem;gap:0.4rem;'>"
         f"      {badges_html}"
-        f"      <span style='font-size:1.25rem;line-height:1;' title='{country}'>{flag}</span>"
+        f"      <span style='font-size:1.15rem;line-height:1;' title='{country}'>{flag}</span>"
         f"    </div>"
         f"    <div class='squad-card-name'>{name}</div>"
-        f"    <div class='squad-card-role'>{role_icon} {role}</div>"
+        f"    <div class='squad-card-role'>{role}</div>"
         f"  </div>"
         f"  <div class='squad-card-footer'>"
-        f"    <span style='color:#64748B;font-weight:600;'>{country}</span>"
+        f"    <span>{country}</span>"
         f"    {notes_html}"
         f"  </div>"
         f"</div>"
