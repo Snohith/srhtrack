@@ -2,7 +2,9 @@
 Live Matchday Fixture Scraper for @SRHXtra.
 
 Workflow (per user requirement):
-  1. Open / scrape https://crex.com/schedule
+  1. Pull fixtures for today -> today+4 days: Crex fixture API (pages 0-2)
+     UNION the SSR schedule page (the API occasionally omits matches the
+     page lists — both sources are merged and deduped)
   2. Extract all upcoming/live match links
   3. Visit each match page
   4. Extract the Squad / Playing XI section text
@@ -18,7 +20,7 @@ Generic "Franchise Update" matches without a named player do not qualify.
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 from bs4 import BeautifulSoup
@@ -30,6 +32,23 @@ from utils.time_utils import get_current_ist
 CREX_BASE = "https://crex.com"
 CREX_SCHEDULE_URL = f"{CREX_BASE}/schedule"
 
+# Crex's own fixture APIs (same ones the site's Angular client calls):
+#   POST {FIXTURE_API_URL} {tl:[0,0,0],type:"",page:N,wise:"1",lang:"en",formatType:""}
+#     -> ~20 fixtures/page, 2-3 IST calendar days per page
+#   POST {MAPPING_API_URL} (header type:datewise) {p:[],s:[series fkeys],
+#     t:[team fkeys],u:[],v:[],lc:"en"} -> team/series names
+# Match pages resolve by the `nf` id alone (slug text is ignored), so API
+# fixtures link out as /cricket-live-score/match-match-updates-{nf}.
+FIXTURE_API_URL = "https://stats.crickapi.com/fixture/getFixture"
+MAPPING_API_URL = "https://oc.crickapi.com/mapping/getHomeMapData"
+MAPPING_JWT = (
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImV4cGlyZXNJbiI6IjM2NWQifQ."
+    "eyJ0aW1lIjoxNjYwMDQ2NjIwMDAwfQ.bTEmMWlR7hLRUHxPPq6-1TP7cuuW7m6sZ9jcdbYzLRA"
+)
+FIXTURE_API_PAGES = (0, 1, 2)  # covers today -> today+4 days and beyond
+WINDOW_DAYS = 4  # today through today+4
+IST_OFFSET = timedelta(hours=5, minutes=30)
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -37,9 +56,13 @@ HEADERS = {
         "Chrome/128.0.0.0 Safari/537.36"
     )
 }
+JSON_HEADERS = {**HEADERS, "Content-Type": "application/json"}
+MAPPING_HEADERS = {
+    **JSON_HEADERS, "authorization": MAPPING_JWT, "type": "datewise",
+}
 
 CACHE_TTL_SECS = 900  # 15 min — matches AUTO_INGEST_INTERVAL_SECS
-MAX_MATCHES_PER_CYCLE = 25
+MAX_MATCHES_PER_CYCLE = 80
 
 _CACHE = {"ts": 0.0, "fixtures": []}
 
@@ -77,6 +100,163 @@ def _http_get(url, timeout=12):
     except Exception as exc:
         error_logger.warning(f"Matchday scrape failed for {url}: {type(exc).__name__}: {exc}")
     return None
+
+
+def _api_post(url, payload, headers=JSON_HEADERS, timeout=12):
+    """POST JSON to a Crex API. Returns parsed JSON or None (never raises)."""
+    try:
+        resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+        if resp.status_code == 200:
+            return resp.json()
+        error_logger.warning(f"Matchday API: HTTP {resp.status_code} for {url}")
+    except Exception as exc:
+        error_logger.warning(f"Matchday API failed for {url}: {type(exc).__name__}: {exc}")
+    return None
+
+
+def _ordinal(mn):
+    """'8' -> '8th', '3' -> '3rd'. Non-numeric codes pass through raw."""
+    try:
+        n = int(str(mn).strip().lstrip("^"))
+    except (ValueError, AttributeError, TypeError):
+        return str(mn or "").strip()
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
+def fetch_fixture_api_page(page, timeout=12):
+    """One page (~20 fixtures) from Crex's fixture API. Never raises."""
+    data = _api_post(
+        FIXTURE_API_URL,
+        {"tl": [0, 0, 0], "type": "", "page": page,
+         "wise": "1", "lang": "en", "formatType": ""},
+        timeout=timeout,
+    )
+    return data if isinstance(data, list) else []
+
+
+def resolve_fixture_names(items, timeout=12):
+    """Batch-resolves team/series fkeys to names via Crex's mapping API.
+
+    Returns ({team fkey: (name, short)}, {series fkey: (name, short)}).
+    Empty maps on failure (caller falls back to SSR cards).
+    """
+    teams = sorted({str(x.get("t1f", "")) for x in items}
+                   | {str(x.get("t2f", "")) for x in items} - {""})
+    series = sorted({str(x.get("sf", "")) for x in items} - {""})
+    if not teams and not series:
+        return {}, {}
+    data = _api_post(
+        MAPPING_API_URL,
+        {"p": [], "s": series, "t": teams, "u": [], "v": [], "lc": "en"},
+        headers=MAPPING_HEADERS,
+        timeout=timeout,
+    )
+    if not isinstance(data, dict):
+        return {}, {}
+    team_map = {e.get("f_key"): (e.get("n", ""), e.get("sn", "") or e.get("n", ""))
+                for e in data.get("t", []) if e.get("f_key")}
+    series_map = {e.get("f_key"): (e.get("n", ""), e.get("sn", "") or e.get("n", ""))
+                  for e in data.get("s", []) if e.get("f_key")}
+    return team_map, series_map
+
+
+def fetch_api_cards(pages=FIXTURE_API_PAGES, window_days=WINDOW_DAYS, timeout=12):
+    """Fixtures for today -> today+window_days via Crex's fixture API.
+
+    Returns card dicts in the same shape as fetch_schedule_cards (plus
+    `start_ts` ms and `nf` id). Multi-page overlap is deduped by `nf`.
+    Returns [] on failure (never raises) — caller falls back to SSR.
+    """
+    items, seen_nf = [], set()
+    for page in pages:
+        for it in fetch_fixture_api_page(page, timeout=timeout):
+            nf = str(it.get("nf", ""))
+            if nf and nf not in seen_nf:
+                seen_nf.add(nf)
+                items.append(it)
+    if not items:
+        return []
+    team_map, series_map = resolve_fixture_names(items, timeout=timeout)
+    if not team_map:
+        return []
+    now_ist = get_current_ist().replace(tzinfo=None)
+    today = now_ist.date()
+    cards = []
+    for it in items:
+        try:
+            start_utc = datetime.utcfromtimestamp(int(it.get("t", 0)) / 1000.0)
+        except (ValueError, TypeError, OverflowError, OSError):
+            continue
+        start_ist = start_utc + IST_OFFSET
+        # Generous window: yesterday (catches late-finishing/live games whose
+        # API date rolled over) through today+window_days. The per-match
+        # flow still drops anything actually finished.
+        if not (today - timedelta(days=1) <= start_ist.date() <= today + timedelta(days=window_days)):
+            continue
+        t1 = team_map.get(str(it.get("t1f", "")), ("", ""))
+        t2 = team_map.get(str(it.get("t2f", "")), ("", ""))
+        if not t1[0] or not t2[0]:
+            continue
+        series = series_map.get(str(it.get("sf", "")), ("", ""))
+        series_name = series[1] or series[0]
+        fo = str(it.get("fo", "")).strip()
+        mn = _ordinal(it.get("mn", ""))
+        cards.append({
+            "team1": t1[0],
+            "team2": t2[0],
+            "time_str": start_ist.strftime("%I:%M %p").lstrip("0"),
+            "format_str": f"{mn} {fo}".strip(),
+            "series": series_name,
+            "href": f"/cricket-live-score/match-match-updates-{it.get('nf')}",
+            "date_header": start_ist.strftime("%a, %d %b %Y"),
+            "start_ts": int(it.get("t", 0)),
+            "nf": str(it.get("nf", "")),
+        })
+    # Chronological so the per-match pool hits soonest games first.
+    cards.sort(key=lambda c: c["start_ts"])
+    return cards
+
+
+_NF_RE = re.compile(r"match-updates-([A-Za-z0-9]+)\s*$")
+
+
+def _card_key(card):
+    """Dedupe key shared by API cards (nf) and SSR cards (href suffix)."""
+    nf = card.get("nf") or ""
+    if nf:
+        return nf
+    m = _NF_RE.search(card.get("href", "") or "")
+    return m.group(1) if m else card.get("href", "")
+
+
+def _ssr_card_in_window(card, today, window_days):
+    try:
+        m = _SCHEDULE_DATE_RE.search(card.get("date_header", "") or "")
+        if not m:
+            return True  # undated — let the per-match flow decide
+        dt = datetime(int(m.group(4)), _MONTH_NUM[m.group(3).lower()], int(m.group(2)))
+        return today - timedelta(days=1) <= dt.date() <= today + timedelta(days=window_days)
+    except (ValueError, AttributeError, TypeError):
+        return True
+
+
+def merge_cards(api_cards, ssr_cards, window_days=WINDOW_DAYS):
+    """Union of API + SSR cards, deduped (API wins), SSR window-filtered."""
+    today = get_current_ist().replace(tzinfo=None).date()
+    merged, seen = [], set()
+    for card in list(api_cards or []) + list(ssr_cards or []):
+        key = _card_key(card)
+        if not key or key in seen:
+            continue
+        if not card.get("start_ts") and not _ssr_card_in_window(card, today, window_days):
+            continue
+        seen.add(key)
+        merged.append(card)
+    return merged
 
 
 def fetch_schedule_cards(timeout=12):
@@ -470,7 +650,7 @@ def _sort_key(fixture):
 
 
 def get_sunrisers_fixtures(force_refresh=False, max_matches=MAX_MATCHES_PER_CYCLE):
-    """Full workflow: schedule -> match pages -> SRH-player fixtures.
+    """Full workflow: fixtures (today -> today+4) -> match pages -> SRH fixtures.
 
     Sorted LIVE first, then soonest upcoming. Finished matches excluded.
     Results cached for CACHE_TTL_SECS. Never raises — returns [] on failure.
@@ -480,13 +660,22 @@ def get_sunrisers_fixtures(force_refresh=False, max_matches=MAX_MATCHES_PER_CYCL
         # ts != 0 means a cycle ran (even an empty one) — serve it until TTL.
         return list(_CACHE["fixtures"])
     try:
-        cards = fetch_schedule_cards()
+        # Multi-day window (today -> today+4): UNION of the fixture API and
+        # the SSR schedule page (either source occasionally omits matches
+        # the other lists — e.g. PAK vs SL). API cards win dedupe ties.
+        api_cards = fetch_api_cards()
+        try:
+            ssr_cards = fetch_schedule_cards()
+        except Exception:
+            ssr_cards = []
+        cards = merge_cards(api_cards, ssr_cards)
+        source = f"API({len(api_cards)})+SSR({len(ssr_cards)})"
     except Exception as exc:
         error_logger.warning(f"Matchday schedule fetch crashed: {exc}")
-        cards = []
+        cards, source = [], "none"
     fixtures = []
     if cards:
-        with ThreadPoolExecutor(max_workers=8) as pool:
+        with ThreadPoolExecutor(max_workers=12) as pool:
             for fixture in pool.map(fetch_match_fixture, cards[:max_matches]):
                 if fixture:
                     fixtures.append(fixture)
@@ -495,7 +684,7 @@ def get_sunrisers_fixtures(force_refresh=False, max_matches=MAX_MATCHES_PER_CYCL
     _CACHE["fixtures"] = fixtures
     rss_logger.info(
         f"Matchday cycle complete: {len(fixtures)} Sunrisers fixtures "
-        f"from {len(cards)} schedule matches."
+        f"from {len(cards)} schedule matches ({source})."
     )
     return list(fixtures)
 

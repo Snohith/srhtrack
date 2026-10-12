@@ -245,7 +245,8 @@ with tab_schedule:
     st.markdown(
         f"<div style='color:#475569;margin-bottom:1.0rem;font-weight:500;'>"
         f"Live from <a href='{CREX_SCHEDULE_URL}' target='_blank' rel='noopener'>crex.com/schedule</a> — "
-        f"every Squad / Playing XI checked against the Excel roster. "
+        f"today through the next 4 days. "
+        f"Every Squad / Playing XI checked against the Excel roster. "
         f"Only fixtures with Sunrisers players are listed. LIVE first, finished matches removed.</div>",
         unsafe_allow_html=True,
     )

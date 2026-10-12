@@ -32,7 +32,7 @@ Live: [https://srhtrack.streamlit.app/](https://srhtrack.streamlit.app/)
 | Live Pulse news feed | Hero card + list cards + 10-item timeline, newest first by `pub_timestamp`; click-through to source URL |
 | Live search | Full-text search over title, summary, player name (`search_news`) |
 | Franchise filter | Sidebar filter across all 4 squads; applies to news and fixtures |
-| Fixture breakdown | Live Crex engine (`scrapers/matchday_scraper.py`): schedule → Playing XI vs roster, LIVE first, finished removed (`config/schedule.py` is offline fallback) |
+| Fixture breakdown | Live Crex engine (`scrapers/matchday_scraper.py`): today→+4 days, schedule → Playing XI vs roster, LIVE first, finished removed (`config/schedule.py` is offline fallback) |
 | Squad directory | Roster cards grouped by franchise; filters for role, coach, captain, wicket-keeper, overseas; Ownership & Business section with live business news and exchange/registry links |
 | Retention | 24h rolling window for news (`purge_expired_24h_news`); notifications pruned after 7 days |
 | Logging | `logs/rss.log`, `logs/database.log` plus error log via `utils/logger.py` |

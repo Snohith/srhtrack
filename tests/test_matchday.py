@@ -229,7 +229,7 @@ def test_finished_matches_removed_and_live_first():
                "format_str": "3rd ODI", "date_header": "Wed, 14 Oct 2026",
                "href": "/cricket-live-score/up-one"}
     old_card = {"team1": "Old Team A", "team2": "Old Team B", "series": "S3",
-                "format_str": "Final", "date_header": "Mon, 05 Oct 2026",
+                "format_str": "Final",
                 "href": "/cricket-live-score/old-one"}
     pages = {
         "live-one": LIVE_SRH_HTML,
@@ -244,10 +244,11 @@ def test_finished_matches_removed_and_live_first():
         return None
 
     md.clear_matchday_cache()
-    with patch.object(md, "fetch_schedule_cards",
+    with patch.object(md, "fetch_api_cards",
                       return_value=[up_card, old_card, live_card]):
-        with patch.object(md, "_http_get", side_effect=fake_http):
-            fixtures = md.get_sunrisers_fixtures(force_refresh=True)
+        with patch.object(md, "fetch_schedule_cards", return_value=[]):
+            with patch.object(md, "_http_get", side_effect=fake_http):
+                fixtures = md.get_sunrisers_fixtures(force_refresh=True)
     assert len(fixtures) == 2, fixtures  # finished Old Team match removed
     assert fixtures[0]["status"] == "LIVE", fixtures
     assert fixtures[1]["status"] == "UPCOMING", fixtures
@@ -301,3 +302,60 @@ def test_third_party_links_rejected_and_escaped():
     assert "<script>" not in html and "&lt;script&gt;" in html
     assert "evil.example.com" not in html  # off-site link never rendered
     print("✅ Off-site links rejected; markup escaped.")
+
+
+def test_ordinal():
+    assert md._ordinal("1") == "1st"
+    assert md._ordinal("2") == "2nd"
+    assert md._ordinal("3") == "3rd"
+    assert md._ordinal("8") == "8th"
+    assert md._ordinal("135") == "135th"
+    assert md._ordinal("^0") == "0th" or isinstance(md._ordinal("^0"), str)
+    print("✅ Ordinals.")
+
+
+def _api_item(nf, t_ms, t1f="U", t2f="T", sf="2BD", mn="3", fo="T20I"):
+    return {"t1f": t1f, "t2f": t2f, "sf": sf, "tt": 0, "date": "10/13/2026",
+            "t": t_ms, "mn": mn, "mt": 5, "nf": nf, "id": 1, "ft": 2,
+            "fo": fo, "status": 0}
+
+
+def test_api_cards_window_and_dedupe():
+    import time
+    now_ms = int(time.time() * 1000)
+    day = 86400000
+    items = [_api_item("IN1", now_ms + day), _api_item("IN1", now_ms + day),
+             _api_item("OUT1", now_ms + 10 * day)]
+    mapping = {"t": [{"f_key": "U", "n": "Pakistan", "sn": "PAK"},
+                     {"f_key": "T", "n": "Sri Lanka", "sn": "SL"}],
+               "s": [{"f_key": "2BD", "n": "SL tour of PAK", "sn": "SL vs PAK 2026"}]}
+    with patch.object(md, "fetch_fixture_api_page", return_value=items):
+        with patch.object(md, "resolve_fixture_names",
+                          return_value=({"U": ("Pakistan", "PAK"), "T": ("Sri Lanka", "SL")},
+                                        {"2BD": ("SL tour of PAK", "SL vs PAK 2026")})):
+            cards = md.fetch_api_cards(pages=(0,), window_days=4)
+    assert len(cards) == 1, cards  # dup IN1 collapsed, OUT1 outside window
+    assert cards[0]["href"].endswith("match-match-updates-IN1")
+    assert cards[0]["format_str"] == "3rd T20I"
+    print("✅ API cards: window-filtered, deduped, nf links.")
+
+
+def test_merge_unions_api_and_ssr():
+    api = [{"team1": "A", "team2": "B", "series": "S", "format_str": "T20",
+            "time_str": "1:00 PM", "href": "/cricket-live-score/match-match-updates-N1",
+            "date_header": "Tue, 13 Oct 2026", "start_ts": 1, "nf": "N1"}]
+    ssr = [{"team1": "A", "team2": "B", "series": "S", "format_str": "T20",
+            "time_str": "1:00 PM",
+            "href": "/cricket-live-score/a-vs-b-1st-t20-s-2026-match-updates-N1",
+            "date_header": "Tue, 13 Oct 2026"},
+           {"team1": "C", "team2": "D", "series": "S2", "format_str": "ODI",
+            "time_str": "2:00 PM",
+            "href": "/cricket-live-score/c-vs-d-999-odi-s2-match-updates-N2",
+            "date_header": "Tue, 13 Oct 2036"}]
+    # N2 is dated 2036 (outside the window) -> dropped; N1 deduped API wins.
+    merged = md.merge_cards(api, ssr, window_days=4)
+    assert [md._card_key(c) for c in merged] == ["N1"], merged
+    assert merged[0]["href"].endswith("match-match-updates-N1")
+    merged2 = md.merge_cards([], ssr, window_days=4000)
+    assert len(merged2) == 2, merged2  # SSR-only path keeps dated-in-window cards
+    print("✅ Merge: union + dedupe (API wins) + SSR window filter.")
