@@ -21,7 +21,7 @@ Live: [https://srhtrack.streamlit.app/](https://srhtrack.streamlit.app/)
 1. **Poll** — `fetch_feed_with_retry()` fetches each feed in `CRICKET_SOURCES` (3s timeout, 2 attempts). Articles older than 24h are discarded at ingest.
 2. **Match** — `match_player_or_franchise_in_text()` keeps only articles mentioning a rostered player (word-boundary match + single-name aliases) or one of the 4 franchise names. US-sports false positives (`nfl`, `mlb`, etc.) are rejected.
 3. **Store** — `insert_news()` writes to SQLite with target-aware dedupe (same URL/title can exist once *per player/franchise*, not once globally). `purge_expired_24h_news()` deletes rows older than 24h on startup.
-4. **Serve** — `app.py` renders 4 tabs: Live Pulse news, fixture breakdown, On-This-Day archive, squad directory. Background ingest runs every 15 min; the page reloads every 5 min; query cache TTL is 60s.
+4. **Serve** — `app.py` renders 3 tabs: Live Pulse news, live Crex matchday fixtures, squad directory. Background ingest runs every 15 min; the page reloads every 5 min; query cache TTL is 60s.
 
 ---
 
@@ -31,9 +31,8 @@ Live: [https://srhtrack.streamlit.app/](https://srhtrack.streamlit.app/)
 |------|----------|
 | Live Pulse news feed | Hero card + list cards + 10-item timeline, newest first by `pub_timestamp`; click-through to source URL |
 | Live search | Full-text search over title, summary, player name (`search_news`) |
-| Franchise filter | Sidebar filter across all 4 squads; applies to news, fixtures, history |
-| Fixture breakdown | `config/schedule.py` (July–September 2026) with LIVE / UPCOMING / COMPLETED status, countdowns, broadcast tags |
-| On This Day | Curated milestone DB with date picker, category filter, and keyword search |
+| Franchise filter | Sidebar filter across all 4 squads; applies to news and fixtures |
+| Fixture breakdown | Live Crex engine (`scrapers/matchday_scraper.py`): schedule → Playing XI vs roster, LIVE first, finished removed (`config/schedule.py` is offline fallback) |
 | Squad directory | Roster cards grouped by franchise; filters for role, coach, captain, wicket-keeper, overseas; Ownership & Business section with live business news and exchange/registry links |
 | Retention | 24h rolling window for news (`purge_expired_24h_news`); notifications pruned after 7 days |
 | Logging | `logs/rss.log`, `logs/database.log` plus error log via `utils/logger.py` |
@@ -44,15 +43,16 @@ Live: [https://srhtrack.streamlit.app/](https://srhtrack.streamlit.app/)
 
 ```
 srhtrack/                         # v14.1.0, Python >= 3.9
-├── app.py                        # Streamlit UI: 4 tabs, ingest scheduling, sidebar controls
+├── app.py                        # Streamlit UI: 3 tabs, ingest scheduling, sidebar controls
 ├── data/squadofsunrisers.xlsx    # Master roster: 88 rows, 86 distinct players, 4 squads
 ├── squadofsunrisers.xlsx         # Legacy fallback copy at repo root
 ├── scrapers/
 │   ├── rss_collector.py          # CRICKET_SOURCES (193 feeds), fetch + filter pipeline
+│   ├── matchday_scraper.py       # Live Crex schedule → Playing XI vs roster fixtures
 │   └── web_scraper.py            # scrape_match_highlights() helper (no feeds)
 ├── config/
 │   ├── roster.py                 # Excel loader, word-boundary matcher, aliases
-│   ├── schedule.py               # July–September 2026 fixture list
+│   ├── schedule.py               # Offline fixture fallback (live tab uses Crex)
 │   └── theme.py                  # CSS tokens + card render helpers
 ├── agents/
 │   └── __init__.py               # Agents package (per-article scoring removed)

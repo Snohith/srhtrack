@@ -1,6 +1,8 @@
 """
 Fixture Schedule for @SRHXtra — July / August / September 2026.
-ACCURATELY AUDITED: 100% official fixtures with zero misattributed players.
+LEGACY OFFLINE FALLBACK: the live Matchday tab is now powered by
+scrapers/matchday_scraper.py (crex.com/schedule -> Playing XI vs roster).
+This static calendar is only used when the live scrape is unreachable.
 Every listed player is confirmed to be an active squad member participating in that match.
 """
 FIXTURE_SCHEDULE = [

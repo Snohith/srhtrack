@@ -18,7 +18,6 @@ from .theme import (
     render_telemetry_news_card,
     render_telemetry_pulse_item,
     render_broadcast_match_card,
-    render_otd_telemetry_card,
     render_squad_member_card,
 )
 
@@ -37,6 +36,5 @@ __all__ = [
     "render_telemetry_news_card",
     "render_telemetry_pulse_item",
     "render_broadcast_match_card",
-    "render_otd_telemetry_card",
     "render_squad_member_card",
 ]

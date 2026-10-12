@@ -571,72 +571,6 @@ def get_custom_css():
         font-size: 0.82rem;
         font-weight: 600;
     }
-    /* On This Day Cards (Tab 3) */
-    .otd-card-dark {
-        background: #FFFFFF;
-        border: 1px solid #E2E8F0;
-        border-left: 5px solid #F26522;
-        border-radius: 14px;
-        padding: 1.5rem 1.8rem;
-        margin-bottom: 1.2rem;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);
-        transition: all 0.2s ease;
-    }
-    .otd-card-hero {
-        border-left-color: #D97706 !important;
-        background: linear-gradient(135deg, #FFFFFF 0%, #FFFBEB 100%) !important;
-        box-shadow: 0 8px 24px rgba(217, 119, 6, 0.15) !important;
-    }
-    .otd-card-dark:hover {
-        border-left-color: #D97706;
-        box-shadow: 0 8px 24px rgba(242, 101, 34, 0.12);
-    }
-    .otd-year-dark {
-        font-family: 'Inter', sans-serif;
-        font-size: 1.45rem;
-        font-weight: 800;
-        color: #F26522;
-        margin-bottom: 0.4rem;
-        display: flex;
-        align-items: center;
-        gap: 0.6rem;
-    }
-    .otd-title-dark {
-        font-family: 'Inter', sans-serif;
-        font-size: 1.35rem;
-        font-weight: 800;
-        color: #0F172A;
-        margin-bottom: 0.6rem;
-    }
-    .otd-desc-dark {
-        color: #334155;
-        font-size: 1.02rem;
-        line-height: 1.65;
-        margin-bottom: 0.8rem;
-    }
-    .otd-score-box {
-        background: #F8FAFC;
-        border: 1px solid #E2E8F0;
-        border-radius: 8px;
-        padding: 0.6rem 1rem;
-        font-family: 'Inter', sans-serif;
-        font-weight: 700;
-        color: #0F172A;
-        font-size: 0.95rem;
-        margin-bottom: 0.8rem;
-    }
-    .otd-stat-chip {
-        background: rgba(242, 101, 34, 0.1);
-        color: #E05600;
-        border: 1px solid rgba(242, 101, 34, 0.25);
-        padding: 3px 10px;
-        border-radius: 6px;
-        font-size: 0.82rem;
-        font-weight: 700;
-        display: inline-block;
-        margin-right: 0.5rem;
-        margin-bottom: 0.4rem;
-    }
     /* Source Favicon */
     .source-fav-icon {
         width: 14px;
@@ -782,6 +716,7 @@ def render_next_match_hero(next_fixture, status="UPCOMING"):
     """Renders next fixture countdown telemetry bar with dynamic LIVE / UPCOMING status."""
     if not next_fixture:
         return ""
+    status = next_fixture.get("status", status) or status
     vs = html_lib.escape(next_fixture.get("vs", ""))
     squad = html_lib.escape(next_fixture.get("squad", ""))
     league = html_lib.escape(next_fixture.get("league", ""))
@@ -807,6 +742,16 @@ def render_next_match_hero(next_fixture, status="UPCOMING"):
         right_class = "hero-fixture-right"
         val_html = "<div class='hero-countdown-val'>⏳ UPCOMING</div>"
         lbl_html = "<div class='hero-countdown-lbl'>Matchday Status</div>"
+    link_html = ""
+    _hero_link = str(next_fixture.get("link", ""))
+    if _hero_link.startswith("https://crex.com/cricket-live-score/"):
+        link_attr = html_lib.escape(_hero_link, quote=True)
+        link_html = (
+            f"<div style='margin-top:0.5rem;'>"
+            f"<a href='{link_attr}' target='_blank' rel='noopener' "
+            f"style='color:#F26522;font-weight:800;font-size:0.9rem;text-decoration:none;'>"
+            f"🔗 View Squad & Live Score on Crex ↗</a></div>"
+        )
     return f"""
     <div class='{card_class}'>
         <div class='hero-fixture-left'>
@@ -817,6 +762,7 @@ def render_next_match_hero(next_fixture, status="UPCOMING"):
                 <span>📍 {venue}</span>
                 <span>📺 {broadcast}</span>
             </div>
+            {link_html}
         </div>
         <div class='{right_class}'>
             {val_html}
@@ -940,7 +886,12 @@ def render_telemetry_pulse_item(n):
         f"</div>"
     )
 def render_broadcast_match_card(item, status="UPCOMING"):
-    """Renders fixture item in broadcast infographic format."""
+    """Renders fixture item in broadcast infographic format.
+
+    Live Crex fixtures carry `link`, `srh_players` and `franchises`; static
+    legacy fixtures omit them and still render cleanly.
+    """
+    status = item.get("status", status) or status
     if status == "LIVE":
         status_html = "<span class='status-pill status-pill-live'>🔴 LIVE NOW</span>"
         card_extra_class = " broadcast-match-card-live"
@@ -950,53 +901,45 @@ def render_broadcast_match_card(item, status="UPCOMING"):
     else:
         status_html = "<span class='status-pill status-pill-upcoming'>⏳ UPCOMING</span>"
         card_extra_class = ""
-    venue_html = f"<span class='venue-badge'>📍 {item.get('venue', '')}</span>" if item.get("venue") else ""
-    broadcast_html = f"<span class='broadcast-badge'>📺 {item.get('broadcast', '')}</span>" if item.get("broadcast") else ""
+    venue_html = f"<span class='venue-badge'>📍 {html_lib.escape(str(item.get('venue', '')))}</span>" if item.get("venue") else ""
+    broadcast_html = f"<span class='broadcast-badge'>📺 {html_lib.escape(str(item.get('broadcast', '')))}</span>" if item.get("broadcast") else ""
+    squad = html_lib.escape(str(item.get("squad", "")))
+    vs = html_lib.escape(str(item.get("vs", "")))
+    league = html_lib.escape(str(item.get("league", "")))
+    match_time = html_lib.escape(str(item.get("time", "")))
+    date_str = html_lib.escape(str(item.get("date_str", "")))
+    players = html_lib.escape(str(item.get("players", "")))
+    link_html = ""
+    _link = str(item.get("link", ""))
+    if _link.startswith("https://crex.com/cricket-live-score/"):
+        link_attr = html_lib.escape(_link, quote=True)
+        link_html = (
+            f"<div style='margin-top:0.6rem;'>"
+            f"<a href='{link_attr}' target='_blank' rel='noopener' "
+            f"style='color:#F26522;font-weight:800;font-size:0.9rem;text-decoration:none;'>"
+            f"🔗 View Squad & Live Score on Crex ↗</a></div>"
+        )
+    franchise_html = ""
+    if item.get("franchises"):
+        chips = "".join(
+            f"<span class='chip-squad'>🧡 {html_lib.escape(str(f))}</span>"
+            for f in item["franchises"]
+        )
+        franchise_html = f"<div style='margin-top:0.5rem;display:flex;gap:0.4rem;flex-wrap:wrap;'>{chips}</div>"
     return (
         f"<div class='broadcast-match-card{card_extra_class}'>"
         f"<div class='broadcast-match-header'>"
         f"{status_html}"
-        f"<span class='chip-squad'>{item.get('squad', '')}</span>"
-        f"<span class='chip-league'>🏏 {item.get('league', '')}</span>"
+        f"<span class='chip-squad'>{squad}</span>"
+        f"<span class='chip-league'>🏏 {league}</span>"
         f"{venue_html}"
         f"{broadcast_html}"
         f"</div>"
-        f"<div class='match-versus'>{item.get('squad', '')} vs {item.get('vs', '')}</div>"
-        f"<div style='color:#475569;font-size:0.92rem;font-weight:600;'>⏰ <strong>Match Time:</strong> {item.get('time', '')} | <strong>Date:</strong> {item.get('date_str', '')}</div>"
-        f"<div style='color:#334155;font-size:0.92rem;margin-top:0.5rem;'><strong>Key Squad Members:</strong> {item.get('players', '')}</div>"
-        f"</div>"
-    )
-def render_otd_telemetry_card(m, is_hero=False):
-    """Renders On This Day historical moment card with scorecards and performance chips."""
-    emoji = m.get("emoji", "🏆")
-    year = m.get("year", "")
-    category = m.get("category", "")
-    title = html_lib.escape(m.get("title", ""))
-    desc = html_lib.escape(m.get("desc", ""))
-    entity = html_lib.escape(m.get("entity", ""))
-    franchise = html_lib.escape(m.get("franchise", ""))
-    scorecard = html_lib.escape(m.get("scorecard", "")) if m.get("scorecard") else ""
-    stats = m.get("stats", [])
-    card_class = "otd-card-dark otd-card-hero" if is_hero else "otd-card-dark"
-    hero_badge = "<span class='chip-new-live' style='background:#FEF3C7;color:#92400E;border-color:#FDE68A;'>⭐ TODAY'S ANNIVERSARY HIGHLIGHT</span>" if is_hero else ""
-    scorecard_html = f"<div class='otd-score-box'>🏏 <strong>Match Telemetry / Scorecard:</strong> {scorecard}</div>" if scorecard else ""
-    stats_html = ""
-    if stats:
-        chips = "".join([f"<span class='otd-stat-chip'>📊 {html_lib.escape(s)}</span>" for s in stats])
-        stats_html = f"<div style='margin-top:0.4rem;margin-bottom:0.6rem;'>{chips}</div>"
-    return (
-        f"<div class='{card_class}'>"
-        f"<div style='display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem;flex-wrap:wrap;'>"
-        f"{hero_badge}"
-        f"<span class='otd-year-dark'>{emoji} {year}</span>"
-        f"<span class='chip-league'>{category}</span>"
-        f"<span class='chip-player'>👤 {entity}</span>"
-        f"<span class='chip-squad'>🧡 {franchise}</span>"
-        f"</div>"
-        f"<div class='otd-title-dark'>{title}</div>"
-        f"{scorecard_html}"
-        f"{stats_html}"
-        f"<div class='otd-desc-dark'>{desc}</div>"
+        f"<div class='match-versus'>{squad} vs {vs}</div>"
+        f"<div style='color:#475569;font-size:0.92rem;font-weight:600;'>⏰ <strong>Match Time:</strong> {match_time} | <strong>Date:</strong> {date_str}</div>"
+        f"<div style='color:#334155;font-size:0.92rem;margin-top:0.5rem;'><strong>🧡 Sunrisers in Squad:</strong> {players}</div>"
+        f"{franchise_html}"
+        f"{link_html}"
         f"</div>"
     )
 

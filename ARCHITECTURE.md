@@ -32,12 +32,11 @@ The player list lives in `data/squadofsunrisers.xlsx` (~90 rows). Everything the
 3. **Store** — Matching stories are saved in SQLite with standard defaults. The same story can be saved once *per player it mentions* (so one article about Head *and* Klaasen appears under both), but never twice for the same player. Anything older than 24 hours is deleted automatically.
 4. **Show** — The dashboard displays the newest stories first, with search, team filters, and a live timeline.
 
-## The 4 dashboard tabs (`app.py`)
+## The 3 dashboard tabs (`app.py`)
 
 1. **Live Pulse** — hero story + news cards + 10-item timeline, with search.
-2. **Fixture Breakdown** — match schedule (`config/schedule.py`) with LIVE / UPCOMING / COMPLETED status.
-3. **On This Day** — historical milestones and birthdays (a fixed list inside `app.py`).
-4. **Squad Directory** — every player card, filterable by role, captain, coach, overseas, etc.
+2. **Fixture Breakdown** — live Crex matchday (`scrapers/matchday_scraper.py`): schedule → Playing XI vs roster, LIVE first, finished removed.
+3. **Squad Directory** — every player card, filterable by role, captain, coach, overseas, etc.
 
 The page refreshes itself every 5 minutes; news data is cached for 60 seconds.
 
@@ -49,7 +48,8 @@ The page refreshes itself every 5 minutes; news data is cached for 60 seconds.
 | `scrapers/rss_collector.py` | The 193-feed list + download/filter pipeline. |
 | `scrapers/web_scraper.py` | Backup fetcher when a feed fails. |
 | `config/roster.py` | Reads the Excel roster; matches names in headlines. |
-| `config/schedule.py` | Fixture list. |
+| `config/schedule.py` | Offline fixture fallback. |
+| `scrapers/matchday_scraper.py` | Live Crex schedule → Playing XI vs roster fixture engine. |
 | `config/theme.py` | Page styling + card layouts. |
 | `database/db_manager.py` | All database reads/writes, dedupe, cleanup. |
 | `database/schema.sql` | Table definitions (news, players, notifications, metadata). |

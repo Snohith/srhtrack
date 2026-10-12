@@ -55,8 +55,7 @@ graph TD
 ## 3. UI Presentation Layer (`app.py` & `config/theme.py`)
 
 - **Design Philosophy**: Daylight Athletic Telemetry (#F8FAFC, #0F172A, #F26522) with Inter typography.
-- **4 Dedicated Telemetry Panels**:
+- **3 Dedicated Telemetry Panels**:
   1. **📡 Real-Time Intelligence & News Feed**: Live hero cards, search query filters, pulse timeline.
-  2. **📋 Match Day Fixture Breakdown**: Dynamic status detection (`LIVE`, `UPCOMING`, `COMPLETED`), countdown clocks, TV/streaming broadcast tags.
-  3. **🗓️ On This Day Historical Engine**: Interactive date picker time machine, match scorecards, records broken.
-  4. **👥 Official Squad Directory**: Complete franchise-by-franchise roster cards with role chips, overseas flags, coach leadership, and captain markers.
+  2. **📋 Match Day Fixture Breakdown**: Live Crex schedule → Playing XI vs roster; LIVE first, finished removed; Crex deep-links, TV/streaming tags.
+  3. **👥 Official Squad Directory**: Complete franchise-by-franchise roster cards with role chips, overseas flags, coach leadership, and captain markers.
