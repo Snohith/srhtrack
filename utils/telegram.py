@@ -28,16 +28,20 @@ Security notes:
     descriptions are generic strings (e.g. "Bad Request: chat not found")
     and are safe to log.
 """
+import concurrent.futures
 import html
 import os
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 
+import bs4
 import requests
 
 from utils.logger import error_logger
 
 TELEGRAM_API_TIMEOUT_SECS = 6
+TELEGRAM_OG_FETCH_TIMEOUT_SECS = 5
 TELEGRAM_MAX_MESSAGE_CHARS = 4096
+TELEGRAM_MAX_CAPTION_CHARS = 1024
 DEFAULT_MAX_ALERTS_PER_CYCLE = 10
 
 
@@ -126,24 +130,44 @@ def _clip(text, limit):
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
+FRANCHISE_ACCENTS = {
+    "Sunrisers Hyderabad": "🟠",
+    "Sunrisers Eastern Cape": "🟢",
+    "Sunrisers Leeds Men": "🔵",
+    "Sunrisers Leeds Women": "🟣",
+}
+
+
+def _accent(franchise):
+    return FRANCHISE_ACCENTS.get(str(franchise or ""), "🟠")
+
+
 def format_article_message(article):
-    """One alert bubble per fresh article. All values escaped (untrusted RSS)."""
+    """One alert card per fresh article. All values escaped (untrusted RSS).
+
+    Layout: accent header + bold title + expandable summary quote (collapsed
+    to 3 lines, tap to expand — degrades to a plain quote on old clients) +
+    meta lines + story link (drives the large link-preview card).
+    """
     title = html.escape(_clip(article.get("title", "New Sunrisers update"), 250))
     player = html.escape(str(article.get("player_name", "")))
     franchise = html.escape(str(article.get("franchise", "")))
     source = html.escape(str(article.get("source", "")))
     published = html.escape(str(article.get("published_at", "")))
-    summary = html.escape(_clip(article.get("summary", ""), 300))
+    summary = html.escape(_clip(article.get("summary", ""), 400))
     link = _safe_url(article.get("link", ""))
     lines = [
-        "🟠 <b>SRHXtra — fresh update</b>",
+        f"{_accent(article.get('franchise', ''))} <b>SRHXtra · Fresh</b>",
         "",
         f"<b>{title}</b>",
+    ]
+    if summary:
+        lines += ["", f"<blockquote expandable>{summary}</blockquote>"]
+    lines += [
+        "",
         f"⚡ {player} · {franchise}",
         f"📰 {source} · {published}",
     ]
-    if summary:
-        lines += ["", summary]
     if link:
         lines += ["", f'<a href="{html.escape(link, quote=True)}">Read full story →</a>']
     return "\n".join(lines)[:TELEGRAM_MAX_MESSAGE_CHARS]
@@ -167,20 +191,31 @@ def format_digest_message(articles, total_inserted, total_cycle=None):
     return "\n".join(lines)[:TELEGRAM_MAX_MESSAGE_CHARS]
 
 
-def send_telegram_message(text):
-    """POSTs one message via Bot API. Returns True/False, never raises."""
+def send_telegram_message(text, preview_url=None):
+    """POSTs one message via Bot API. Returns True/False, never raises.
+
+    preview_url must already be sanitized (_safe_url): when given, Telegram
+    renders the large link-preview card for it (prefer_large_media only
+    applies to an explicitly specified URL — first-link fallback stays small).
+    """
     cfg = get_telegram_config()
     if not (cfg["enabled"] and cfg["token"] and cfg["chat_id"]):
         return False
+    body = {
+        "chat_id": cfg["chat_id"],
+        "text": text[:TELEGRAM_MAX_MESSAGE_CHARS],
+        "parse_mode": "HTML",
+    }
+    if preview_url:
+        body["link_preview_options"] = {
+            "url": preview_url,
+            "prefer_large_media": True,
+            "show_above_text": False,
+        }
     try:
         resp = requests.post(
             f"https://api.telegram.org/bot{cfg['token']}/sendMessage",
-            json={
-                "chat_id": cfg["chat_id"],
-                "text": text[:TELEGRAM_MAX_MESSAGE_CHARS],
-                "parse_mode": "HTML",
-                "disable_web_page_preview": False,
-            },
+            json=body,
             timeout=TELEGRAM_API_TIMEOUT_SECS,
         )
         try:
@@ -215,19 +250,151 @@ def notify_new_articles(articles):
     sent = 0
     try:
         if cfg["mode"] == "digest":
-            if send_telegram_message(format_digest_message(articles, len(articles))):
+            if send_telegram_message(
+                format_digest_message(articles, len(articles)),
+                _first_preview_link(articles),
+            ):
                 sent = 1
         else:
-            for article in articles[: cfg["max_alerts"]]:
-                if send_telegram_message(format_article_message(article)):
+            batch = articles[: cfg["max_alerts"]]
+            images = _prefetch_images(batch)
+            for article in batch:
+                if _send_article(article, images.get(id(article))):
                     sent += 1
             if len(articles) > cfg["max_alerts"]:
+                rest = articles[cfg["max_alerts"]:]
                 if send_telegram_message(
-                    format_digest_message(articles[cfg["max_alerts"]:],
-                                          len(articles) - cfg["max_alerts"],
-                                          total_cycle=len(articles))
+                    format_digest_message(rest,
+                                          len(rest),
+                                          total_cycle=len(articles)),
+                    _first_preview_link(rest),
                 ):
                     sent += 1
     except Exception as exc:
         error_logger.warning(f"Telegram dispatch failed: {type(exc).__name__}.")
     return {"sent": sent, "mode": cfg["mode"], "reason": "ok"}
+
+
+def _fetch_og_image(page_url, timeout=TELEGRAM_OG_FETCH_TIMEOUT_SECS):
+    """Best-effort article hero image (og:image → twitter:image). Never raises."""
+    page_url = _safe_url(page_url)
+    if not page_url:
+        return None
+    try:
+        resp = requests.get(
+            page_url,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; SRHXtra/1.0)"},
+            timeout=timeout,
+        )
+        if resp.status_code != 200:
+            return None
+        soup = bs4.BeautifulSoup((resp.text or "")[:200000], "html.parser")
+        for attrs in ({"property": "og:image"}, {"name": "twitter:image"}):
+            tag = soup.find("meta", attrs)
+            if tag and tag.get("content"):
+                img = _safe_url(urljoin(page_url, tag["content"].strip()))
+                if img:
+                    return img
+    except Exception:
+        pass
+    return None
+
+
+def _prefetch_images(batch):
+    """Resolves hero images concurrently ({id(article): url}); never raises."""
+    out = {}
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+            futs = {pool.submit(_fetch_og_image, (a or {}).get("link", "")): a for a in batch}
+            for fut, art in futs.items():
+                try:
+                    img = fut.result(timeout=TELEGRAM_OG_FETCH_TIMEOUT_SECS + 3)
+                except Exception:
+                    img = None
+                if img:
+                    out[id(art)] = img
+    except Exception:
+        pass
+    return out
+
+
+def format_photo_caption(article):
+    """Compact card caption (≤1024 chars). Fields are pre-clipped so the final
+    guard can never split an entity — overlong captions drop the quote block
+    deterministically instead."""
+    title = html.escape(_clip(article.get("title", "New Sunrisers update"), 150))
+    player = html.escape(str(article.get("player_name", "")))
+    franchise = html.escape(str(article.get("franchise", "")))
+    source = html.escape(str(article.get("source", "")))
+    summary = html.escape(_clip(article.get("summary", ""), 220))
+    link = _safe_url(article.get("link", ""))
+    lines = [
+        f"{_accent(article.get('franchise', ''))} <b>SRHXtra · Fresh</b>",
+        "",
+        f"<b>{title}</b>",
+    ]
+    if summary:
+        lines += ["", f"<blockquote expandable>{summary}</blockquote>"]
+    lines += [f"⚡ {player} · {franchise}", f"📰 {source}"]
+    if link:
+        lines += [f'<a href="{html.escape(link, quote=True)}">Read full story →</a>']
+    caption = "\n".join(lines)
+    if len(caption) > TELEGRAM_MAX_CAPTION_CHARS - 24:
+        lines = [ln for ln in lines if not ln.startswith("<blockquote")]
+        caption = "\n".join(lines)
+    return caption[:TELEGRAM_MAX_CAPTION_CHARS]
+
+
+def send_telegram_photo(photo_url, caption):
+    """POSTs a photo card via Bot API. Returns True/False, never raises."""
+    cfg = get_telegram_config()
+    if not (cfg["enabled"] and cfg["token"] and cfg["chat_id"]):
+        return False
+    try:
+        resp = requests.post(
+            f"https://api.telegram.org/bot{cfg['token']}/sendPhoto",
+            json={
+                "chat_id": cfg["chat_id"],
+                "photo": photo_url,
+                "caption": caption[:TELEGRAM_MAX_CAPTION_CHARS],
+                "parse_mode": "HTML",
+            },
+            timeout=TELEGRAM_API_TIMEOUT_SECS,
+        )
+        try:
+            payload = resp.json()
+        except Exception:
+            payload = {}
+        ok = resp.status_code == 200 and bool(payload.get("ok"))
+        if not ok:
+            desc = str(payload.get("description") or "")
+            error_logger.warning(f"Telegram photo failed: HTTP {resp.status_code} {desc}".rstrip())
+        return ok
+    except Exception as exc:
+        error_logger.warning(f"Telegram photo failed: {type(exc).__name__}.")
+        return False
+
+
+def _send_article(article, image_url):
+    """Photo card when a hero image resolved, else the text card. Never raises."""
+    try:
+        if image_url:
+            if send_telegram_photo(image_url, format_photo_caption(article)):
+                return True
+            # Photo rejected (hotlink protection, bad file…) → text fallback.
+        return send_telegram_message(
+            format_article_message(article),
+            _safe_url(article.get("link", "")) or None,
+        )
+    except Exception as exc:
+        error_logger.warning(f"Article dispatch failed: {type(exc).__name__}.")
+        return False
+
+
+def _first_preview_link(articles):
+    """First sanitized article URL for the digest preview card (None if none)."""
+    for article in articles or []:
+        link = _safe_url((article or {}).get("link", ""))
+        if link:
+            return link
+    return None

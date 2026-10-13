@@ -3,7 +3,7 @@ Telegram alerting tests for @SRHXtra (no network, no production DB).
 
 Covers utils/telegram.py dispatch/formatting/security behaviour, the
 ingest→Telegram wiring in scrapers/rss_collector.py (fully mocked, no DB),
-and the _RssResult backwards-compatible extension.
+photo cards with fallback, and the _RssResult backwards-compatible extension.
 """
 import pytest
 
@@ -20,6 +20,9 @@ ARTICLE = {
     "franchise": "Sunrisers Hyderabad",
 }
 
+# Real implementation, captured before the autouse fixture below replaces it.
+_real_fetch_og_image = tg._fetch_og_image
+
 
 @pytest.fixture()
 def tg_env(monkeypatch):
@@ -30,6 +33,12 @@ def tg_env(monkeypatch):
     monkeypatch.setenv("TELEGRAM_MODE", "per_article")
     monkeypatch.setenv("TELEGRAM_MAX_ALERTS_PER_CYCLE", "10")
     return monkeypatch
+
+
+@pytest.fixture(autouse=True)
+def _no_og_images(monkeypatch):
+    """Unit tests never hit the network for hero images (unless re-patched)."""
+    monkeypatch.setattr(tg, "_fetch_og_image", lambda url, timeout=5: None)
 
 
 def _ok_post(calls):
@@ -76,9 +85,12 @@ def test_per_article_sends_one_message_each(tg_env, monkeypatch):
     res = tg.notify_new_articles([ARTICLE, {**ARTICLE, "title": "Second story"}])
     assert res["sent"] == 2 and res["mode"] == "per_article"
     assert len(calls) == 2
-    assert "Abhishek Sharma" in calls[0]["body"]["text"]
-    assert calls[0]["body"]["parse_mode"] == "HTML"
-    assert calls[0]["body"]["disable_web_page_preview"] is False
+    body = calls[0]["body"]
+    assert "Abhishek Sharma" in body["text"]
+    assert body["parse_mode"] == "HTML"
+    assert "<blockquote expandable>" in body["text"]
+    assert body["link_preview_options"]["prefer_large_media"] is True
+    assert body["link_preview_options"]["url"] == "https://example.com/story-1"
 
 
 def test_cap_collapses_overflow_into_digest(tg_env, monkeypatch):
@@ -99,6 +111,28 @@ def test_digest_mode_sends_single_summary(tg_env, monkeypatch):
     res = tg.notify_new_articles([{**ARTICLE, "title": f"Story {i}"} for i in range(4)])
     assert res["sent"] == 1 and res["mode"] == "digest"
     assert "4 new article(s)" in calls[0]["body"]["text"]
+
+
+def test_franchise_accents():
+    assert tg._accent("Sunrisers Hyderabad") == "🟠"
+    assert tg._accent("Sunrisers Eastern Cape") == "🟢"
+    assert tg._accent("Sunrisers Leeds Men") == "🔵"
+    assert tg._accent("Sunrisers Leeds Women") == "🟣"
+    assert tg._accent("Something Else") == "🟠"
+    card = tg.format_article_message({**ARTICLE, "franchise": "Sunrisers Eastern Cape"})
+    assert card.startswith("🟢 <b>SRHXtra · Fresh</b>")
+
+
+def test_expandable_quote_only_with_summary():
+    assert "<blockquote expandable>" in tg.format_article_message(ARTICLE)
+    assert "<blockquote" not in tg.format_article_message({**ARTICLE, "summary": ""})
+
+
+def test_no_preview_options_without_safe_link(tg_env, monkeypatch):
+    calls = []
+    monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
+    tg.notify_new_articles([{**ARTICLE, "link": "javascript:alert(1)"}])
+    assert "link_preview_options" not in calls[0]["body"]
 
 
 def test_untrusted_content_is_escaped_and_schemes_rejected(tg_env, monkeypatch):
@@ -138,6 +172,77 @@ def test_api_error_returns_false_with_description(tg_env, monkeypatch):
 
     monkeypatch.setattr(tg.requests, "post", lambda *a, **k: _Resp())
     assert tg.send_telegram_message("hi") is False
+
+
+def test_og_image_extraction(monkeypatch):
+    html_doc = (
+        '<html><head>'
+        '<meta property="og:image" content="https://cdn.example.com/hero.jpg">'
+        "</head></html>"
+    )
+
+    class _Resp:
+        status_code = 200
+        text = html_doc
+
+    monkeypatch.setattr(tg.requests, "get", lambda *a, **k: _Resp())
+    assert _real_fetch_og_image("https://example.com/story") == "https://cdn.example.com/hero.jpg"
+
+
+def test_og_image_relative_url_resolved_and_bad_cases_empty(monkeypatch):
+    class _Resp:
+        status_code = 200
+        text = '<html><head><meta name="twitter:image" content="/img/x.jpg"></head></html>'
+
+    monkeypatch.setattr(tg.requests, "get", lambda *a, **k: _Resp())
+    assert _real_fetch_og_image("https://example.com/a/b") == "https://example.com/img/x.jpg"
+    monkeypatch.setattr(tg.requests, "get", lambda *a, **k: (_ for _ in ()).throw(TimeoutError("down")))
+    assert _real_fetch_og_image("https://example.com/a") is None
+    calls = []
+    monkeypatch.setattr(tg.requests, "get", lambda *a, **k: (calls.append(1), _Resp())[1])
+    assert _real_fetch_og_image("javascript:alert(1)") is None
+    assert calls == []  # unsafe page URL never fetched
+
+
+def test_photo_card_payload_and_caption_budget(tg_env, monkeypatch):
+    calls = []
+    monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
+    assert tg.send_telegram_photo("https://cdn.example.com/hero.jpg", "<b>Hi</b>") is True
+    body = calls[0]["body"]
+    assert calls[0]["url"].endswith("/sendPhoto")
+    assert body["photo"] == "https://cdn.example.com/hero.jpg"
+    assert body["parse_mode"] == "HTML"
+    giant_link = {**ARTICLE, "link": "https://example.com/" + "x" * 900}
+    capped = tg.format_photo_caption(giant_link)
+    assert len(capped) <= 1024 and "<blockquote" not in capped
+    short_caption = tg.format_photo_caption(ARTICLE)
+    assert "<blockquote expandable>" in short_caption and len(short_caption) <= 1024
+
+
+def test_photo_preferred_then_text_fallback(tg_env, monkeypatch):
+    calls = []
+    monkeypatch.setattr(tg, "_fetch_og_image", lambda url, timeout=5: "https://cdn.example.com/hero.jpg")
+    monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
+    assert tg.notify_new_articles([ARTICLE])["sent"] == 1
+    assert calls[0]["url"].endswith("/sendPhoto")
+
+    def _flaky(url, **kwargs):
+        calls.append({"url": url})
+        if url.endswith("/sendPhoto"):
+            class _Bad:
+                status_code = 400
+
+                @staticmethod
+                def json():
+                    return {"ok": False, "description": "Bad Request: wrong file"}
+            return _Bad()
+        return _ok_post(calls)(url, **kwargs)
+
+    calls.clear()
+    monkeypatch.setattr(tg.requests, "post", _flaky)
+    assert tg.notify_new_articles([ARTICLE])["sent"] == 1
+    assert calls[0]["url"].endswith("/sendPhoto")
+    assert calls[1]["url"].endswith("/sendMessage")  # fallback delivered
 
 
 def test_rss_result_backwards_compatible():
