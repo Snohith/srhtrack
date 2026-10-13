@@ -118,7 +118,8 @@ def _run_ingest_cycle(reason):
     """Single synchronous ingest + cache invalidation shared by auto & manual.
 
     Timestamp is written AFTER a successful fetch so a failed cycle retries
-    on the next tick instead of silently skipping a full interval.
+    on the next tick instead of silently skipping a full interval. A cycle
+    only counts as failed when EVERY polled feed failed.
     """
     result = fetch_and_filter_rss()
     try:
@@ -128,9 +129,16 @@ def _run_ingest_cycle(reason):
         pass
     now = time.time()
     try:
-        set_metadata("last_auto_ingest_ts", str(now))
+        failed = getattr(result, "failed_feeds", []) or []
+        total = getattr(result, "total_polled", 0) or 0
+        all_failed = bool(total) and len(failed) >= total
     except Exception:
-        pass
+        all_failed = False
+    if not all_failed:
+        try:
+            set_metadata("last_auto_ingest_ts", str(now))
+        except Exception:
+            pass
     st.session_state["last_refreshed"] = format_ist_12hr()
     st.session_state["last_refresh_ts"] = now
     return result

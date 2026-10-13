@@ -6,6 +6,11 @@ Best-effort by design: alerting must never break or slow the ingest cycle —
 every public function returns a status instead of raising, and sends are
 skipped silently when the bot is not configured.
 
+Sends run synchronously inside the ingest cycle (ordering + guaranteed
+delivery before the cycle is marked complete). Each POST typically takes
+<1s; the per-call timeout below bounds the pathological case to
+max_alerts × timeout seconds.
+
 Configuration (environment or `.env`; see `.env.example`):
   TELEGRAM_ENABLED=yes|no            master switch (default: yes)
   TELEGRAM_BOT_TOKEN=...             token from @BotFather (secret — never logged)
@@ -19,7 +24,9 @@ Security notes:
     HTML-escaped, and article URLs are restricted to http/https only.
   - The bot token is a secret: it is never written to logs. Request
     exceptions may embed the request URL (which contains the token), so only
-    the exception *type* is logged, never its message.
+    the exception *type* is logged, never its message. Bot API error
+    descriptions are generic strings (e.g. "Bad Request: chat not found")
+    and are safe to log.
 """
 import html
 import os
@@ -29,7 +36,7 @@ import requests
 
 from utils.logger import error_logger
 
-TELEGRAM_API_TIMEOUT_SECS = 10
+TELEGRAM_API_TIMEOUT_SECS = 6
 TELEGRAM_MAX_MESSAGE_CHARS = 4096
 DEFAULT_MAX_ALERTS_PER_CYCLE = 10
 
@@ -142,14 +149,14 @@ def format_article_message(article):
     return "\n".join(lines)[:TELEGRAM_MAX_MESSAGE_CHARS]
 
 
-def format_digest_message(articles, total_inserted):
+def format_digest_message(articles, total_inserted, total_cycle=None):
     """Single-cycle overflow/digest summary (used for overflow + digest mode)."""
     shown = articles[:10]
-    lines = [
-        "🟠 <b>SRHXtra — fresh updates</b>",
-        "",
-        f"{total_inserted} new article(s) captured this cycle:",
-    ]
+    lines = ["🟠 <b>SRHXtra — fresh updates</b>", ""]
+    if total_cycle and total_cycle > total_inserted:
+        lines.append(f"{total_inserted} further update(s) — {total_cycle} new this cycle:")
+    else:
+        lines.append(f"{total_inserted} new article(s) captured this cycle:")
     for a in shown:
         title = html.escape(_clip(a.get("title", ""), 120))
         player = html.escape(str(a.get("player_name", "")))
@@ -168,23 +175,21 @@ def send_telegram_message(text):
     try:
         resp = requests.post(
             f"https://api.telegram.org/bot{cfg['token']}/sendMessage",
-            data={
+            json={
                 "chat_id": cfg["chat_id"],
                 "text": text[:TELEGRAM_MAX_MESSAGE_CHARS],
                 "parse_mode": "HTML",
-                "disable_web_page_preview": "false",
+                "disable_web_page_preview": False,
             },
             timeout=TELEGRAM_API_TIMEOUT_SECS,
         )
         try:
-            ok = resp.status_code == 200 and bool(resp.json().get("ok"))
-            desc = str(resp.json().get("description") or "")
+            payload = resp.json()
         except Exception:
-            ok = resp.status_code == 200
-            desc = ""
+            payload = {}
+        ok = resp.status_code == 200 and bool(payload.get("ok"))
+        desc = str(payload.get("description") or "")
         if not ok:
-            # Description is a generic Bot API error string (e.g. "Bad Request:
-            # chat not found") — safe to log, contains no secrets.
             error_logger.warning(f"Telegram send failed: HTTP {resp.status_code} {desc}".rstrip())
         return ok
     except Exception as exc:
@@ -219,7 +224,8 @@ def notify_new_articles(articles):
             if len(articles) > cfg["max_alerts"]:
                 if send_telegram_message(
                     format_digest_message(articles[cfg["max_alerts"]:],
-                                          len(articles) - cfg["max_alerts"])
+                                          len(articles) - cfg["max_alerts"],
+                                          total_cycle=len(articles))
                 ):
                     sent += 1
     except Exception as exc:

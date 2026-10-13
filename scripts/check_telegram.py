@@ -57,6 +57,7 @@ def main():
               "Regenerate via @BotFather and update your secret store.")
         return 1
     print(f"token valid — bot username: @{me['result'].get('username')}")
+    bot_name = "@" + str(me["result"].get("username") or "this bot")
     try:
         updates = requests.get(
             f"https://api.telegram.org/bot{cfg['token']}/getUpdates",
@@ -74,9 +75,9 @@ def main():
     target = str(cfg["chat_id"])
     print(f"your configured chat contacted this bot: {target in seen}")
     if target not in seen:
-        print("ACTION NEEDED: the chat id in your config has NEVER talked to this bot. "
+        print(f"ACTION NEEDED: the chat id in your config has NEVER talked to {bot_name}. "
               "Either the id is mistyped (re-copy it from @userinfobot) or you pressed "
-              "START on a different bot (open @srhxtrafeedbot → /start from the same "
+              f"START on a different bot (open {bot_name} → /start from the same "
               "account). Bots cannot message chats they have never seen.")
         if not args.send_test:
             return 3

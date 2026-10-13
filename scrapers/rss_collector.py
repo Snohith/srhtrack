@@ -395,6 +395,7 @@ def fetch_and_filter_rss():
     matched_articles = 0
     stale_discarded  = 0
     new_articles     = []
+    seen_stories     = set()  # (title, link): alerts go out once per unique story
     rss_logger.info(
         f"Starting 24-Hour Ingestion Cycle across {len(CRICKET_SOURCES)} sources..."
     )
@@ -440,15 +441,20 @@ def fetch_and_filter_rss():
                 )
                 if news_id:
                     total_inserted += 1
-                    new_articles.append({
-                        "title": title,
-                        "source": feed_info["name"],
-                        "summary": summary,
-                        "link": link,
-                        "published_at": pub_date,
-                        "player_name": mt["player_name"],
-                        "franchise": mt["franchise"],
-                    })
+                    # DB + in-app notifications stay per-target; Telegram alerts
+                    # go out once per unique story (one URL can match N players).
+                    story_key = (title, link)
+                    if story_key not in seen_stories:
+                        seen_stories.add(story_key)
+                        new_articles.append({
+                            "title": title,
+                            "source": feed_info["name"],
+                            "summary": summary,
+                            "link": link,
+                            "published_at": pub_date,
+                            "player_name": mt["player_name"],
+                            "franchise": mt["franchise"],
+                        })
                     insert_notification(
                         message=(
                             f"⚡ {mt['player_name']} ({mt['franchise']})"
