@@ -394,6 +394,7 @@ def fetch_and_filter_rss():
     failed_feeds   = []
     matched_articles = 0
     stale_discarded  = 0
+    new_articles     = []
     rss_logger.info(
         f"Starting 24-Hour Ingestion Cycle across {len(CRICKET_SOURCES)} sources..."
     )
@@ -439,6 +440,15 @@ def fetch_and_filter_rss():
                 )
                 if news_id:
                     total_inserted += 1
+                    new_articles.append({
+                        "title": title,
+                        "source": feed_info["name"],
+                        "summary": summary,
+                        "link": link,
+                        "published_at": pub_date,
+                        "player_name": mt["player_name"],
+                        "franchise": mt["franchise"],
+                    })
                     insert_notification(
                         message=(
                             f"⚡ {mt['player_name']} ({mt['franchise']})"
@@ -453,16 +463,25 @@ def fetch_and_filter_rss():
         f"({matched_articles} matched, {stale_discarded} stale >24h discarded). "
         f"{len(failed_feeds)}/{len(CRICKET_SOURCES)} feeds failed."
     )
-    return _RssResult(total_inserted, failed_feeds, len(CRICKET_SOURCES))
+    # Telegram alerts for every fresh article — best-effort, never fails ingest.
+    try:
+        from utils.telegram import notify_new_articles
+        tg = notify_new_articles(new_articles)
+        if tg["sent"]:
+            rss_logger.info(f"Telegram alerts dispatched: {tg['sent']} sent ({tg['mode']}).")
+    except Exception as exc:
+        error_logger.warning(f"Telegram hook failed: {type(exc).__name__}.")
+    return _RssResult(total_inserted, failed_feeds, len(CRICKET_SOURCES), new_articles)
 class _RssResult(int):
     """
     Backwards-compatible return value that behaves like an int (for legacy callers
     that do `count = fetch_and_filter_rss()` and display it as a number) while also
     carrying the full structured result as attributes.
     """
-    def __new__(cls, inserted, failed_feeds, total_polled):
+    def __new__(cls, inserted, failed_feeds, total_polled, new_articles=None):
         obj = super().__new__(cls, inserted)
         obj.inserted     = inserted
         obj.failed_feeds = failed_feeds
         obj.total_polled = total_polled
+        obj.new_articles = list(new_articles or [])
         return obj

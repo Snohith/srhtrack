@@ -16,12 +16,10 @@ import os
 import sys
 import time
 import textwrap
-import threading
 import urllib.parse
 from datetime import datetime, date as date_cls
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import streamlit as st
-import streamlit.components.v1 as components
 from config.roster import MASTER_ROSTER
 from config.schedule import FIXTURE_SCHEDULE
 from database.db_manager import (
@@ -62,51 +60,120 @@ st.set_page_config(
 st.markdown(get_custom_css(), unsafe_allow_html=True)
 init_db()
 purge_expired_24h_news()
-AUTO_INGEST_INTERVAL_SECS = 900
-components.html(
-    """
-    <script>
-        setTimeout(function(){ window.parent.location.reload(); }, 300000);
-    </script>
-    """,
-    height=0, width=0,
-)
+
+
+def _load_dotenv(path=".env"):
+    """Minimal .env loader (no extra dependency): KEY=VALUE lines only."""
+    try:
+        base = os.path.dirname(os.path.abspath(__file__))
+        env_path = path if os.path.isabs(path) else os.path.join(base, path)
+        if not os.path.exists(env_path):
+            return
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, val = line.split("=", 1)
+                key, val = key.strip(), val.strip().strip("'\"")
+                if key and key not in os.environ:
+                    os.environ[key] = val
+    except Exception:
+        pass
+
+
+_load_dotenv()
+
+
+def _get_auto_ingest_interval_secs():
+    try:
+        return max(60, int(os.environ.get("AUTO_INGEST_INTERVAL_SECS", "900")))
+    except (TypeError, ValueError):
+        return 900
+
+
+AUTO_INGEST_INTERVAL_SECS = _get_auto_ingest_interval_secs()
 if "last_refreshed" not in st.session_state:
     st.session_state["last_refreshed"] = format_ist_12hr()
 if "last_refresh_ts" not in st.session_state:
     st.session_state["last_refresh_ts"] = 0.0
+if "auto_ingest_running" not in st.session_state:
+    st.session_state["auto_ingest_running"] = False
 @st.cache_data(ttl=60)
 def cached_get_recent_news(limit=150):
     return get_recent_news(limit=limit)
 @st.cache_data(ttl=60)
 def cached_search_news(query):
     return search_news(query)
-_last_auto_ts = float(get_metadata("last_auto_ingest_ts", "0"))
-_secs_since_auto = time.time() - _last_auto_ts
-def _run_background_ingest():
+
+
+def _secs_since_last_ingest():
     try:
-        fetch_and_filter_rss()
+        return time.time() - float(get_metadata("last_auto_ingest_ts", "0") or 0)
+    except (TypeError, ValueError):
+        return float("inf")
+
+
+def _run_ingest_cycle(reason):
+    """Single synchronous ingest + cache invalidation shared by auto & manual.
+
+    Timestamp is written AFTER a successful fetch so a failed cycle retries
+    on the next tick instead of silently skipping a full interval.
+    """
+    result = fetch_and_filter_rss()
+    try:
         cached_get_recent_news.clear()
         cached_search_news.clear()
+    except Exception:
+        pass
+    now = time.time()
+    try:
+        set_metadata("last_auto_ingest_ts", str(now))
+    except Exception:
+        pass
+    st.session_state["last_refreshed"] = format_ist_12hr()
+    st.session_state["last_refresh_ts"] = now
+    return result
+
+
+_secs_since_auto = _secs_since_last_ingest()
+if _secs_since_auto >= AUTO_INGEST_INTERVAL_SECS and not st.session_state["auto_ingest_running"]:
+    st.session_state["auto_ingest_running"] = True
+    try:
+        with st.spinner(f"Auto-syncing {_source_count} feeds..."):
+            _run_ingest_cycle("auto")
     except Exception as exc:
         try:
             from utils.logger import error_logger
-            error_logger.error(f"Background RSS ingest failed: {exc}")
+            error_logger.error(f"Auto RSS ingest failed: {exc}")
         except Exception:
             pass
-if _secs_since_auto >= AUTO_INGEST_INTERVAL_SECS:
-    _now = time.time()
-    set_metadata("last_auto_ingest_ts", str(_now))
-    _t = threading.Thread(target=_run_background_ingest, daemon=True)
-    _t.start()
-    st.session_state["last_refreshed"] = format_ist_12hr()
-    st.session_state["last_refresh_ts"] = _now
+    finally:
+        st.session_state["auto_ingest_running"] = False
+    _secs_since_auto = 0.0
 if len(cached_get_recent_news(limit=1)) == 0:
     with st.spinner(f"Loading matchday intelligence (scanning {_source_count} feeds)..."):
-        fetch_and_filter_rss()
-        set_metadata("last_auto_ingest_ts", str(time.time()))
-        cached_get_recent_news.clear()
-        cached_search_news.clear()
+        try:
+            _run_ingest_cycle("bootstrap")
+        except Exception:
+            pass
+
+
+@st.fragment(run_every=AUTO_INGEST_INTERVAL_SECS)
+def _auto_refresh_tick():
+    """Fires every AUTO_INGEST_INTERVAL_SECS with zero interaction.
+
+    A fragment rerun alone would not refresh the feed list (rendered outside
+    the fragment), so escalate to a full app rerun — the ingest check above
+    then runs synchronously and the current render shows fresh rows.
+    """
+    if _secs_since_last_ingest() >= AUTO_INGEST_INTERVAL_SECS:
+        st.rerun()
+
+
+_auto_refresh_tick()
+
+
 def get_bulletproof_sort_key(n):
     ts = n.get("pub_timestamp")
     if ts and isinstance(ts, (int, float)) and ts > 0:
@@ -116,18 +183,26 @@ def get_bulletproof_sort_key(n):
         return datetime.strptime(pub_str, "%b %d, %Y @ %I:%M %p IST").timestamp()
     except Exception:
         return 0.0
-st.sidebar.markdown("<h2 style='font-family:Inter,sans-serif;font-weight:800;letter-spacing:-0.01em;color:#0F172A;margin-bottom:0.2rem;'>SRHXtra</h2>", unsafe_allow_html=True)
-st.sidebar.markdown("<div style='color:#E05600;font-family:Inter,sans-serif;font-size:0.82rem;font-weight:800;margin-bottom:1rem;'>SQUAD TELEMETRY V15 · LIVE CREX MATCHDAY</div>", unsafe_allow_html=True)
+st.sidebar.markdown("<div class='srh-side-brand'><span class='dot'>●</span> SRHXtra</div><div class='srh-side-label' style='margin-bottom:1rem;'>Squad telemetry · V15</div>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"<span class='srh-side-label'>Roster</span>\n`{_player_count} players · 4 squads`")
 st.sidebar.markdown(f"<span class='srh-side-label'>Last refreshed · IST</span>\n`{st.session_state['last_refreshed']}`")
+_auto_mins_total = AUTO_INGEST_INTERVAL_SECS // 60
 _auto_secs_remaining = max(0, int(AUTO_INGEST_INTERVAL_SECS - _secs_since_auto))
 _auto_mins = _auto_secs_remaining // 60
 _auto_s = _auto_secs_remaining % 60
 if _auto_secs_remaining > 0:
-    st.sidebar.caption(f"Next auto-sync {_auto_mins}m {_auto_s:02d}s")
+    st.sidebar.caption(f"Auto-sync every {_auto_mins_total}m · next in {_auto_mins}m {_auto_s:02d}s")
 else:
     st.sidebar.caption("Sync running…")
+try:
+    from utils.telegram import is_telegram_configured, get_telegram_config as _tg_cfg
+    if is_telegram_configured():
+        st.sidebar.caption(f"🔔 Telegram alerts ON ({_tg_cfg()['mode']})")
+    else:
+        st.sidebar.caption("🔕 Telegram alerts off — set TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID in .env")
+except Exception:
+    pass
 st.sidebar.markdown("---")
 franchise_filter = st.sidebar.selectbox(
     "Squad",
@@ -135,13 +210,7 @@ franchise_filter = st.sidebar.selectbox(
 )
 if st.sidebar.button(f"Refresh feeds ({_source_count})", use_container_width=True):
     with st.spinner(f"Polling {_source_count} global sources..."):
-        result = fetch_and_filter_rss()
-        _now = time.time()
-        st.session_state["last_refresh_ts"] = _now
-        st.session_state["last_refreshed"] = format_ist_12hr()
-        set_metadata("last_auto_ingest_ts", str(_now))
-        cached_get_recent_news.clear()
-        cached_search_news.clear()
+        result = _run_ingest_cycle("manual")
         inserted = getattr(result, "inserted", int(result))
         failed = getattr(result, "failed_feeds", [])
         st.sidebar.success(f"Captured {inserted} fresh items!")

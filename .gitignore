@@ -44,3 +44,6 @@ generated/*.png
 
 # Dev container (local only)
 .devcontainer/
+
+# Local secrets (never commit)
+.env

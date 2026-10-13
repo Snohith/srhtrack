@@ -107,8 +107,25 @@ Dependencies: `streamlit`, `feedparser`, `beautifulsoup4`, `requests`, `pandas`,
 | `SRH_DB_PATH` | `database/srh_tracker.db` | Override SQLite file location (tests use a temp file) |
 | `AUTO_INGEST_INTERVAL_SECS` | `900` | Seconds between background ingest cycles |
 | `STREAMLIT_SERVER_PORT` | `8501` | Local server port (see `.env.example`, `.streamlit/config.toml`) |
+| `TELEGRAM_ENABLED` | `true` | Master switch for Telegram fresh-article alerts |
+| `TELEGRAM_BOT_TOKEN` | _(empty)_ | Bot token from `@BotFather` (empty = alerts off) |
+| `TELEGRAM_CHAT_ID` | _(empty)_ | Target chat/channel id (empty = alerts off) |
+| `TELEGRAM_MODE` | `per_article` | `per_article` (overflow → digest) or `digest` (one summary/cycle) |
+| `TELEGRAM_MAX_ALERTS_PER_CYCLE` | `10` | Cap for per-article mode, 1–50 |
 
 Copy `.env.example` to `.env` to customize a deployment. Page auto-reload is fixed at 5 min (`app.py`, JS `setTimeout 300000`); news query cache TTL is 60s.
+
+### Telegram alerts (fresh article → phone)
+
+Every ingest cycle (auto-refresh, manual `Refresh feeds`, `scheduler/worker.py`) sends Telegram messages for newly stored articles via `utils/telegram.py` — no extra dependency (`requests` only). Alerting is best-effort: if Telegram is down or unconfigured, ingest continues and the failure lands in `logs/errors.log` (token never logged).
+
+1. Message `@BotFather` → `/newbot` → copy the token into `TELEGRAM_BOT_TOKEN`.
+2. Message `@userinfobot` → copy the id into `TELEGRAM_CHAT_ID` (channel: add the bot as admin, use the `-100…` id).
+3. `cp .env.example .env`, fill the two values, restart the app. Sidebar shows `🔔 Telegram alerts ON` when live.
+
+### Keeping the app awake on Community Cloud
+
+The free tier sleeps apps after ~12h with no visit or commit. `.github/workflows/keep-awake.yml` pushes a scheduled empty commit every 10h to reset that timer (the officially documented method — plain URL pingers no longer reliably count). After merging, wake the app once manually via `Yes, get this app back up!`, then the schedule holds it. Use `Actions → Keep Streamlit Awake → Run workflow` for an on-demand ping.
 
 ---
 
