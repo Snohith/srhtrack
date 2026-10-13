@@ -185,8 +185,8 @@ def get_bulletproof_sort_key(n):
         return 0.0
 st.sidebar.markdown("<div class='srh-side-brand'><span class='dot'>●</span> SRHXtra</div><div class='srh-side-label' style='margin-bottom:1rem;'>Squad telemetry · V15</div>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
-st.sidebar.markdown(f"<span class='srh-side-label'>Roster</span>\n`{_player_count} players · 4 squads`")
-st.sidebar.markdown(f"<span class='srh-side-label'>Last refreshed · IST</span>\n`{st.session_state['last_refreshed']}`")
+st.sidebar.markdown(f"<span class='srh-side-label'>Roster</span>\n`{_player_count} players · 4 squads`", unsafe_allow_html=True)
+st.sidebar.markdown(f"<span class='srh-side-label'>Last refreshed · IST</span>\n`{st.session_state['last_refreshed']}`", unsafe_allow_html=True)
 _auto_mins_total = AUTO_INGEST_INTERVAL_SECS // 60
 _auto_secs_remaining = max(0, int(AUTO_INGEST_INTERVAL_SECS - _secs_since_auto))
 _auto_mins = _auto_secs_remaining // 60

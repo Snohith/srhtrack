@@ -57,19 +57,35 @@ def _load_dotenv(path=".env"):
 _load_dotenv()
 
 
+def _secret(name, default=""):
+    """Env first, Streamlit secrets fallback (Cloud dashboard → Secrets).
+
+    TOML values may be non-strings (e.g. an unquoted numeric chat id),
+    so everything is coerced to str. Values are never logged.
+    """
+    val = os.environ.get(name, "")
+    if str(val).strip():
+        return str(val).strip()
+    try:
+        import streamlit as st
+        return str(st.secrets.get(name, default) or default).strip()
+    except Exception:
+        return default
+
+
 def get_telegram_config():
-    """Reads Telegram settings from the environment. Never includes secrets in logs."""
-    enabled = os.environ.get("TELEGRAM_ENABLED", "true").strip().lower() in (
+    """Reads Telegram settings from env / Streamlit secrets. Never includes secrets in logs."""
+    enabled = _secret("TELEGRAM_ENABLED", "true").lower() in (
         "1", "true", "yes", "y", "on",
     )
-    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
-    mode = os.environ.get("TELEGRAM_MODE", "per_article").strip().lower()
+    token = _secret("TELEGRAM_BOT_TOKEN")
+    chat_id = _secret("TELEGRAM_CHAT_ID")
+    mode = _secret("TELEGRAM_MODE", "per_article").lower()
     if mode not in ("per_article", "digest"):
         mode = "per_article"
     try:
-        max_alerts = max(1, min(50, int(os.environ.get(
-            "TELEGRAM_MAX_ALERTS_PER_CYCLE", str(DEFAULT_MAX_ALERTS_PER_CYCLE)))))
+        max_alerts = max(1, min(50, int(
+            _secret("TELEGRAM_MAX_ALERTS_PER_CYCLE", str(DEFAULT_MAX_ALERTS_PER_CYCLE)))))
     except (TypeError, ValueError):
         max_alerts = DEFAULT_MAX_ALERTS_PER_CYCLE
     return {
@@ -162,10 +178,14 @@ def send_telegram_message(text):
         )
         try:
             ok = resp.status_code == 200 and bool(resp.json().get("ok"))
+            desc = str(resp.json().get("description") or "")
         except Exception:
             ok = resp.status_code == 200
+            desc = ""
         if not ok:
-            error_logger.warning(f"Telegram send failed: HTTP {resp.status_code}.")
+            # Description is a generic Bot API error string (e.g. "Bad Request:
+            # chat not found") — safe to log, contains no secrets.
+            error_logger.warning(f"Telegram send failed: HTTP {resp.status_code} {desc}".rstrip())
         return ok
     except Exception as exc:
         # Log only the exception type: messages may embed the request URL,

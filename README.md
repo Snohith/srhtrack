@@ -123,6 +123,15 @@ Every ingest cycle (auto-refresh, manual `Refresh feeds`, `scheduler/worker.py`)
 2. Message `@userinfobot` → copy the id into `TELEGRAM_CHAT_ID` (channel: add the bot as admin, use the `-100…` id).
 3. `cp .env.example .env`, fill the two values, restart the app. Sidebar shows `🔔 Telegram alerts ON` when live.
 
+On Streamlit Community Cloud `.env` never deploys (gitignored) — put the same keys under the app's **Settings → Secrets** instead (TOML; quote the values):
+```toml
+TELEGRAM_ENABLED = "true"
+TELEGRAM_BOT_TOKEN = "paste-from-BotFather"
+TELEGRAM_CHAT_ID = "your-chat-id"
+TELEGRAM_MODE = "per_article"
+```
+The bot can only message you **after you tap START on it once** (Telegram rule — bots can't message first). No channel needed; alerts arrive as DMs from the bot itself.
+
 ### Keeping the app awake on Community Cloud
 
 The free tier sleeps apps after ~12h with no visit or commit. `.github/workflows/keep-awake.yml` pushes a scheduled empty commit every 10h to reset that timer (the officially documented method — plain URL pingers no longer reliably count). After merging, wake the app once manually via `Yes, get this app back up!`, then the schedule holds it. Use `Actions → Keep Streamlit Awake → Run workflow` for an on-demand ping.

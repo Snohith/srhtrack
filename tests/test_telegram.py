@@ -125,6 +125,18 @@ def test_send_failure_never_raises(tg_env, monkeypatch):
     assert res["sent"] == 0 and res["reason"] == "ok"
 
 
+def test_api_error_returns_false_with_description(tg_env, monkeypatch):
+    class _Resp:
+        status_code = 400
+
+        @staticmethod
+        def json():
+            return {"ok": False, "description": "Bad Request: chat not found"}
+
+    monkeypatch.setattr(tg.requests, "post", lambda *a, **k: _Resp())
+    assert tg.send_telegram_message("hi") is False
+
+
 def test_rss_result_backwards_compatible():
     legacy = _RssResult(3, ["Feed X"], 193)  # old 3-arg call style still works
     assert int(legacy) == 3 and legacy.new_articles == []
