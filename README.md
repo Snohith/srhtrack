@@ -132,6 +132,12 @@ TELEGRAM_MODE = "per_article"
 ```
 The bot can only message you **after you tap START on it once** (Telegram rule — bots can't message first). No channel needed; alerts arrive as DMs from the bot itself.
 
+### Headless ingest (alerts with zero tabs open)
+
+The app only runs while a browser tab is open. `.github/workflows/headless-ingest.yml` removes that limitation: every 15 min a GitHub runner executes `scripts/ingest_job.py` (schema init + `run_collector_cycle()` + Telegram sends). Dedupe memory persists via the cached `srh_tracker.db`, so stories never resend; overlapping runs cancel each other to protect it.
+
+Setup: repo **Settings → Secrets and variables → Actions → New repository secret** — add `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` (values from your local `.env`). Then trigger one manual run (**Actions → Headless Ingest → Run workflow**) and watch for the DMs. Note: the very first run has no cache, so it delivers a bounded one-time catch-up (cap + digest).
+
 ### Keeping the app awake on Community Cloud
 
 The free tier sleeps apps after ~12h with no visit or commit. `.github/workflows/keep-awake.yml` pushes a scheduled empty commit every 10h to reset that timer (the officially documented method — plain URL pingers no longer reliably count). After merging, wake the app once manually via `Yes, get this app back up!`, then the schedule holds it. Use `Actions → Keep Streamlit Awake → Run workflow` for an on-demand ping.

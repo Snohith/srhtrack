@@ -15,6 +15,7 @@ V15 Upgrades:
 import os
 import sys
 import time
+import random
 import textwrap
 import urllib.parse
 from datetime import datetime, date as date_cls
@@ -149,7 +150,13 @@ if _secs_since_auto >= AUTO_INGEST_INTERVAL_SECS and not st.session_state["auto_
     st.session_state["auto_ingest_running"] = True
     try:
         with st.spinner(f"Auto-syncing {_source_count} feeds..."):
-            _run_ingest_cycle("auto")
+            # Cross-session race guard: two tabs whose fragment timers align
+            # would both pass the gate above and ingest twice (duplicate DMs;
+            # DB rows dedupe silently). A short random delay decorrelates them;
+            # the loser re-reads a fresh timestamp and skips.
+            time.sleep(random.uniform(1.0, 8.0))
+            if _secs_since_last_ingest() >= AUTO_INGEST_INTERVAL_SECS:
+                _run_ingest_cycle("auto")
     except Exception as exc:
         try:
             from utils.logger import error_logger
@@ -158,7 +165,7 @@ if _secs_since_auto >= AUTO_INGEST_INTERVAL_SECS and not st.session_state["auto_
             pass
     finally:
         st.session_state["auto_ingest_running"] = False
-    _secs_since_auto = 0.0
+    _secs_since_auto = _secs_since_last_ingest()
 if len(cached_get_recent_news(limit=1)) == 0:
     with st.spinner(f"Loading matchday intelligence (scanning {_source_count} feeds)..."):
         try:
