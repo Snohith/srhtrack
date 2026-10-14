@@ -294,6 +294,8 @@ def test_ingest_dispatches_one_alert_per_unique_story(tg_env, monkeypatch):
     )
     monkeypatch.setattr(rc, "insert_news", lambda **k: 999)
     monkeypatch.setattr(rc, "insert_notification", lambda *a, **k: None)
+    # Alert memory is a real DB write: keep this hermetic test DB-free.
+    monkeypatch.setattr(rc, "try_claim_alert", lambda *a, **k: True)
     calls = []
     monkeypatch.setattr(
         "utils.telegram.notify_new_articles",
