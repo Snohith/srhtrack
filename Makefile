@@ -14,6 +14,9 @@ install:
 run:
 	streamlit run app.py
 
+bot:
+	python bot.py
+
 test:
 	pytest tests/
 

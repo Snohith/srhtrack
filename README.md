@@ -133,6 +133,16 @@ TELEGRAM_MODE = "per_article"
 ```
 The bot can only message you **after you tap START on it once** (Telegram rule — bots can't message first). No channel needed; alerts arrive as DMs from the bot itself.
 
+### Command bot (`/matches` live fixtures + `/refresh` on demand)
+
+`bot.py` long-polls your bot — no server, no dashboard. From chat:
+
+- `/matches` — Crex fixtures with our players, LIVE first: team names, IST date + start time, our players grouped by franchise, venue + score link. Empty window? An honest "nothing live" card instead of silence.
+- `/refresh` — sweep all 193 feeds now (summary + DMs follow)
+- `/status` — rows stored, players tracked, alert mode
+
+Only your `TELEGRAM_CHAT_ID` can issue commands (strangers silently ignored); one sweep at a time; no buttons anywhere. Run with `python bot.py` (or `make bot`) anywhere Python runs. Register the menu in BotFather once via `/setcommands`: `matches`, `refresh`, `status`, `start`, `help`.
+
 ### Headless ingest (alerts with zero tabs open)
 
 The app only runs while a browser tab is open. `.github/workflows/headless-ingest.yml` removes that limitation: every 15 min a GitHub runner executes `scripts/ingest_job.py` (schema init + `run_collector_cycle()` + Telegram sends). Dedupe memory persists via the cached `srh_tracker.db`, so stories never resend; overlapping runs cancel each other to protect it.
