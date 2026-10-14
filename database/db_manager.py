@@ -9,8 +9,10 @@ Improvements in V12.0:
   - get_analytics_summary() added for test & dashboard use
 """
 import os
+import re
 import sqlite3
 import time
+import unicodedata
 from contextlib import closing
 from config.roster import MASTER_ROSTER, match_player_or_franchise_in_text
 from utils.logger import db_logger, error_logger
@@ -20,6 +22,8 @@ DB_PATH = os.environ.get(
 )
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "schema.sql")
 SECONDS_24_HOURS = 86400.0
+ALERT_MEMORY_SECS = 14 * 24 * 3600.0
+_DASH_CHARS_RE = re.compile("[\u2010\u2011\u2012\u2013\u2014\u2015]")
 def get_connection():
     """Returns sqlite3 connection with dict-row cursor. Use with contextlib.closing().
 
@@ -29,6 +33,115 @@ def get_connection():
     conn = sqlite3.connect(os.environ.get("SRH_DB_PATH", DB_PATH))
     conn.row_factory = sqlite3.Row
     return conn
+def normalize_title_for_dedupe(title):
+    """Folds a headline into a stable dedupe key.
+
+    Google News re-serves the same evergreen story with cosmetic variance
+    (case, spacing, hyphen vs en-dash, curly quotes). Raw titles stay stored
+    verbatim; only the alert-memory key is normalized.
+
+    A trailing outlet tag ("... fail the test - IOL") is also folded away:
+    direct publisher feeds and Google News mirrors of the same story differ
+    only by that tag. The tag is stripped only when it is short, digit-free
+    (fixture markers like "2nd T20I" distinguish real stories), and leaves a
+    meaningful remainder.
+    """
+    text = unicodedata.normalize("NFKC", str(title or ""))
+    text = (
+        text.replace("\u201c", '"').replace("\u201d", '"')
+        .replace("\u2018", "'").replace("\u2019", "'")
+    )
+    text = _DASH_CHARS_RE.sub("-", text)
+    text = text.lower()
+    text = re.sub(r"\s+", " ", text).strip()
+    for sep in (" - ", " | "):
+        if sep not in text:
+            continue
+        head, _, tail = text.rpartition(sep)
+        tail_words = tail.split()
+        if (
+            len(head) >= 15
+            and 1 <= len(tail_words) <= 4
+            and not any(ch.isdigit() for ch in tail)
+        ):
+            text = head.strip()
+            break
+    return text
+
+
+def try_claim_alert(title_norm, player_name, franchise, seen_ts=None,
+                    max_age_secs=ALERT_MEMORY_SECS):
+    """Atomically claims one Telegram alert slot for a story+target.
+
+    Returns True only when this call wins the slot: first sighting, or a
+    sighting after the memory window expired. Re-stamped evergreen pages and
+    post-purge resurrections lose the race and must stay silent. Concurrent
+    claimants are serialized by the UNIQUE index; the loser reads
+    "already present" instead of double-alerting.
+    """
+    now = time.time()
+    try:
+        seen = float(seen_ts) if seen_ts else now
+    except (TypeError, ValueError):
+        seen = now
+    try:
+        with closing(get_connection()) as conn:
+            # BEGIN IMMEDIATE serializes concurrent claimants so the
+            # check-and-set below is atomic across processes.
+            conn.execute("BEGIN IMMEDIATE")
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT first_seen_ts FROM alerted_stories "
+                "WHERE title_norm = ? AND player_name = ? AND franchise = ?",
+                (title_norm, player_name, franchise),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                try:
+                    cursor.execute(
+                        "INSERT INTO alerted_stories "
+                        "(title_norm, player_name, franchise, first_seen_ts) "
+                        "VALUES (?, ?, ?, ?)",
+                        (title_norm, player_name, franchise, seen),
+                    )
+                except sqlite3.IntegrityError:
+                    # Lost a concurrent claim race: the slot is taken.
+                    conn.rollback()
+                    return False
+                conn.commit()
+                return True
+            try:
+                first_seen = float(row["first_seen_ts"])
+            except (TypeError, ValueError):
+                first_seen = 0.0
+            if now - first_seen > max_age_secs:
+                cursor.execute(
+                    "UPDATE alerted_stories SET first_seen_ts = ? "
+                    "WHERE title_norm = ? AND player_name = ? AND franchise = ?",
+                    (now, title_norm, player_name, franchise),
+                )
+                conn.commit()
+                return True
+            conn.rollback()
+            return False
+    except Exception as e:
+        error_logger.error(f"Alert-claim error: {e}")
+        return True
+
+
+def purge_expired_alerts(max_age_secs=ALERT_MEMORY_SECS):
+    """Drops alert-memory rows older than the window so the table stays bounded."""
+    try:
+        with closing(get_connection()) as conn:
+            conn.execute(
+                "DELETE FROM alerted_stories WHERE first_seen_ts < ?",
+                (time.time() - max_age_secs,),
+            )
+            conn.commit()
+    except Exception as e:
+        error_logger.error(f"Error purging expired alert memory: {e}")
+
+
 def cleanup_invalid_matches(max_rows=500):
     """
     Re-evaluates the most recent N articles and purges any misattributed rows.
@@ -160,6 +273,7 @@ def init_db():
         cleanup_invalid_matches()
         purge_expired_24h_news()
         purge_stale_notifications()
+        purge_expired_alerts()
         db_logger.info("Database schema & Excel master roster initialised cleanly.")
     except Exception as e:
         error_logger.error(f"Failed to initialise database: {e}")

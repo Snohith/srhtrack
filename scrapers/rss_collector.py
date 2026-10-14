@@ -13,7 +13,12 @@ import bs4
 import html
 from urllib.parse import urlparse, parse_qs
 from config.roster import match_player_or_franchise_in_text
-from database.db_manager import insert_news, insert_notification
+from database.db_manager import (
+    insert_news,
+    insert_notification,
+    normalize_title_for_dedupe,
+    try_claim_alert,
+)
 from utils.logger import rss_logger, error_logger
 from utils.time_utils import parse_rss_date_to_ist, format_ist_12hr
 CRICKET_SOURCES = [
@@ -441,20 +446,42 @@ def fetch_and_filter_rss():
                 )
                 if news_id:
                     total_inserted += 1
+                    # Alert memory (14d) outlives the 24h news purge: Google
+                    # News re-stamps evergreen pages in place (same link,
+                    # mutated pubDate), so a re-stored row must not re-alert.
+                    # Every matched target claims its own slot even though the
+                    # Telegram alert below goes out only once per story.
+                    # Claim time is "now" (not the article pubDate): the window
+                    # measures time since the last alert.
+                    claimed = try_claim_alert(
+                        normalize_title_for_dedupe(title),
+                        mt["player_name"],
+                        mt["franchise"],
+                    )
                     # DB + in-app notifications stay per-target; Telegram alerts
                     # go out once per unique story (one URL can match N players).
                     story_key = (title, link)
                     if story_key not in seen_stories:
                         seen_stories.add(story_key)
-                        new_articles.append({
-                            "title": title,
-                            "source": feed_info["name"],
-                            "summary": summary,
-                            "link": link,
-                            "published_at": pub_date,
-                            "player_name": mt["player_name"],
-                            "franchise": mt["franchise"],
-                        })
+                        has_timestamp = bool(
+                            entry.get("published_parsed") or entry.get("updated_parsed")
+                        )
+                        if claimed:
+                            new_articles.append({
+                                "title": title,
+                                "source": feed_info["name"],
+                                "summary": summary,
+                                "link": link,
+                                "published_at": pub_date,
+                                "player_name": mt["player_name"],
+                                "franchise": mt["franchise"],
+                                "age_hours": age_hours if has_timestamp else None,
+                                "pub_timestamp": pub_ts,
+                            })
+                        else:
+                            rss_logger.info(
+                                f"  ↳ skip re-alert (already sent within 14d) — {title[:60]}"
+                            )
                     insert_notification(
                         message=(
                             f"⚡ {mt['player_name']} ({mt['franchise']})"
@@ -469,6 +496,9 @@ def fetch_and_filter_rss():
         f"({matched_articles} matched, {stale_discarded} stale >24h discarded). "
         f"{len(failed_feeds)}/{len(CRICKET_SOURCES)} feeds failed."
     )
+    # Newest first: feeds arrive in source order, alerts must lead with the
+    # freshest story so a catch-up backlog never buries breaking news.
+    new_articles.sort(key=lambda a: a.get("pub_timestamp") or 0, reverse=True)
     # Telegram alerts for every fresh article (plus a heartbeat DM on empty
     # cycles) — best-effort, never fails ingest.
     try:

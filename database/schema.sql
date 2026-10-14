@@ -81,3 +81,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_news_link_target
     WHERE link IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_news_title_target
     ON news (title, player_name, franchise);
+
+-- Alert memory: which stories already triggered a Telegram alert, per tracked
+-- target. Google News re-stamps evergreen pages in place (same link, mutated
+-- pubDate), and the 24h news purge above wipes the display row — without this
+-- table every re-stamp would re-alert as "Fresh". Retention is 14 days, kept
+-- deliberately longer than the 24h news display window.
+CREATE TABLE IF NOT EXISTS alerted_stories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title_norm TEXT NOT NULL,
+    player_name TEXT NOT NULL,
+    franchise TEXT NOT NULL,
+    first_seen_ts REAL NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_alerted_stories_target
+    ON alerted_stories (title_norm, player_name, franchise);

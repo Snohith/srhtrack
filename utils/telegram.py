@@ -146,6 +146,32 @@ def _accent(franchise):
     return FRANCHISE_ACCENTS.get(str(franchise or ""), "🟠")
 
 
+FRESH_LABEL_MAX_AGE_HOURS = 6.0
+
+
+def _freshness_header(article):
+    """Honest alert header from the article's age at ingest time.
+
+    Google News re-stamps evergreen pages (same link, fresh pubDate), so the
+    stored timestamp can lag the alert by many hours. Only genuinely fresh
+    items may claim "Fresh"; late catch-up carries its age, and entries with
+    no feed timestamp make no freshness claim at all. Articles predating the
+    age signal (no "age_hours" key) keep the legacy "Fresh" header.
+    """
+    if "age_hours" not in article:
+        return "SRHXtra · Fresh"
+    age = article.get("age_hours")
+    if age is None:
+        return "SRHXtra · New"
+    try:
+        age_hours = float(age)
+    except (TypeError, ValueError):
+        return "SRHXtra · New"
+    if age_hours <= FRESH_LABEL_MAX_AGE_HOURS:
+        return "SRHXtra · Fresh"
+    return f"SRHXtra · Catch-up · {age_hours:.0f}h old"
+
+
 def format_article_message(article):
     """One alert card per fresh article. All values escaped (untrusted RSS).
 
@@ -161,7 +187,7 @@ def format_article_message(article):
     summary = html.escape(_clip(article.get("summary", ""), 400))
     link = _safe_url(article.get("link", ""))
     lines = [
-        f"{_accent(article.get('franchise', ''))} <b>SRHXtra · Fresh</b>",
+        f"{_accent(article.get('franchise', ''))} <b>{_freshness_header(article)}</b>",
         "",
         f"<b>{title}</b>",
     ]
@@ -174,6 +200,49 @@ def format_article_message(article):
     ]
     if link:
         lines += ["", f'<a href="{html.escape(link, quote=True)}">Read full story →</a>']
+    return "\n".join(lines)[:TELEGRAM_MAX_MESSAGE_CHARS]
+
+
+def _is_fresh_for_alert(article):
+    """True when an article deserves its own per-article card.
+
+    Backlog floods (cold-start reboots, ingest gaps) can queue dozens of
+    day-old stories; each would otherwise arrive as its own "Fresh" DM.
+    Stale items (>6h) ride in one catch-up digest instead. Ageless articles
+    (no timestamp in the feed) keep per-article treatment with a "New" label.
+    """
+    age = (article or {}).get("age_hours", "unknown")
+    if age is None or age == "unknown":
+        return True
+    try:
+        return float(age) <= FRESH_LABEL_MAX_AGE_HOURS
+    except (TypeError, ValueError):
+        return True
+
+
+def _format_age_short(age):
+    try:
+        return f"{float(age):.0f}h old"
+    except (TypeError, ValueError):
+        return "age unknown"
+
+
+def format_catchup_digest_message(articles):
+    """One collapsed DM for a cycle's stale backlog (already on the dashboard)."""
+    shown = list(articles or [])[:10]
+    lines = ["📦 <b>SRHXtra — Catch-up</b>", ""]
+    lines.append(
+        f"{len(articles)} older update(s) already on your dashboard:"
+    )
+    for a in shown:
+        title = html.escape(_clip(a.get("title", ""), 120))
+        player = html.escape(str(a.get("player_name", "")))
+        source = html.escape(str(a.get("source", "")))
+        lines.append(
+            f"• <b>{player}</b> — {title} ({source}, {_format_age_short(a.get('age_hours'))})"
+        )
+    if len(articles) > len(shown):
+        lines.append(f"…and {len(articles) - len(shown)} more in the app.")
     return "\n".join(lines)[:TELEGRAM_MAX_MESSAGE_CHARS]
 
 
@@ -286,18 +355,26 @@ def notify_new_articles(articles, stats=None):
             ):
                 sent = 1
         else:
-            batch = articles[: cfg["max_alerts"]]
+            fresh = [a for a in articles if _is_fresh_for_alert(a)]
+            stale = [a for a in articles if not _is_fresh_for_alert(a)]
+            batch = fresh[: cfg["max_alerts"]]
             images = _prefetch_images(batch)
             for article in batch:
                 if _send_article(article, images.get(id(article))):
                     sent += 1
-            if len(articles) > cfg["max_alerts"]:
-                rest = articles[cfg["max_alerts"]:]
+            if len(fresh) > cfg["max_alerts"]:
+                rest = fresh[cfg["max_alerts"]:]
                 if send_telegram_message(
                     format_digest_message(rest,
                                           len(rest),
                                           total_cycle=len(articles)),
                     _first_preview_link(rest),
+                ):
+                    sent += 1
+            if stale:
+                if send_telegram_message(
+                    format_catchup_digest_message(stale),
+                    _first_preview_link(stale),
                 ):
                     sent += 1
     except Exception as exc:
@@ -359,7 +436,7 @@ def format_photo_caption(article):
     summary = html.escape(_clip(article.get("summary", ""), 220))
     link = _safe_url(article.get("link", ""))
     lines = [
-        f"{_accent(article.get('franchise', ''))} <b>SRHXtra · Fresh</b>",
+        f"{_accent(article.get('franchise', ''))} <b>{_freshness_header(article)}</b>",
         "",
         f"<b>{title}</b>",
     ]
