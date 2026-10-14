@@ -90,7 +90,15 @@ def format_match_card(fixture, now=None, roster_map=None):
     date_str = html.escape(str(fixture.get("date_str", "")))
     time_str = html.escape(str(fixture.get("time", "") or "").replace(" IST", "").strip())
     day = fixture_day_label(dt, now)
-    when = html.escape(f"{day}, {date_str} · {time_str} IST".strip(" ,·")) if date_str else ""
+    if date_str and day in ("Today", "Tomorrow"):
+        when = html.escape(f"{day}, {date_str} · {time_str} IST".strip(" ,·"))
+    elif day:
+        # Weekday labels already carry month/day ("Fri, Oct 16") — don't repeat.
+        when = html.escape(f"{day} · {time_str} IST".strip(" ,·"))
+    elif date_str:
+        when = html.escape(f"{date_str} · {time_str} IST".strip(" ,·"))
+    else:
+        when = ""
     lines = [head, "", f"<b>{team1} vs {team2}</b>", f"🏆 {league}"]
     if when:
         lines.append(f"📅 {when}")

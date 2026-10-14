@@ -212,3 +212,12 @@ def test_upcoming_cap_and_roster_map():
     assert "+2 more in the 4-day window." in text
     assert "https://crex.com/m/5" not in text  # only first 4 shown
     assert build_roster_franchise_map().get("Abhishek Sharma") == "Sunrisers Hyderabad"
+
+
+def test_weekday_label_does_not_repeat_date():
+    weekday = _fx(status="UPCOMING", day="October 16, 2026", time="11:00 AM IST")
+    text = format_match_card(weekday, NOW)
+    assert "Fri, Oct 16 · 11:00 AM IST" in text
+    assert "October 16, 2026" not in text
+    today = _fx(status="UPCOMING", day="October 13, 2026", time="12:00 PM IST")
+    assert "Today, October 13, 2026 · 12:00 PM IST" in format_match_card(today, NOW)
