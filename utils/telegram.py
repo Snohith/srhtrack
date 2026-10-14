@@ -211,8 +211,8 @@ def _is_fresh_for_alert(article):
     Stale items (>6h) ride in one catch-up digest instead. Ageless articles
     (no timestamp in the feed) keep per-article treatment with a "New" label.
     """
-    age = (article or {}).get("age_hours", "unknown")
-    if age is None or age == "unknown":
+    age = (article or {}).get("age_hours")
+    if age is None:
         return True
     try:
         return float(age) <= FRESH_LABEL_MAX_AGE_HOURS

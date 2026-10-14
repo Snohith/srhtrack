@@ -265,9 +265,8 @@ def test_title_normalization_keeps_distinct_endings():
     first = normalize_title_for_dedupe("Match tied - 1st T20I")
     second = normalize_title_for_dedupe("Match tied - 2nd T20I")
     assert first != second  # digit endings distinguish real fixtures
-    long_end = normalize_title_for_dedupe("IND vs WI Prediction - Who will win India vs West Indies 4th T20I match?")
-    assert long_end == normalize_title_for_dedupe(
-        "IND vs WI Prediction - Who will win India vs West Indies 4th T20I match?")
+    long_title = "IND vs WI Prediction - Who will win India vs West Indies 4th T20I match?"
+    assert normalize_title_for_dedupe(long_title).endswith("4th t20i match?")
 
 
 def test_direct_plus_mirror_alerts_once(isolated_db, monkeypatch):
