@@ -112,6 +112,7 @@ Dependencies: `streamlit`, `feedparser`, `beautifulsoup4`, `requests`, `pandas`,
 | `TELEGRAM_CHAT_ID` | _(empty)_ | Target chat/channel id (empty = alerts off) |
 | `TELEGRAM_MODE` | `per_article` | `per_article` (overflow → digest) or `digest` (one summary/cycle) |
 | `TELEGRAM_MAX_ALERTS_PER_CYCLE` | `10` | Cap for per-article mode, 1–50 |
+| `TELEGRAM_HEARTBEAT` | `true` | `true` = DM on empty cycles too (~96/day when quiet); `false` = silent unless fresh news |
 
 Copy `.env.example` to `.env` to customize a deployment. Page auto-reload is fixed at 5 min (`app.py`, JS `setTimeout 300000`); news query cache TTL is 60s.
 

@@ -469,12 +469,16 @@ def fetch_and_filter_rss():
         f"({matched_articles} matched, {stale_discarded} stale >24h discarded). "
         f"{len(failed_feeds)}/{len(CRICKET_SOURCES)} feeds failed."
     )
-    # Telegram alerts for every fresh article — best-effort, never fails ingest.
+    # Telegram alerts for every fresh article (plus a heartbeat DM on empty
+    # cycles) — best-effort, never fails ingest.
     try:
         from utils.telegram import notify_new_articles
-        tg = notify_new_articles(new_articles)
+        tg = notify_new_articles(
+            new_articles,
+            {"total_polled": len(CRICKET_SOURCES), "failed": len(failed_feeds)},
+        )
         if tg["sent"]:
-            rss_logger.info(f"Telegram alerts dispatched: {tg['sent']} sent ({tg['mode']}).")
+            rss_logger.info(f"Telegram alerts dispatched: {tg['sent']} sent ({tg['mode']}, {tg['reason']}).")
     except Exception as exc:
         error_logger.warning(f"Telegram hook failed: {type(exc).__name__}.")
     return _RssResult(total_inserted, failed_feeds, len(CRICKET_SOURCES), new_articles)

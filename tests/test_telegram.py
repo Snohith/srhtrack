@@ -74,9 +74,31 @@ def test_unconfigured_sends_nothing(monkeypatch, tg_env):
     assert tg.is_telegram_configured() is False
 
 
-def test_empty_cycle_sends_nothing(tg_env, monkeypatch):
-    monkeypatch.setattr(tg.requests, "post", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no HTTP for empty cycle")))
-    assert tg.notify_new_articles([])["reason"] == "no_new_articles"
+def test_empty_cycle_sends_heartbeat(tg_env, monkeypatch):
+    calls = []
+    monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
+    res = tg.notify_new_articles([], {"total_polled": 193, "failed": 2})
+    assert res == {"sent": 1, "mode": "per_article", "reason": "heartbeat"}
+    assert len(calls) == 1
+    text = calls[0]["body"]["text"]
+    assert "All 193 sources scanned" in text and "2 feeds down" in text
+    assert "link_preview_options" not in calls[0]["body"]  # plain text, no card
+
+
+def test_heartbeat_off_stays_silent(tg_env, monkeypatch):
+    monkeypatch.setenv("TELEGRAM_HEARTBEAT", "false")
+    monkeypatch.setattr(tg.requests, "post", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no HTTP when heartbeat off")))
+    assert tg.notify_new_articles([])["reason"] == "heartbeat_off"
+
+
+def test_heartbeat_without_stats_or_unconfigured(tg_env, monkeypatch):
+    calls = []
+    monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
+    assert tg.notify_new_articles([])["reason"] == "heartbeat"
+    assert "Sweep complete" in calls[0]["body"]["text"]
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN")
+    monkeypatch.setattr(tg.requests, "post", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no HTTP when unconfigured")))
+    assert tg.notify_new_articles([])["reason"] == "unconfigured"
 
 
 def test_per_article_sends_one_message_each(tg_env, monkeypatch):
@@ -275,9 +297,10 @@ def test_ingest_dispatches_one_alert_per_unique_story(tg_env, monkeypatch):
     calls = []
     monkeypatch.setattr(
         "utils.telegram.notify_new_articles",
-        lambda arts: (calls.append(list(arts)), {"sent": 1, "mode": "per_article", "reason": "ok"})[1],
+        lambda arts, stats=None: (calls.append((list(arts), stats)), {"sent": 1, "mode": "per_article", "reason": "ok"})[1],
     )
     res = rc.fetch_and_filter_rss()
     assert int(res) == 2  # both per-target rows stored
     assert len(res.new_articles) == 1  # but a single alert dispatched
-    assert len(calls) == 1 and calls[0][0]["player_name"] == "Abhishek Sharma"
+    assert len(calls) == 1 and calls[0][0][0]["player_name"] == "Abhishek Sharma"
+    assert calls[0][1] == {"total_polled": 1, "failed": 0}  # cycle stats passed through

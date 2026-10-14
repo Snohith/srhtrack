@@ -94,6 +94,9 @@ def get_telegram_config():
     mode = _secret("TELEGRAM_MODE", "per_article").lower()
     if mode not in ("per_article", "digest"):
         mode = "per_article"
+    heartbeat = _secret("TELEGRAM_HEARTBEAT", "true").lower() in (
+        "1", "true", "yes", "y", "on",
+    )
     try:
         max_alerts = max(1, min(50, int(
             _secret("TELEGRAM_MAX_ALERTS_PER_CYCLE", str(DEFAULT_MAX_ALERTS_PER_CYCLE)))))
@@ -104,6 +107,7 @@ def get_telegram_config():
         "token": token,
         "chat_id": chat_id,
         "mode": mode,
+        "heartbeat": heartbeat,
         "max_alerts": max_alerts,
     }
 
@@ -234,10 +238,33 @@ def send_telegram_message(text, preview_url=None):
         return False
 
 
-def notify_new_articles(articles):
+def format_heartbeat_message(stats=None):
+    """Short 'sweep clean' DM so a quiet cycle is distinguishable from a dead
+    pipeline. stats={total_polled, failed} comes from the collector."""
+    stats = stats or {}
+    try:
+        total = int(stats.get("total_polled") or 0)
+    except (TypeError, ValueError):
+        total = 0
+    try:
+        failed = int(stats.get("failed") or 0)
+    except (TypeError, ValueError):
+        failed = 0
+    if total:
+        line = f"All {total} sources scanned — no fresh stories."
+    else:
+        line = "Sweep complete — no fresh stories."
+    if failed:
+        line += f" ({failed} feed{'s' if failed != 1 else ''} down)"
+    return f"✅ {line}\nNothing new since the last check — the watch continues. 🔭"
+
+
+def notify_new_articles(articles, stats=None):
     """Dispatches alerts for one ingest cycle's fresh articles.
 
-    Returns {"sent": int, "mode": str, "reason": str}; never raises.
+    Empty cycle + heartbeat enabled → one "sweep clean" DM so the owner can
+    tell a quiet cycle apart from a dead pipeline. Returns
+    {"sent": int, "mode": str, "reason": str}; never raises.
     """
     articles = list(articles or [])
     cfg = get_telegram_config()
@@ -246,7 +273,10 @@ def notify_new_articles(articles):
     if not (cfg["token"] and cfg["chat_id"]):
         return {"sent": 0, "mode": cfg["mode"], "reason": "unconfigured"}
     if not articles:
-        return {"sent": 0, "mode": cfg["mode"], "reason": "no_new_articles"}
+        if not cfg["heartbeat"]:
+            return {"sent": 0, "mode": cfg["mode"], "reason": "heartbeat_off"}
+        ok = send_telegram_message(format_heartbeat_message(stats))
+        return {"sent": 1 if ok else 0, "mode": cfg["mode"], "reason": "heartbeat"}
     sent = 0
     try:
         if cfg["mode"] == "digest":
