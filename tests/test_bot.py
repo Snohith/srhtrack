@@ -152,18 +152,39 @@ def test_matches_live_first_with_ist_and_players():
     assert "Tomorrow, October 14, 2026 · 7:30 PM IST" in up_text
 
 
-def test_matches_empty_state_and_fetch_failure():
+def test_matches_empty_state_and_fetch_failure(monkeypatch):
     b = _bot(matches_fn=lambda: [])
     assert b.handle_update(_update(text="/matches")) == "matches"
     assert "No Sunrisers fixtures live" in b.sent[-1]
     assert "crex.com/schedule" in b.sent[-1]
 
+    monkeypatch.setattr(bot.time, "sleep", lambda s: None)
+    attempts = []
+
     def _boom():
+        attempts.append(1)
         raise RuntimeError("crex down")
 
     b2 = _bot(matches_fn=_boom)
     assert b2.handle_update(_update(text="/matches")) == "matches"  # never raises
+    assert len(attempts) == 2  # one retry before serving empty state
     assert "No Sunrisers fixtures live" in b2.sent[-1]
+
+
+def test_matches_retry_recovers_transient_failure(monkeypatch):
+    monkeypatch.setattr(bot.time, "sleep", lambda s: None)
+    calls = []
+    fx = _fx(status="LIVE")
+
+    def _flaky():
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("blip")
+        return [fx]
+
+    b = _bot(matches_fn=_flaky)
+    assert b.handle_update(_update(text="/matches")) == "matches"
+    assert "LIVE NOW" in b.sent[-1] and "WACA vs QLD" in b.sent[-1]
 
 
 def test_match_card_escaping_caps_and_labels():

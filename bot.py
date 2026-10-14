@@ -163,6 +163,20 @@ class CommandBot:
         from scrapers.matchday_scraper import get_sunrisers_fixtures
         return get_sunrisers_fixtures()
 
+    def _fetch_matches_resilient(self):
+        """Crex fetch with one retry. Full traceback on final failure so the
+        next transient is diagnosable (type-only logs left us blind once)."""
+        try:
+            return self._fetch_matches() or []
+        except Exception:
+            pass
+        time.sleep(2)
+        try:
+            return self._fetch_matches() or []
+        except Exception:
+            log.exception("Bot /matches fetch failed twice; serving empty state.")
+            return []
+
     def handle_update(self, update):
         msg = update.get("message") or {}
         chat = msg.get("chat") or {}
@@ -187,12 +201,7 @@ class CommandBot:
             self.send(format_status(summary, self.interval, self.mode))
             return "status"
         if cmd == "matches":
-            try:
-                fixtures = self._fetch_matches() or []
-            except Exception as exc:
-                log.warning(f"Bot /matches fetch failed ({type(exc).__name__}).")
-                fixtures = []
-            self.send(format_matches_message(fixtures))
+            self.send(format_matches_message(self._fetch_matches_resilient()))
             return "matches"
         if cmd == "refresh":
             return self.cmd_refresh()
