@@ -13,6 +13,7 @@ from saved_stories.story_storage import (
     get_delivery,
     open_story_box,
     save_article,
+    service_started_at,
     set_up_story_box,
 )
 
@@ -139,6 +140,35 @@ def test_collector_combines_labels_for_a_multi_franchise_player(monkeypatch):
         "Sunrisers Leeds Men",
     }
     assert delivery_counts()["pending"] == 1
+
+
+def test_startup_watermark_is_written_once_and_never_moves():
+    first, created = service_started_at(now=1000.0)
+    second, created_again = service_started_at(now=2000.0)
+
+    assert first == 1000.0
+    assert created is True
+    assert second == 1000.0
+    assert created_again is False
+
+
+def test_first_run_skips_pre_activation_history(monkeypatch):
+    _poll_with(
+        [
+            _entry("Pat Cummins 23 hours old", "https://example.com/old", age_hours=23),
+            _entry("Pat Cummins 3 hours old", "https://example.com/mid", age_hours=3),
+            _entry("Pat Cummins just now", "https://example.com/new", age_hours=0),
+        ],
+        monkeypatch,
+    )
+
+    result = collect_news.collect_fresh_stories(feeds=[_feed()], max_workers=1)
+
+    assert result.historical == 2
+    assert result.stale == 0
+    assert result.inserted == 1
+    assert article_count() == 1
+    assert get_article(1)["link"] == "https://example.com/new"
 
 
 def test_collector_skips_stale_stories_and_malformed_links(monkeypatch):

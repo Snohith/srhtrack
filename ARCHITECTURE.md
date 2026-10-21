@@ -112,6 +112,13 @@ Migration-only memory for recent titles from the old dashboard's
 `alerted_stories` table. It keeps those titles quiet for the remainder of their
 14-day life, then is pruned. New deduplication uses `articles`.
 
+### `service_state`
+
+One row, `started_at`, written on the first collection run. It never moves, so
+deployment cannot replay the last 24 hours of history. Stories published more
+than one hour before activation are skipped; the one-hour grace still allows a
+fresh deployment to deliver genuinely current news.
+
 ## Collection and matching
 
 `collect_fresh_stories()`:
@@ -123,7 +130,9 @@ Migration-only memory for recent titles from the old dashboard's
 4. Cleans title/summary HTML.
 5. Canonicalizes and validates the link.
 6. Skips stories older than 24 hours.
-7. Runs the roster matcher over title + summary.
+7. Skips stories published more than one hour before activation, so a fresh
+   deployment does not replay the previous day as a burst.
+8. Runs the roster matcher over title + summary.
 8. Inserts the article and a `pending` delivery.
 9. Returns a `CollectionResult` for logs and tests.
 
@@ -220,7 +229,7 @@ and the next invocation exits until the current one finishes.
 forces `TELEGRAM_ENABLED=false` with empty credentials. All RSS and Telegram HTTP
 calls are monkeypatched. Tests cover:
 
-- fresh schema and idempotent setup;
+- fresh schema, idempotent setup, and the one-time activation watermark;
 - legacy table migration;
 - roster counts, read-only validation, and actionable load errors;
 - multi-franchise and alias matching, false-positive guards;

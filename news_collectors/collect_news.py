@@ -28,9 +28,11 @@ from saved_stories.story_storage import (
     record_feed_failure,
     record_feed_success,
     save_article,
+    service_started_at,
 )
 
 MAX_ARTICLE_AGE_HOURS = 24.0
+FIRST_RUN_GRACE_SECS = 3600
 FETCH_TIMEOUT_SECS = 8
 FETCH_RETRIES = 1
 MAX_WORKERS = 16
@@ -46,6 +48,7 @@ class CollectionResult:
     matched: int = 0
     duplicates: int = 0
     stale: int = 0
+    historical: int = 0
     invalid_links: int = 0
     total_feeds: int = 0
     polled_feeds: int = 0
@@ -501,6 +504,8 @@ def collect_fresh_stories(feeds=None, max_workers=MAX_WORKERS):
     if not due_feeds:
         return result
 
+    started_at, _ = service_started_at()
+    history_cutoff = started_at - FIRST_RUN_GRACE_SECS
     polled = []
     workers = max(1, min(int(max_workers), len(due_feeds)))
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
@@ -528,6 +533,9 @@ def collect_fresh_stories(feeds=None, max_workers=MAX_WORKERS):
                 continue
             if age_hours is not None and age_hours > MAX_ARTICLE_AGE_HOURS:
                 result.stale += 1
+                continue
+            if published_ts and published_ts < history_cutoff:
+                result.historical += 1
                 continue
             matches = find_our_players_in_story(f"{title} {summary}")
             if not matches:
@@ -566,7 +574,7 @@ def collect_fresh_stories(feeds=None, max_workers=MAX_WORKERS):
     news_diary.info(
         f"Sweep complete: {result.inserted} new, {result.matched} matched, "
         f"{result.duplicates} duplicate, {result.stale} stale, "
-        f"{result.invalid_links} invalid links, "
+        f"{result.historical} pre-start, {result.invalid_links} invalid links, "
         f"{len(result.failed_feeds)}/{result.polled_feeds} feeds failed."
     )
     return result

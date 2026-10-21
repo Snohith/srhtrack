@@ -132,7 +132,8 @@ def main(argv=None):
             counts = delivery_counts()
             summary = (
                 f"SRHXtra cycle: {result.inserted} new, {result.duplicates} duplicate, "
-                f"{result.stale} stale, {result.invalid_links} bad link(s); "
+                f"{result.stale} stale, {result.historical} pre-start, "
+                f"{result.invalid_links} bad link(s); "
                 f"feeds {result.polled_feeds - len(result.failed_feeds)} ok / "
                 f"{len(result.failed_feeds)} failed / {result.skipped_feeds} backoff; "
                 f"alerts {alerts['sent']} sent, {alerts['retried']} retry, "

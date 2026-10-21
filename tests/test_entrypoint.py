@@ -13,6 +13,7 @@ class FakeCollection:
     inserted = 1
     duplicates = 0
     stale = 0
+    historical = 0
     invalid_links = 0
     polled_feeds = 1
     skipped_feeds = 0

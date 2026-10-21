@@ -53,4 +53,11 @@ CREATE TABLE IF NOT EXISTS suppressed_titles (
     expires_ts REAL NOT NULL
 );
 
+-- Persistent activation time.  The first collection skips older stories so a
+-- fresh deployment does not replay the last 24 hours as a burst of alerts.
+CREATE TABLE IF NOT EXISTS service_state (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
 PRAGMA user_version = 2;

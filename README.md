@@ -189,6 +189,9 @@ command every 300 seconds works; cron is the documented default.
   rare window can produce one duplicate retry after 15 minutes. Telegram has no
   idempotency key, so exactly-once delivery cannot be guaranteed across a
   crash.
+- The first collection writes a one-time activation timestamp. Stories
+  published more than one hour before activation are skipped, so a fresh
+  deployment does not replay the previous 24 hours as a burst of alerts.
 - There is no heartbeat, no digest, and no empty-cycle message. Silence means
   there was nothing new.
 - Old articles and their delivery rows are pruned after 30 days. Recent legacy
@@ -289,7 +292,7 @@ production ledger.
 Last run:
 
 ```text
-43 passed
+45 passed
 ```
 
 Coverage includes fresh schema creation, legacy migration, roster read-only

@@ -140,6 +140,33 @@ def make_title_simple_to_compare(title):
     return normalize_title(title)
 
 
+def service_started_at(now=None):
+    """Return (activation timestamp, created_now) from the ledger.
+
+    The timestamp is written once, on the first collection run, and never
+    moves.  It lets the collector ignore stories that predate activation.
+    """
+    now = time.time() if now is None else now
+    with closing(open_story_box()) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            row = conn.execute(
+                "SELECT value FROM service_state WHERE key = 'started_at'"
+            ).fetchone()
+            if row is not None:
+                conn.commit()
+                return float(row["value"]), False
+            conn.execute(
+                "INSERT INTO service_state (key, value) VALUES ('started_at', ?)",
+                (str(now),),
+            )
+            conn.commit()
+            return now, True
+        except Exception:
+            conn.rollback()
+            raise
+
+
 def is_title_suppressed(title_key, now=None):
     now = time.time() if now is None else now
     with closing(open_story_box()) as conn:
