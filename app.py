@@ -1,16 +1,17 @@
-"""
-SRHXtra — Squad Telemetry & Matchday Intelligence Engine (V15 — Live Crex Matchday).
-Bespoke Athletic Editorial & Data Telemetry System for Sunrisers Franchise Network:
-  - Sunrisers Hyderabad (IPL)
-  - Sunrisers Eastern Cape (SA20)
-  - Sunrisers Leeds Men & Women (The Hundred)
-V15 Upgrades:
-  - STRICT Excel Roster Enforcement (100% of tracked entities belong exclusively to squadofsunrisers.xlsx)
-  - LIVE Crex Matchday Engine (scrapes crex.com/schedule, checks Playing XI squads
-    against the roster, lists only fixtures with Sunrisers players — LIVE first,
-    finished matches removed)
-  - Individual Batting & Bowling Masterclasses (Sunrisers & National Team duty)
-  - Player Birthdays & Records Broken Engine
+"""Sunrisers news hub — all our teams' latest stories in one friendly place.
+
+We follow 4 Sunrisers family teams:
+  - Sunrisers Hyderabad (IPL, India)
+  - Sunrisers Eastern Cape (SA20, South Africa)
+  - Sunrisers Leeds Men (The Hundred, England)
+  - Sunrisers Leeds Women (The Hundred, England)
+
+How it works, in plain words:
+  1. We check ~268 cricket news websites every 15 minutes.
+  2. We keep only stories that mention one of our players or teams
+     (the player list lives in data/squadofsunrisers.xlsx).
+  3. We save those stories for 24 hours, then tidy them away.
+  4. You read them here: newest first, with search and team filters.
 """
 import os
 import sys
@@ -21,46 +22,46 @@ import urllib.parse
 from datetime import datetime, date as date_cls
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import streamlit as st
-from config.roster import MASTER_ROSTER
-from config.schedule import FIXTURE_SCHEDULE
-from database.db_manager import (
-    init_db, get_recent_news, search_news, purge_expired_24h_news,
-    get_metadata, set_metadata
+from our_teams.players import PLAYERS_BY_TEAM
+from our_teams.upcoming_matches import UPCOMING_MATCHES
+from saved_stories.story_storage import (
+    set_up_story_box, get_latest_stories, search_stories, throw_away_old_stories,
+    read_saved_fact, save_a_fact
 )
-from utils.time_utils import format_ist_12hr, get_current_ist, IST
-from config.theme import (
-    get_custom_css, render_header_banner, render_next_match_hero,
-    render_telemetry_metrics, render_featured_hero_news,
-    render_telemetry_news_card, render_telemetry_pulse_item,
-    render_broadcast_match_card,
-    render_squad_member_card,
-    get_favicon_url, safe_article_link, time_ago,
-    parse_fixture_datetime, get_fixture_status
+from helpers.dates_and_times import show_indian_time, what_time_is_it_in_india_now, INDIAN_TIME
+from our_teams.website_look import (
+    get_website_style, show_top_part, show_next_match_big_box,
+    show_numbers_at_top, show_big_story,
+    show_story_card, show_small_timeline_story,
+    show_match_card,
+    show_player_card,
+    find_tiny_website_icon, find_good_link_for_story, how_long_ago,
+    read_match_date_and_time, is_match_live_now_or_later
 )
-from scrapers.matchday_scraper import (
-    get_sunrisers_fixtures, clear_matchday_cache, CREX_SCHEDULE_URL,
+from news_collectors.find_matches import (
+    find_our_upcoming_matches, forget_saved_matches, WHERE_TO_FIND_MATCHES_ONLINE,
 )
 try:
-    from scrapers.rss_collector import fetch_and_filter_rss, TOP_50_CRICKET_SOURCES as CRICKET_SOURCES
-    _source_count = len(CRICKET_SOURCES)
+    from news_collectors.collect_news import collect_fresh_stories, NEWS_WEBSITES as NEWS_WEBSITES
+    _source_count = len(NEWS_WEBSITES)
 except Exception:
     class _FakeResult:
         inserted = 0
         failed_feeds = []
         total_polled = 0
-    def fetch_and_filter_rss():
+    def collect_fresh_stories():
         return _FakeResult()
-    _source_count = 193
-_player_count = len({p["name"] for data in MASTER_ROSTER.values() for p in data["players"]})
+    _source_count = 268
+_player_count = len({p["name"] for data in PLAYERS_BY_TEAM.values() for p in data["players"]})
 st.set_page_config(
-    page_title="SRHXtra — Squad Telemetry & Matchday Intelligence Engine",
+    page_title="Sunrisers News Hub — all our teams in one place",
     page_icon="🧡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
-st.markdown(get_custom_css(), unsafe_allow_html=True)
-init_db()
-purge_expired_24h_news()
+st.markdown(get_website_style(), unsafe_allow_html=True)
+set_up_story_box()
+throw_away_old_stories()
 
 
 def _load_dotenv(path=".env"):
@@ -86,43 +87,43 @@ def _load_dotenv(path=".env"):
 _load_dotenv()
 
 
-def _get_auto_ingest_interval_secs():
+def _how_often_to_check_news():
     try:
-        return max(60, int(os.environ.get("AUTO_INGEST_INTERVAL_SECS", "900")))
+        return max(60, int(os.environ.get("HOW_OFTEN_TO_CHECK_NEWS_SECS") or os.environ.get("AUTO_INGEST_INTERVAL_SECS", "900")))
     except (TypeError, ValueError):
         return 900
 
 
-AUTO_INGEST_INTERVAL_SECS = _get_auto_ingest_interval_secs()
+HOW_OFTEN_TO_CHECK_NEWS_SECS = _how_often_to_check_news()
 if "last_refreshed" not in st.session_state:
-    st.session_state["last_refreshed"] = format_ist_12hr()
+    st.session_state["last_refreshed"] = show_indian_time()
 if "last_refresh_ts" not in st.session_state:
     st.session_state["last_refresh_ts"] = 0.0
-if "auto_ingest_running" not in st.session_state:
-    st.session_state["auto_ingest_running"] = False
+if "news_check_running" not in st.session_state:
+    st.session_state["news_check_running"] = False
 @st.cache_data(ttl=60)
 def cached_get_recent_news(limit=150):
-    return get_recent_news(limit=limit)
+    return get_latest_stories(limit=limit)
 @st.cache_data(ttl=60)
 def cached_search_news(query):
-    return search_news(query)
+    return search_stories(query)
 
 
-def _secs_since_last_ingest():
+def _seconds_since_last_news_check():
     try:
-        return time.time() - float(get_metadata("last_auto_ingest_ts", "0") or 0)
+        return time.time() - float(read_saved_fact("last_news_check_time", "0") or 0)
     except (TypeError, ValueError):
         return float("inf")
 
 
-def _run_ingest_cycle(reason):
-    """Single synchronous ingest + cache invalidation shared by auto & manual.
+def _do_one_news_check_and_refresh(reason):
+    """Check the news once, then refresh what you see. Used by auto + manual.
 
     Timestamp is written AFTER a successful fetch so a failed cycle retries
     on the next tick instead of silently skipping a full interval. A cycle
     only counts as failed when EVERY polled feed failed.
     """
-    result = fetch_and_filter_rss()
+    result = collect_fresh_stories()
     try:
         cached_get_recent_news.clear()
         cached_search_news.clear()
@@ -137,52 +138,52 @@ def _run_ingest_cycle(reason):
         all_failed = False
     if not all_failed:
         try:
-            set_metadata("last_auto_ingest_ts", str(now))
+            save_a_fact("last_news_check_time", str(now))
         except Exception:
             pass
-    st.session_state["last_refreshed"] = format_ist_12hr()
+    st.session_state["last_refreshed"] = show_indian_time()
     st.session_state["last_refresh_ts"] = now
     return result
 
 
-_secs_since_auto = _secs_since_last_ingest()
-if _secs_since_auto >= AUTO_INGEST_INTERVAL_SECS and not st.session_state["auto_ingest_running"]:
-    st.session_state["auto_ingest_running"] = True
+_seconds_since_last_check = _seconds_since_last_news_check()
+if _seconds_since_last_check >= HOW_OFTEN_TO_CHECK_NEWS_SECS and not st.session_state["news_check_running"]:
+    st.session_state["news_check_running"] = True
     try:
-        with st.spinner(f"Auto-syncing {_source_count} feeds..."):
+        with st.spinner(f"Checking {_source_count} feeds..."):
             # Cross-session race guard: two tabs whose fragment timers align
-            # would both pass the gate above and ingest twice (duplicate DMs;
-            # DB rows dedupe silently). A short random delay decorrelates them;
+            # would both pass the gate above and check twice (double texts;
+            # saved stories skip copies quietly). A short random pause keeps them apart;
             # the loser re-reads a fresh timestamp and skips.
             time.sleep(random.uniform(1.0, 8.0))
-            if _secs_since_last_ingest() >= AUTO_INGEST_INTERVAL_SECS:
-                _run_ingest_cycle("auto")
+            if _seconds_since_last_news_check() >= HOW_OFTEN_TO_CHECK_NEWS_SECS:
+                _do_one_news_check_and_refresh("auto")
     except Exception as exc:
         try:
-            from utils.logger import error_logger
-            error_logger.error(f"Auto RSS ingest failed: {exc}")
+            from helpers.log_books import problems_diary
+            problems_diary.error(f"Auto news check failed: {exc}")
         except Exception:
             pass
     finally:
-        st.session_state["auto_ingest_running"] = False
-    _secs_since_auto = _secs_since_last_ingest()
+        st.session_state["news_check_running"] = False
+    _seconds_since_last_check = _seconds_since_last_news_check()
 if len(cached_get_recent_news(limit=1)) == 0:
-    with st.spinner(f"Loading matchday intelligence (scanning {_source_count} feeds)..."):
+    with st.spinner(f"Loading the latest stories (checking {_source_count} feeds)..."):
         try:
-            _run_ingest_cycle("bootstrap")
+            _do_one_news_check_and_refresh("bootstrap")
         except Exception:
             pass
 
 
-@st.fragment(run_every=AUTO_INGEST_INTERVAL_SECS)
+@st.fragment(run_every=HOW_OFTEN_TO_CHECK_NEWS_SECS)
 def _auto_refresh_tick():
-    """Fires every AUTO_INGEST_INTERVAL_SECS with zero interaction.
+    """Fires every HOW_OFTEN_TO_CHECK_NEWS_SECS with zero interaction.
 
     A fragment rerun alone would not refresh the feed list (rendered outside
-    the fragment), so escalate to a full app rerun — the ingest check above
+    the fragment), so ask for a full refresh — the news check above
     then runs synchronously and the current render shows fresh rows.
     """
-    if _secs_since_last_ingest() >= AUTO_INGEST_INTERVAL_SECS:
+    if _seconds_since_last_news_check() >= HOW_OFTEN_TO_CHECK_NEWS_SECS:
         st.rerun()
 
 
@@ -198,21 +199,21 @@ def get_bulletproof_sort_key(n):
         return datetime.strptime(pub_str, "%b %d, %Y @ %I:%M %p IST").timestamp()
     except Exception:
         return 0.0
-st.sidebar.markdown("<div class='srh-side-brand'><span class='dot'>●</span> SRHXtra</div><div class='srh-side-label' style='margin-bottom:1rem;'>Squad telemetry · V15</div>", unsafe_allow_html=True)
+st.sidebar.markdown("<div class='srh-side-brand'><span class='dot'>●</span> SRHXtra</div><div class='srh-side-label' style='margin-bottom:1rem;'>All 4 Sunrisers teams</div>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
 st.sidebar.markdown(f"<span class='srh-side-label'>Roster</span>\n`{_player_count} players · 4 squads`", unsafe_allow_html=True)
 st.sidebar.markdown(f"<span class='srh-side-label'>Last refreshed · IST</span>\n`{st.session_state['last_refreshed']}`", unsafe_allow_html=True)
-_auto_mins_total = AUTO_INGEST_INTERVAL_SECS // 60
-_auto_secs_remaining = max(0, int(AUTO_INGEST_INTERVAL_SECS - _secs_since_auto))
+_auto_mins_total = HOW_OFTEN_TO_CHECK_NEWS_SECS // 60
+_auto_secs_remaining = max(0, int(HOW_OFTEN_TO_CHECK_NEWS_SECS - _seconds_since_last_check))
 _auto_mins = _auto_secs_remaining // 60
 _auto_s = _auto_secs_remaining % 60
 if _auto_secs_remaining > 0:
-    st.sidebar.caption(f"Auto-sync every {_auto_mins_total}m · next in {_auto_mins}m {_auto_s:02d}s")
+    st.sidebar.caption(f"Auto-check every {_auto_mins_total}m · next in {_auto_mins}m {_auto_s:02d}s")
 else:
-    st.sidebar.caption("Sync running…")
+    st.sidebar.caption("Checking now…")
 try:
-    from utils.telegram import is_telegram_configured, get_telegram_config as _tg_cfg
-    if is_telegram_configured():
+    from helpers.phone_alerts import are_phone_alerts_ready, what_are_our_phone_settings as _tg_cfg
+    if are_phone_alerts_ready():
         st.sidebar.caption(f"🔔 Telegram alerts ON ({_tg_cfg()['mode']})")
     else:
         st.sidebar.caption("🔕 Telegram alerts off — set TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID in .env")
@@ -224,16 +225,16 @@ franchise_filter = st.sidebar.selectbox(
     ["All", "Sunrisers Hyderabad", "Sunrisers Eastern Cape", "Sunrisers Leeds Men", "Sunrisers Leeds Women"]
 )
 if st.sidebar.button(f"Refresh feeds ({_source_count})", use_container_width=True):
-    with st.spinner(f"Polling {_source_count} global sources..."):
-        result = _run_ingest_cycle("manual")
+    with st.spinner(f"Checking {_source_count} global sources..."):
+        result = _do_one_news_check_and_refresh("manual")
         inserted = getattr(result, "inserted", int(result))
         failed = getattr(result, "failed_feeds", [])
-        st.sidebar.success(f"Captured {inserted} fresh items!")
+        st.sidebar.success(f"Saved {inserted} fresh items!")
         if failed:
-            st.sidebar.warning(f"{len(failed)} feeds unavailable.")
+            st.sidebar.warning(f"{len(failed)} websites unavailable.")
     st.rerun()
-with st.sidebar.expander("Squad roster", expanded=False):
-    for fkey, fdata in MASTER_ROSTER.items():
+with st.sidebar.expander("Our teams", expanded=False):
+    for fkey, fdata in PLAYERS_BY_TEAM.items():
         fname = fdata.get("franchise_name", fkey)
         p_list = fdata.get("players", [])
         coach = next((p["name"] for p in p_list if "coach" in p.get("role", "").lower() or "vettori" in p["name"].lower() or "birrell" in p["name"].lower()), None)
@@ -243,18 +244,18 @@ with st.sidebar.expander("Squad roster", expanded=False):
             st.caption(f"Coach · **{coach}**")
         if captain:
             st.caption(f"Captain · **{captain}**")
-st.markdown(render_header_banner(_player_count, 4), unsafe_allow_html=True)
+st.markdown(show_top_part(_player_count, 4), unsafe_allow_html=True)
 @st.cache_data(ttl=900)
 def cached_get_matchday_fixtures():
     """Live Crex fixtures (LIVE first, finished removed). Cached 15 min."""
     try:
-        return get_sunrisers_fixtures()
+        return find_our_upcoming_matches()
     except Exception:
         return []
 
 
 def _fixture_live_status(s):
-    return s.get("status") or get_fixture_status(s)
+    return s.get("status") or is_match_live_now_or_later(s)
 
 
 try:
@@ -264,29 +265,29 @@ except Exception:
 if not matchday_fixtures:
     # Offline fallback: legacy static calendar, LIVE/UPCOMING only.
     matchday_fixtures = [
-        s for s in FIXTURE_SCHEDULE if get_fixture_status(s) in ["LIVE", "UPCOMING"]
+        s for s in UPCOMING_MATCHES if is_match_live_now_or_later(s) in ["LIVE", "UPCOMING"]
     ]
 live_fixtures = [s for s in matchday_fixtures if _fixture_live_status(s) == "LIVE"]
 if live_fixtures:
     hero_fixture = live_fixtures[0]
     hero_status = "LIVE"
 elif matchday_fixtures:
-    hero_fixture = sorted(matchday_fixtures, key=lambda x: parse_fixture_datetime(x) or datetime.max)[0]
+    hero_fixture = sorted(matchday_fixtures, key=lambda x: read_match_date_and_time(x) or datetime.max)[0]
     hero_status = _fixture_live_status(hero_fixture)
 else:
     hero_fixture = None
     hero_status = "UPCOMING"
 if hero_fixture:
-    st.markdown(render_next_match_hero(hero_fixture, status=hero_status), unsafe_allow_html=True)
+    st.markdown(show_next_match_big_box(hero_fixture, status=hero_status), unsafe_allow_html=True)
 live_count = len(cached_get_recent_news(limit=150))
-st.markdown(render_telemetry_metrics(_source_count, _player_count, live_count), unsafe_allow_html=True)
+st.markdown(show_numbers_at_top(_source_count, _player_count, live_count), unsafe_allow_html=True)
 tab_news, tab_schedule, tab_squads = st.tabs([
     f"Live feed ({live_count})",
     "Matchday",
     f"Squads ({_player_count})",
 ])
 with tab_news:
-    st.markdown("<div class='srh-section-title'>Live feed</div><div class='srh-section-sub'>Real-time squad intelligence from every ingestion cycle.</div>", unsafe_allow_html=True)
+    st.markdown("<div class='srh-section-title'>Live feed</div><div class='srh-section-sub'>Fresh stories about our players, newest first.</div>", unsafe_allow_html=True)
     col_search, col_stats = st.columns([3, 1])
     with col_search:
         search_query = st.text_input(
@@ -305,9 +306,9 @@ with tab_news:
     if news_list:
         col_main, col_pulse = st.columns([2.2, 1])
         with col_main:
-            st.markdown(render_featured_hero_news(news_list[0]), unsafe_allow_html=True)
+            st.markdown(show_big_story(news_list[0]), unsafe_allow_html=True)
             for n in news_list[1:]:
-                st.markdown(render_telemetry_news_card(n), unsafe_allow_html=True)
+                st.markdown(show_story_card(n), unsafe_allow_html=True)
         with col_pulse:
             st.markdown("""
             <div class='pulse-panel'>
@@ -317,7 +318,7 @@ with tab_news:
                 </div>
             """, unsafe_allow_html=True)
             for n in news_list[:10]:
-                st.markdown(render_telemetry_pulse_item(n), unsafe_allow_html=True)
+                st.markdown(show_small_timeline_story(n), unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
     else:
         if search_query.strip():
@@ -328,7 +329,7 @@ with tab_schedule:
     st.markdown("<div class='srh-section-title'>Matchday</div>", unsafe_allow_html=True)
     st.markdown(
         f"<div class='srh-section-sub'>"
-        f"Live from <a href='{CREX_SCHEDULE_URL}' target='_blank' rel='noopener'>crex.com/schedule</a> · "
+        f"Live from <a href='{WHERE_TO_FIND_MATCHES_ONLINE}' target='_blank' rel='noopener'>crex.com/schedule</a> · "
         f"today through the next 4 days. "
         f"Every squad checked against the roster — Sunrisers fixtures only, live first.</div>",
         unsafe_allow_html=True,
@@ -336,7 +337,7 @@ with tab_schedule:
     col_ctrl, col_m1, col_m2, col_m3 = st.columns([1.5, 1, 1, 1])
     with col_ctrl:
         if st.button("Refresh matchday", use_container_width=True):
-            clear_matchday_cache()
+            forget_saved_matches()
             cached_get_matchday_fixtures.clear()
             st.rerun()
     base_schedule = [s for s in matchday_fixtures if _fixture_live_status(s) in ["LIVE", "UPCOMING"]]
@@ -359,8 +360,8 @@ with tab_schedule:
         }
         fkey = franchise_key_map.get(franchise_filter, "")
         franchise_players = set()
-        if fkey and fkey in MASTER_ROSTER:
-            franchise_players = {p["name"] for p in MASTER_ROSTER[fkey]["players"]}
+        if fkey and fkey in PLAYERS_BY_TEAM:
+            franchise_players = {p["name"] for p in PLAYERS_BY_TEAM[fkey]["players"]}
         def _fixture_matches_filter(s):
             if franchise_filter in str(s.get("squad", "")):
                 return True
@@ -378,7 +379,7 @@ with tab_schedule:
         filtered_sched = base_schedule
     filtered_sched = sorted(
         filtered_sched,
-        key=lambda x: (0 if _fixture_live_status(x) == "LIVE" else 1, parse_fixture_datetime(x) or datetime.max),
+        key=lambda x: (0 if _fixture_live_status(x) == "LIVE" else 1, read_match_date_and_time(x) or datetime.max),
     )
     if filtered_sched:
         grouped_dates = {}
@@ -388,7 +389,7 @@ with tab_schedule:
             st.markdown(f"<div class='srh-date-group'>{date_str}</div>", unsafe_allow_html=True)
             for item in items:
                 status = _fixture_live_status(item)
-                st.markdown(render_broadcast_match_card(item, status=status), unsafe_allow_html=True)
+                st.markdown(show_match_card(item, status=status), unsafe_allow_html=True)
     else:
         st.info(f"No upcoming Sunrisers fixtures for **{franchise_filter}** right now. Refresh matchday to re-check live.")
 with tab_squads:
@@ -433,13 +434,13 @@ with tab_squads:
         if _biz_news:
             st.markdown(f"<div class='srh-note' style='margin-bottom:0.5rem;'>Ownership & business · {len(_biz_news)}</div>", unsafe_allow_html=True)
             for _bn in _biz_news:
-                st.markdown(render_telemetry_news_card(_bn), unsafe_allow_html=True)
+                st.markdown(show_story_card(_bn), unsafe_allow_html=True)
         else:
-            st.caption("No ownership or business stories in the last 24 hours — exchange filings and business wires are polled with every ingest cycle.")
+            st.caption("No ownership or business stories in the last 24 hours — exchange filings and business wires are checked with every news round.")
 
     col_sq_f, col_sq_role, col_sq_search = st.columns([1.5, 1.2, 2])
     with col_sq_f:
-        squad_team_options = ["All Franchises"] + [fdata["franchise_name"] for fdata in MASTER_ROSTER.values()]
+        squad_team_options = ["All Franchises"] + [fdata["franchise_name"] for fdata in PLAYERS_BY_TEAM.values()]
         def_idx = squad_team_options.index(franchise_filter) if franchise_filter in squad_team_options else 0
         squad_team_filter = st.selectbox("Team", squad_team_options, index=def_idx, key="squad_team_sel")
     with col_sq_role:
@@ -452,7 +453,7 @@ with tab_squads:
         squad_search_query = st.text_input("Search", placeholder="Player, coach or country…", key="squad_search_input")
 
     filtered_members = []
-    for fkey, fdata in MASTER_ROSTER.items():
+    for fkey, fdata in PLAYERS_BY_TEAM.items():
         fname = fdata["franchise_name"]
         if squad_team_filter != "All Franchises" and squad_team_filter != fname:
             continue
@@ -525,11 +526,11 @@ with tab_squads:
                 cols = st.columns(3)
                 for idx, player in enumerate(plist):
                     with cols[idx % 3]:
-                        st.markdown(render_squad_member_card(player, franchise_name=tname), unsafe_allow_html=True)
+                        st.markdown(show_player_card(player, franchise_name=tname), unsafe_allow_html=True)
         else:
             cols = st.columns(3)
             for idx, player in enumerate(filtered_members):
                 with cols[idx % 3]:
-                    st.markdown(render_squad_member_card(player, franchise_name=squad_team_filter), unsafe_allow_html=True)
+                    st.markdown(show_player_card(player, franchise_name=squad_team_filter), unsafe_allow_html=True)
     else:
         st.info("No squad members match the current filter criteria.")

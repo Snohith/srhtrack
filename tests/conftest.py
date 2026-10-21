@@ -1,7 +1,7 @@
 """Pytest bootstrap: guarantees DB isolation before ANY test module is imported.
 
 pytest imports conftest.py before collecting test modules, so SRH_DB_PATH is
-set before database.db_manager binds DB_PATH at its first import. Without
+set before saved_stories.story_storage binds STORY_BOX_FILE at its first import. Without
 this, whichever test module imports first (alphabetical: test_ingest_job)
 would pin the whole suite to the production database file.
 """

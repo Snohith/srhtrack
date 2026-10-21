@@ -10,8 +10,8 @@ import os
 import tempfile
 
 # Isolated temp DB (mirrors tests/test_system.py): importing
-# scrapers.matchday_scraper pulls in scrapers/__init__ -> rss_collector ->
-# database.db_manager, which binds SRH_DB_PATH at import time. This must stay
+# news_collectors.find_matches pulls in news_collectors/__init__ -> collect_news ->
+# saved_stories.story_storage, which binds SRH_DB_PATH at import time. This must stay
 # a temp file so the production DB is never touched, regardless of pytest
 # import order. This module performs no DB writes itself.
 _tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
@@ -21,9 +21,9 @@ os.environ["SRH_DB_PATH"] = _tmp_db.name
 from unittest.mock import patch
 from datetime import timedelta
 
-from utils.time_utils import get_current_ist
+from helpers.dates_and_times import what_time_is_it_in_india_now
 
-from scrapers import matchday_scraper as md
+from news_collectors import find_matches as md
 
 
 def _date_line_safe(dt):
@@ -32,9 +32,9 @@ def _date_line_safe(dt):
     return s.replace(", 0", ", ").replace(" 0", " ")
 
 
-_LIVE_DT = get_current_ist().replace(tzinfo=None) - timedelta(hours=2)
-_UP_DT = get_current_ist().replace(tzinfo=None) + timedelta(days=1, hours=2)
-_OLD_DT = get_current_ist().replace(tzinfo=None) - timedelta(days=8)
+_LIVE_DT = what_time_is_it_in_india_now().replace(tzinfo=None) - timedelta(hours=2)
+_UP_DT = what_time_is_it_in_india_now().replace(tzinfo=None) + timedelta(days=1, hours=2)
+_OLD_DT = what_time_is_it_in_india_now().replace(tzinfo=None) - timedelta(days=8)
 
 SCHEDULE_HTML = """
 <div class="date-wise-matches-card">
@@ -121,7 +121,7 @@ OLD_SRH_HTML = _match_html(
 
 def test_schedule_cards_parsed():
     with patch.object(md, "_http_get", return_value=SCHEDULE_HTML):
-        cards = md.fetch_schedule_cards()
+        cards = md.download_match_list_from_website()
     assert len(cards) == 2, cards
     assert cards[0]["team1"] == "New South Wales"
     assert cards[0]["team2"] == "Tasmania"
@@ -132,7 +132,7 @@ def test_schedule_cards_parsed():
 
 
 def test_squad_extract_covers_both_teams():
-    squad = md.extract_squad_text(UPCOMING_SRH_HTML)
+    squad = md.read_squad_words_from_match_page(UPCOMING_SRH_HTML)
     assert "Phoebe Litchfield" in squad
     assert "Annabel Sutherland" in squad
     assert "Beth Mooney" in squad  # embedded-only name still found
@@ -140,12 +140,12 @@ def test_squad_extract_covers_both_teams():
 
 
 def test_roster_check_uses_excel_roster():
-    from config.roster import match_player_or_franchise_in_text
-    squad = md.extract_squad_text(LIVE_SRH_HTML)
-    names = {m["player_name"] for m in match_player_or_franchise_in_text(squad)}
+    from our_teams.players import find_our_players_in_story
+    squad = md.read_squad_words_from_match_page(LIVE_SRH_HTML)
+    names = {m["player_name"] for m in find_our_players_in_story(squad)}
     assert "Pat Cummins" in names, names
-    squad2 = md.extract_squad_text(UPCOMING_SRH_HTML)
-    names2 = {m["player_name"] for m in match_player_or_franchise_in_text(squad2)}
+    squad2 = md.read_squad_words_from_match_page(UPCOMING_SRH_HTML)
+    names2 = {m["player_name"] for m in find_our_players_in_story(squad2)}
     assert "Phoebe Litchfield" in names2 and "Annabel Sutherland" in names2
     print("✅ Roster check matches SRH / Leeds Women stars.")
 
@@ -154,7 +154,7 @@ def test_strict_squad_matching_no_false_positives():
     # Abhishek Paradkar (USA) is NOT Abhishek Sharma; Malan Kruger is NOT
     # Patrick Kruger; Ishan Pandey is NOT Ishan Kishan; Duan Jansen (Titans)
     # is NOT Marco Jansen; Rubin Hermann is NOT Jordan Hermann.
-    names = {m["player_name"] for m in md.match_squad_players(
+    names = {m["player_name"] for m in md.find_our_players_in_match_squad(
         ["Abhishek Paradkar", "Malan Kruger", "Ishan Pandey", "Duan Jansen",
          "Rubin Hermann"])}
     assert "Abhishek Sharma" not in names, names
@@ -164,7 +164,7 @@ def test_strict_squad_matching_no_false_positives():
     assert "Jordan Hermann" not in names, names
     assert names == set(), names
     # ...while true roster names (full, initial, or nickname variants) match.
-    good = {m["player_name"] for m in md.match_squad_players(
+    good = {m["player_name"] for m in md.find_our_players_in_match_squad(
         ["Pat Cummins", "P Cummins", "Mitchell Marsh", "Phoebe Litchfield",
          "Abrar Ahmed", "Kamindu Mendis", "Eshan Malinga", "Quinton De Kock",
          "Marco Jansen", "Jordan Hermann"])}
@@ -188,19 +188,19 @@ def test_lookalike_squad_yields_no_fixture():
         embedded=["Abhishek Paradkar", "Malan Kruger", "Gerhard Erasmus"],
     )
     with patch.object(md, "_http_get", return_value=lookalike_html):
-        assert md.fetch_match_fixture(card) is None
+        assert md.check_one_match_for_our_players(card) is None
     print("✅ Lookalike squads (Paradkar/Kruger) yield no fixture.")
 
 
 def test_match_meta_and_status():
     card = {"team1": "Pakistan", "team2": "Sri Lanka", "series": "SL vs PAK 2026",
             "format_str": "3rd T20I", "date_header": "Tue, 13 Oct 2026"}
-    meta_live = md.extract_match_meta(LIVE_SRH_HTML, card)
+    meta_live = md.read_match_details(LIVE_SRH_HTML, card)
     assert meta_live["is_live_tab"] is True
     assert meta_live["venue"] == "Sydney Olympic Park"
     assert meta_live["datetime"] is not None
     assert md._resolve_status(meta_live) == "LIVE"
-    meta_up = md.extract_match_meta(UPCOMING_SRH_HTML, card)
+    meta_up = md.read_match_details(UPCOMING_SRH_HTML, card)
     assert meta_up["is_live_tab"] is False
     assert md._resolve_status(meta_up) == "UPCOMING"
     print("✅ Meta extract + LIVE/UPCOMING status.")
@@ -211,22 +211,27 @@ def test_fixture_returned_only_with_srh_player():
             "format_str": "8th One Day", "date_header": "Tue, 13 Oct 2026",
             "href": "/cricket-live-score/nsw-vs-tas-test-132H"}
     with patch.object(md, "_http_get", return_value=LIVE_SRH_HTML):
-        fx = md.fetch_match_fixture(card)
+        fx = md.check_one_match_for_our_players(card)
     assert fx is not None
     assert "Pat Cummins" in fx["srh_players"], fx
     assert fx["link"].startswith("https://crex.com/cricket-live-score/")
     assert fx["status"] == "LIVE"
     with patch.object(md, "_http_get", return_value=NO_SRH_HTML):
-        assert md.fetch_match_fixture(card) is None
+        assert md.check_one_match_for_our_players(card) is None
     print("✅ Fixture details returned only for SRH squads (with link).")
 
 
 def test_finished_matches_removed_and_live_first():
+    # Date headers built from today, so this test works any day it runs
+    # (the old fixed "Oct 13/14" headers expired and got window-filtered).
+    from helpers.dates_and_times import what_time_is_it_in_india_now as _now
+    _today = _now().replace(tzinfo=None).date()
+    _live_hdr = _LIVE_DT.strftime("%a, %d %b %Y")
     live_card = {"team1": "New South Wales", "team2": "Tasmania", "series": "S",
-                 "format_str": "8th", "date_header": "Tue, 13 Oct 2026",
+                 "format_str": "8th", "date_header": _live_hdr,
                  "href": "/cricket-live-score/live-one"}
     up_card = {"team1": "Australia Women", "team2": "Bangladesh Women", "series": "S2",
-               "format_str": "3rd ODI", "date_header": "Wed, 14 Oct 2026",
+               "format_str": "3rd ODI", "date_header": _UP_DT.strftime("%a, %d %b %Y"),
                "href": "/cricket-live-score/up-one"}
     old_card = {"team1": "Old Team A", "team2": "Old Team B", "series": "S3",
                 "format_str": "Final",
@@ -243,30 +248,30 @@ def test_finished_matches_removed_and_live_first():
                 return v
         return None
 
-    md.clear_matchday_cache()
-    with patch.object(md, "fetch_api_cards",
+    md.forget_saved_matches()
+    with patch.object(md, "download_match_list_from_api",
                       return_value=[up_card, old_card, live_card]):
-        with patch.object(md, "fetch_schedule_cards", return_value=[]):
+        with patch.object(md, "download_match_list_from_website", return_value=[]):
             with patch.object(md, "_http_get", side_effect=fake_http):
-                fixtures = md.get_sunrisers_fixtures(force_refresh=True)
+                fixtures = md.find_our_upcoming_matches(force_refresh=True)
     assert len(fixtures) == 2, fixtures  # finished Old Team match removed
     assert fixtures[0]["status"] == "LIVE", fixtures
     assert fixtures[1]["status"] == "UPCOMING", fixtures
     assert all(" drizzle " not in f["link"] for f in fixtures)
-    md.clear_matchday_cache()
+    md.forget_saved_matches()
     print("✅ Finished removed; LIVE sorts before upcoming.")
 
 
 def test_fixture_compatible_with_theme_helpers():
-    from config.theme import parse_fixture_datetime, get_fixture_status
+    from our_teams.website_look import read_match_date_and_time, is_match_live_now_or_later
     card = {"team1": "Pakistan", "team2": "Sri Lanka", "series": "SL vs PAK 2026",
             "format_str": "3rd T20I", "date_header": "Tue, 13 Oct 2026",
             "href": "/cricket-live-score/x"}
     with patch.object(md, "_http_get", return_value=UPCOMING_SRH_HTML):
-        fx = md.fetch_match_fixture(card)
+        fx = md.check_one_match_for_our_players(card)
     assert fx is not None
-    assert parse_fixture_datetime(fx) is not None
-    assert get_fixture_status(fx) in ("LIVE", "UPCOMING")
+    assert read_match_date_and_time(fx) is not None
+    assert is_match_live_now_or_later(fx) in ("LIVE", "UPCOMING")
     print("✅ Live fixture shape works with theme datetime/status + cards.")
 
 
@@ -274,8 +279,8 @@ def test_on_this_day_removed():
     import os as _os
     repo = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
     app_src = open(_os.path.join(repo, "app.py")).read()
-    theme_src = open(_os.path.join(repo, "config", "theme.py")).read()
-    init_src = open(_os.path.join(repo, "config", "__init__.py")).read()
+    theme_src = open(_os.path.join(repo, "our_teams", "website_look.py")).read()
+    init_src = open(_os.path.join(repo, "our_teams", "__init__.py")).read()
     assert "ON_THIS_DAY_DB" not in app_src
     assert "tab_otd" not in app_src
     assert "on this day" not in app_src.lower()
@@ -283,22 +288,23 @@ def test_on_this_day_removed():
     assert "render_otd_telemetry_card" not in theme_src
     assert "render_otd_telemetry_card" not in init_src
     assert "def render_otd_telemetry_card" not in theme_src
+    assert "show_otd_story_card" not in theme_src
     print("✅ On This Day removed from UI + codebase.")
 
 
 def test_third_party_links_rejected_and_escaped():
-    from config.theme import render_broadcast_match_card
+    from our_teams.website_look import show_match_card
     card = {"team1": "A", "team2": "B", "series": "S",
             "format_str": "T20", "date_header": "Tue, 13 Oct 2026",
             "href": "https://evil.example.com/cricket-live-score/x"}
     with patch.object(md, "_http_get", return_value=LIVE_SRH_HTML):
-        assert md.fetch_match_fixture(card) is None  # off-site URL never fetched
+        assert md.check_one_match_for_our_players(card) is None  # off-site URL never fetched
     fx = {"squad": "A", "vs": "B", "league": "S", "time": "01:00 PM IST",
           "date_str": "October 13, 2026", "players": "Pat Cummins",
           "venue": "<script>alert(1)</script>",
           "link": "https://evil.example.com/cricket-live-score/x",
           "status": "UPCOMING"}
-    html = render_broadcast_match_card(fx, status="UPCOMING")
+    html = show_match_card(fx, status="UPCOMING")
     assert "<script>" not in html and "&lt;script&gt;" in html
     assert "evil.example.com" not in html  # off-site link never rendered
     print("✅ Off-site links rejected; markup escaped.")
@@ -329,11 +335,11 @@ def test_api_cards_window_and_dedupe():
     mapping = {"t": [{"f_key": "U", "n": "Pakistan", "sn": "PAK"},
                      {"f_key": "T", "n": "Sri Lanka", "sn": "SL"}],
                "s": [{"f_key": "2BD", "n": "SL tour of PAK", "sn": "SL vs PAK 2026"}]}
-    with patch.object(md, "fetch_fixture_api_page", return_value=items):
-        with patch.object(md, "resolve_fixture_names",
+    with patch.object(md, "download_one_page_of_matches", return_value=items):
+        with patch.object(md, "turn_team_codes_into_names",
                           return_value=({"U": ("Pakistan", "PAK"), "T": ("Sri Lanka", "SL")},
                                         {"2BD": ("SL tour of PAK", "SL vs PAK 2026")})):
-            cards = md.fetch_api_cards(pages=(0,), window_days=4)
+            cards = md.download_match_list_from_api(pages=(0,), window_days=4)
     assert len(cards) == 1, cards  # dup IN1 collapsed, OUT1 outside window
     assert cards[0]["href"].endswith("match-match-updates-IN1")
     assert cards[0]["format_str"] == "3rd T20I"
@@ -341,18 +347,22 @@ def test_api_cards_window_and_dedupe():
 
 
 def test_merge_unions_api_and_ssr():
+    from helpers.dates_and_times import what_time_is_it_in_india_now as _now2
+    _t = _now2().replace(tzinfo=None).date()
+    _in_window = _t.strftime("%a, %d %b %Y")
+    _far_future = (_t + timedelta(days=30)).strftime("%a, %d %b %Y")
     api = [{"team1": "A", "team2": "B", "series": "S", "format_str": "T20",
             "time_str": "1:00 PM", "href": "/cricket-live-score/match-match-updates-N1",
-            "date_header": "Tue, 13 Oct 2026", "start_ts": 1, "nf": "N1"}]
+            "date_header": _in_window, "start_ts": 1, "nf": "N1"}]
     ssr = [{"team1": "A", "team2": "B", "series": "S", "format_str": "T20",
             "time_str": "1:00 PM",
             "href": "/cricket-live-score/a-vs-b-1st-t20-s-2026-match-updates-N1",
-            "date_header": "Tue, 13 Oct 2026"},
+            "date_header": _in_window},
            {"team1": "C", "team2": "D", "series": "S2", "format_str": "ODI",
             "time_str": "2:00 PM",
             "href": "/cricket-live-score/c-vs-d-999-odi-s2-match-updates-N2",
-            "date_header": "Tue, 13 Oct 2036"}]
-    # N2 is dated 2036 (outside the window) -> dropped; N1 deduped API wins.
+            "date_header": _far_future}]
+    # N2 is dated 30 days out (outside the 4-day window) -> dropped; N1 deduped API wins.
     merged = md.merge_cards(api, ssr, window_days=4)
     assert [md._card_key(c) for c in merged] == ["N1"], merged
     assert merged[0]["href"].endswith("match-match-updates-N1")

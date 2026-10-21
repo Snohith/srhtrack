@@ -1,11 +1,11 @@
 .PHONY: help install run test sync-squads clean lint
 
 help:
-	@echo "Available commands for SRHXtra:"
+	@echo "Friendly commands for the Sunrisers news hub:"
 	@echo "  make install      - Install Python dependencies"
 	@echo "  make run          - Launch Streamlit dashboard locally"
 	@echo "  make test         - Run full pytest automated verification suite"
-	@echo "  make sync-squads  - Synchronize squad database from script to Excel & DB"
+	@echo "  make sync-squads  - Refresh our player list from the Excel sheet"
 	@echo "  make clean        - Remove bytecode, test caches, and temporary artifacts"
 
 install:
@@ -15,13 +15,13 @@ run:
 	streamlit run app.py
 
 bot:
-	python bot.py
+	python phone_bot.py
 
 test:
 	pytest tests/
 
 sync-squads:
-	python scripts/update_squads.py
+	python handy_tools/refresh_player_list.py
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +

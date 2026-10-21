@@ -1,6 +1,6 @@
 # Tracker — How Our Project Works
 
-**One-sentence version:** Tracker reads cricket news from 193 RSS feeds, keeps only stories about our Sunrisers players, stores them with standard defaults, and shows them in a web dashboard.
+**One-sentence version:** Tracker reads cricket news from 268 RSS feeds, keeps only stories about our Sunrisers players, stores them with standard defaults, and shows them in a web dashboard.
 
 Live app: `https://srhtrack.streamlit.app/` — run locally with `streamlit run app.py`.
 
@@ -18,16 +18,16 @@ The player list lives in `data/squadofsunrisers.xlsx` (~90 rows). Everything the
 ## The journey of one news story
 
 ```
-193 RSS feeds
-  → scrapers/rss_collector.py  (download each feed, retry if it fails)
-  → config/roster.py           (is a Sunrisers player or team mentioned? if no, drop it)
-  → database/srh_tracker.db   (SQLite file — saved for 24 hours)
+268 RSS feeds
+  → news_collectors/collect_news.py  (download each feed, retry if it fails)
+  → our_teams/players.py           (is a Sunrisers player or team mentioned? if no, drop it)
+  → saved_stories/sunrisers_news.db   (SQLite file — saved for 24 hours)
   → app.py                    (Streamlit dashboard you see in the browser)
 ```
 
 **Step by step:**
 
-1. **Collect** — Every 15 minutes the app downloads all 193 feeds (ESPNcricinfo, Cricbuzz, BBC, Google News searches, regional papers, etc.). If a feed is dead, a Google News fallback tries to recover its stories.
+1. **Collect** — Every 15 minutes the app downloads all 268 feeds (ESPNcricinfo, Cricbuzz, BBC, Google News searches, regional papers, etc.). If a feed is dead, a Google News fallback tries to recover its stories.
 2. **Filter** — Stories older than 24 hours are thrown away. Then each headline is checked: does it mention one of our players (full name like "Abhishek Sharma", or a nickname like "Klaasen", "Stubbs") or one of our 4 team names? Non-cricket lookalikes (NFL, MLB…) are rejected. No match = dropped.
 3. **Store** — Matching stories are saved in SQLite with standard defaults. The same story can be saved once *per player it mentions* (so one article about Head *and* Klaasen appears under both), but never twice for the same player. Anything older than 24 hours is deleted automatically.
 4. **Show** — The dashboard displays the newest stories first, with search, team filters, and a live timeline.
@@ -35,7 +35,7 @@ The player list lives in `data/squadofsunrisers.xlsx` (~90 rows). Everything the
 ## The 3 dashboard tabs (`app.py`)
 
 1. **Live Pulse** — hero story + news cards + 10-item timeline, with search.
-2. **Fixture Breakdown** — live Crex matchday (`scrapers/matchday_scraper.py`): schedule → Playing XI vs roster, LIVE first, finished removed.
+2. **Fixture Breakdown** — live Crex matchday (`news_collectors/find_matches.py`): schedule → Playing XI vs roster, LIVE first, finished removed.
 3. **Squad Directory** — every player card, filterable by role, captain, coach, overseas, etc.
 
 The page refreshes itself every 5 minutes; news data is cached for 60 seconds.
@@ -45,23 +45,23 @@ The page refreshes itself every 5 minutes; news data is cached for 60 seconds.
 | File | Job |
 |---|---|
 | `app.py` | The whole dashboard (UI + scheduling). |
-| `scrapers/rss_collector.py` | The 193-feed list + download/filter pipeline. |
-| `scrapers/web_scraper.py` | Backup fetcher when a feed fails. |
-| `config/roster.py` | Reads the Excel roster; matches names in headlines. |
-| `config/schedule.py` | Offline fixture fallback. |
-| `scrapers/matchday_scraper.py` | Live Crex schedule → Playing XI vs roster fixture engine. |
-| `config/theme.py` | Page styling + card layouts. |
-| `database/db_manager.py` | All database reads/writes, dedupe, cleanup. |
-| `database/schema.sql` | Table definitions (news, players, notifications, metadata). |
-| `scheduler/worker.py` | Runs one collection cycle on demand. |
-| `scripts/update_squads.py` | Rebuilds the Excel roster (`make sync-squads`). |
+| `news_collectors/collect_news.py` | The 268-feed list + download/filter pipeline. |
+| `news_collectors/backup_news_finder.py` | Backup fetcher when a feed fails. |
+| `our_teams/players.py` | Reads the Excel roster; matches names in headlines. |
+| `our_teams/upcoming_matches.py` | Offline fixture fallback. |
+| `news_collectors/find_matches.py` | Live Crex schedule → Playing XI vs roster fixture engine. |
+| `our_teams/website_look.py` | Page styling + card layouts. |
+| `saved_stories/story_storage.py` | Saves, finds and tidies stories (skips copies). |
+| `saved_stories/tables.sql` | Table definitions (news, players, notifications, metadata). |
+| `regular_checks/check_news.py` | Checks the news once, right now. |
+| `handy_tools/refresh_player_list.py` | Rebuilds the Excel roster (`make sync-squads`). |
 | `tests/test_system.py` | 20 automated checks (`make test`). |
 
 ## Good to know
 
-- **Database resets itself:** news older than a day is purged on every startup; player list is re-seeded from Excel.
+- **Tidies itself:** stories older than a day are recycled on every start; the player list is recopied from Excel.
 - **Two Excel copies exist:** `data/squadofsunrisers.xlsx` (the real one) and a root-level backup. The sync script writes both.
-- **Settings:** copy `.env.example` to `.env` to change the database location or ingest interval.
+- **Settings:** copy `.env.example` to `.env` to change where stories are kept or how often we check.
 - **Tests never touch real data:** they use a temporary database.
 - **Tech:** Python + Streamlit + SQLite + pandas. Install with `pip install -r requirements.txt`.
 

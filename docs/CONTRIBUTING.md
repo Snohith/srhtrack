@@ -1,6 +1,6 @@
-# 🤝 Contributing to @SRHXtra
+# 🤝 Helping out with the Sunrisers news hub
 
-Thank you for your interest in contributing to **@SRHXtra**! Follow these guidelines to maintain production quality across the repository.
+Thanks for helping! These little rules keep the news hub friendly for the next fan who reads the code.
 
 ---
 
@@ -38,9 +38,9 @@ Thank you for your interest in contributing to **@SRHXtra**! Follow these guidel
 
 ## 📋 Code Conventions & Best Practices
 
-- **Strict Full-Name Matching**: All squad members added to `data/squadofsunrisers.xlsx` must include first and last names.
-- **Single-Name Aliases**: Only distinct first or last names may be registered in `PLAYER_ALIASES` in `config/roster.py` (e.g. `Klaasen`, `Cummins`, `Head`). Common surnames (e.g. `Hussain`, `Sharma`, `Patel`) must never be added as single-token aliases.
-- **Target-Aware Deduplication**: Never apply global uniqueness constraints to `news.link` or `news.title` in database schemas.
+- **Full names please**: everyone added to `data/squadofsunrisers.xlsx` needs a first + last name.
+- **Nicknames**: only unusual names go in `PLAYER_NICKNAMES` in `our_teams/players.py` (like `Klaasen`). Common surnames (`Sharma`, `Patel`) must never stand alone.
+- **Skipping copies**: never make `news.link` or `news.title` unique on their own — one story may belong to several players.
 - **Context Managers**: Always wrap database connections using `with closing(get_connection()) as conn:`.
 
 ---
@@ -49,5 +49,5 @@ Thank you for your interest in contributing to **@SRHXtra**! Follow these guidel
 
 Before submitting a Pull Request:
 - [ ] Run `pytest tests/` and verify all tests pass.
-- [ ] Verify `data/squadofsunrisers.xlsx` synchronizes cleanly via `python scripts/update_squads.py`.
+- [ ] Verify `data/squadofsunrisers.xlsx` synchronizes cleanly via `python handy_tools/refresh_player_list.py`.
 - [ ] Ensure no temporary files (`.DS_Store`, `*.log`, `*.db`) are staged.

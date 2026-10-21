@@ -1,14 +1,14 @@
 """
 Telegram alerting tests for @SRHXtra (no network, no production DB).
 
-Covers utils/telegram.py dispatch/formatting/security behaviour, the
-ingest→Telegram wiring in scrapers/rss_collector.py (fully mocked, no DB),
+Covers helpers/phone_alerts.py dispatch/formatting/security behaviour, the
+ingest→Telegram wiring in news_collectors/collect_news.py (fully mocked, no DB),
 photo cards with fallback, and the _RssResult backwards-compatible extension.
 """
 import pytest
 
-from utils import telegram as tg
-from scrapers.rss_collector import _RssResult
+from helpers import phone_alerts as tg
+from news_collectors.collect_news import _RssResult
 
 ARTICLE = {
     "title": "Abhishek Sharma smashes fifty",
@@ -62,49 +62,49 @@ def _ok_post(calls):
 def test_disabled_sends_nothing(monkeypatch, tg_env):
     monkeypatch.setenv("TELEGRAM_ENABLED", "false")
     monkeypatch.setattr(tg.requests, "post", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no HTTP when disabled")))
-    res = tg.notify_new_articles([ARTICLE])
+    res = tg.tell_phones_about_new_stories([ARTICLE])
     assert res == {"sent": 0, "mode": "per_article", "reason": "disabled"}
 
 
 def test_unconfigured_sends_nothing(monkeypatch, tg_env):
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN")
     monkeypatch.setattr(tg.requests, "post", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no HTTP when unconfigured")))
-    res = tg.notify_new_articles([ARTICLE])
+    res = tg.tell_phones_about_new_stories([ARTICLE])
     assert res["sent"] == 0 and res["reason"] == "unconfigured"
-    assert tg.is_telegram_configured() is False
+    assert tg.are_phone_alerts_ready() is False
 
 
 def test_empty_cycle_sends_heartbeat(tg_env, monkeypatch):
     calls = []
     monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
-    res = tg.notify_new_articles([], {"total_polled": 193, "failed": 2})
+    res = tg.tell_phones_about_new_stories([], {"total_polled": 268, "failed": 2})
     assert res == {"sent": 1, "mode": "per_article", "reason": "heartbeat"}
     assert len(calls) == 1
     text = calls[0]["body"]["text"]
-    assert "All 193 sources scanned" in text and "2 feeds down" in text
+    assert "All 268 sources scanned" in text and "2 feeds down" in text
     assert "link_preview_options" not in calls[0]["body"]  # plain text, no card
 
 
 def test_heartbeat_off_stays_silent(tg_env, monkeypatch):
     monkeypatch.setenv("TELEGRAM_HEARTBEAT", "false")
     monkeypatch.setattr(tg.requests, "post", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no HTTP when heartbeat off")))
-    assert tg.notify_new_articles([])["reason"] == "heartbeat_off"
+    assert tg.tell_phones_about_new_stories([])["reason"] == "heartbeat_off"
 
 
 def test_heartbeat_without_stats_or_unconfigured(tg_env, monkeypatch):
     calls = []
     monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
-    assert tg.notify_new_articles([])["reason"] == "heartbeat"
+    assert tg.tell_phones_about_new_stories([])["reason"] == "heartbeat"
     assert "Sweep complete" in calls[0]["body"]["text"]
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN")
     monkeypatch.setattr(tg.requests, "post", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no HTTP when unconfigured")))
-    assert tg.notify_new_articles([])["reason"] == "unconfigured"
+    assert tg.tell_phones_about_new_stories([])["reason"] == "unconfigured"
 
 
 def test_per_article_sends_one_message_each(tg_env, monkeypatch):
     calls = []
     monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
-    res = tg.notify_new_articles([ARTICLE, {**ARTICLE, "title": "Second story"}])
+    res = tg.tell_phones_about_new_stories([ARTICLE, {**ARTICLE, "title": "Second story"}])
     assert res["sent"] == 2 and res["mode"] == "per_article"
     assert len(calls) == 2
     body = calls[0]["body"]
@@ -120,7 +120,7 @@ def test_cap_collapses_overflow_into_digest(tg_env, monkeypatch):
     calls = []
     monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
     articles = [{**ARTICLE, "title": f"Story {i}"} for i in range(5)]
-    res = tg.notify_new_articles(articles)
+    res = tg.tell_phones_about_new_stories(articles)
     assert res["sent"] == 3  # 2 per-article + 1 overflow digest
     assert len(calls) == 3
     assert "3 further update(s) — 5 new this cycle:" in calls[-1]["body"]["text"]
@@ -130,30 +130,30 @@ def test_digest_mode_sends_single_summary(tg_env, monkeypatch):
     monkeypatch.setenv("TELEGRAM_MODE", "digest")
     calls = []
     monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
-    res = tg.notify_new_articles([{**ARTICLE, "title": f"Story {i}"} for i in range(4)])
+    res = tg.tell_phones_about_new_stories([{**ARTICLE, "title": f"Story {i}"} for i in range(4)])
     assert res["sent"] == 1 and res["mode"] == "digest"
     assert "4 new article(s)" in calls[0]["body"]["text"]
 
 
 def test_franchise_accents():
-    assert tg._accent("Sunrisers Hyderabad") == "🟠"
-    assert tg._accent("Sunrisers Eastern Cape") == "🟢"
-    assert tg._accent("Sunrisers Leeds Men") == "🔵"
-    assert tg._accent("Sunrisers Leeds Women") == "🟣"
-    assert tg._accent("Something Else") == "🟠"
-    card = tg.format_article_message({**ARTICLE, "franchise": "Sunrisers Eastern Cape"})
+    assert tg._team_symbol("Sunrisers Hyderabad") == "🟠"
+    assert tg._team_symbol("Sunrisers Eastern Cape") == "🟢"
+    assert tg._team_symbol("Sunrisers Leeds Men") == "🔵"
+    assert tg._team_symbol("Sunrisers Leeds Women") == "🟣"
+    assert tg._team_symbol("Something Else") == "🟠"
+    card = tg.write_story_card_for_phone({**ARTICLE, "franchise": "Sunrisers Eastern Cape"})
     assert card.startswith("🟢 <b>SRHXtra · Fresh</b>")
 
 
 def test_expandable_quote_only_with_summary():
-    assert "<blockquote expandable>" in tg.format_article_message(ARTICLE)
-    assert "<blockquote" not in tg.format_article_message({**ARTICLE, "summary": ""})
+    assert "<blockquote expandable>" in tg.write_story_card_for_phone(ARTICLE)
+    assert "<blockquote" not in tg.write_story_card_for_phone({**ARTICLE, "summary": ""})
 
 
 def test_no_preview_options_without_safe_link(tg_env, monkeypatch):
     calls = []
     monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
-    tg.notify_new_articles([{**ARTICLE, "link": "javascript:alert(1)"}])
+    tg.tell_phones_about_new_stories([{**ARTICLE, "link": "javascript:alert(1)"}])
     assert "link_preview_options" not in calls[0]["body"]
 
 
@@ -166,12 +166,12 @@ def test_untrusted_content_is_escaped_and_schemes_rejected(tg_env, monkeypatch):
         "summary": "Quote \"break\" <b>bold</b>",
         "link": "javascript:alert(1)",
     }
-    tg.notify_new_articles([evil])
+    tg.tell_phones_about_new_stories([evil])
     text = calls[0]["body"]["text"]
     assert "<script>" not in text and "&lt;script&gt;" in text
     assert "javascript:" not in text  # executable scheme stripped at choke point
     good = {**ARTICLE, "link": "https://example.com/ok"}
-    assert "https://example.com/ok" in tg.format_article_message(good)
+    assert "https://example.com/ok" in tg.write_story_card_for_phone(good)
 
 
 def test_send_failure_never_raises(tg_env, monkeypatch):
@@ -179,8 +179,8 @@ def test_send_failure_never_raises(tg_env, monkeypatch):
         raise TimeoutError("https://api.telegram.org/botSECRET/sendMessage timed out")
 
     monkeypatch.setattr(tg.requests, "post", _boom)
-    assert tg.send_telegram_message("hi") is False  # no raise, no secret leak
-    res = tg.notify_new_articles([ARTICLE])
+    assert tg.send_a_phone_message("hi") is False  # no raise, no secret leak
+    res = tg.tell_phones_about_new_stories([ARTICLE])
     assert res["sent"] == 0 and res["reason"] == "ok"
 
 
@@ -193,7 +193,7 @@ def test_api_error_returns_false_with_description(tg_env, monkeypatch):
             return {"ok": False, "description": "Bad Request: chat not found"}
 
     monkeypatch.setattr(tg.requests, "post", lambda *a, **k: _Resp())
-    assert tg.send_telegram_message("hi") is False
+    assert tg.send_a_phone_message("hi") is False
 
 
 def test_og_image_extraction(monkeypatch):
@@ -229,7 +229,7 @@ def test_og_image_relative_url_resolved_and_bad_cases_empty(monkeypatch):
 def test_photo_card_payload_and_caption_budget(tg_env, monkeypatch):
     calls = []
     monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
-    assert tg.send_telegram_photo("https://cdn.example.com/hero.jpg", "<b>Hi</b>") is True
+    assert tg.send_a_phone_photo("https://cdn.example.com/hero.jpg", "<b>Hi</b>") is True
     body = calls[0]["body"]
     assert calls[0]["url"].endswith("/sendPhoto")
     assert body["photo"] == "https://cdn.example.com/hero.jpg"
@@ -245,7 +245,7 @@ def test_photo_preferred_then_text_fallback(tg_env, monkeypatch):
     calls = []
     monkeypatch.setattr(tg, "_fetch_og_image", lambda url, timeout=5: "https://cdn.example.com/hero.jpg")
     monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
-    assert tg.notify_new_articles([ARTICLE])["sent"] == 1
+    assert tg.tell_phones_about_new_stories([ARTICLE])["sent"] == 1
     assert calls[0]["url"].endswith("/sendPhoto")
 
     def _flaky(url, **kwargs):
@@ -262,46 +262,46 @@ def test_photo_preferred_then_text_fallback(tg_env, monkeypatch):
 
     calls.clear()
     monkeypatch.setattr(tg.requests, "post", _flaky)
-    assert tg.notify_new_articles([ARTICLE])["sent"] == 1
+    assert tg.tell_phones_about_new_stories([ARTICLE])["sent"] == 1
     assert calls[0]["url"].endswith("/sendPhoto")
     assert calls[1]["url"].endswith("/sendMessage")  # fallback delivered
 
 
 def test_rss_result_backwards_compatible():
-    legacy = _RssResult(3, ["Feed X"], 193)  # old 3-arg call style still works
+    legacy = _RssResult(3, ["Feed X"], 268)  # old 3-arg call style still works
     assert int(legacy) == 3 and legacy.new_articles == []
     assert legacy.inserted == 3 and legacy.failed_feeds == ["Feed X"]
-    extended = _RssResult(1, [], 193, [ARTICLE])
+    extended = _RssResult(1, [], 268, [ARTICLE])
     assert extended.new_articles == [ARTICLE] and int(extended) == 1
 
 
 def test_ingest_dispatches_one_alert_per_unique_story(tg_env, monkeypatch):
     """One URL matching 2 players stores 2 rows but alerts once (no DB touched)."""
-    from scrapers import rss_collector as rc
+    from news_collectors import collect_news as rc
 
-    monkeypatch.setattr(rc, "CRICKET_SOURCES", [{"name": "Fake", "url": "https://example.com/fake"}])
+    monkeypatch.setattr(rc, "NEWS_WEBSITES", [{"name": "Fake", "url": "https://example.com/fake"}])
     monkeypatch.setattr(
         rc, "_poll_one_source",
         lambda fi: (fi, [{"title": "Shared story", "summary": "S", "link": "https://example.com/x"}], None),
     )
-    monkeypatch.setattr(rc, "parse_rss_date_to_ist", lambda e: ("Oct 13, 2026 @ 10:00 AM IST", 1.0, 12345.0))
+    monkeypatch.setattr(rc, "read_story_date_as_indian_time", lambda e: ("Oct 13, 2026 @ 10:00 AM IST", 1.0, 12345.0))
     monkeypatch.setattr(
-        rc, "match_player_or_franchise_in_text",
+        rc, "find_our_players_in_story",
         lambda t: [
             {"player_name": "Abhishek Sharma", "franchise": "Sunrisers Hyderabad"},
             {"player_name": "Ishan Kishan", "franchise": "Sunrisers Hyderabad"},
         ],
     )
-    monkeypatch.setattr(rc, "insert_news", lambda **k: 999)
-    monkeypatch.setattr(rc, "insert_notification", lambda *a, **k: None)
+    monkeypatch.setattr(rc, "save_story", lambda **k: 999)
+    monkeypatch.setattr(rc, "leave_a_note", lambda *a, **k: None)
     # Alert memory is a real DB write: keep this hermetic test DB-free.
-    monkeypatch.setattr(rc, "try_claim_alert", lambda *a, **k: True)
+    monkeypatch.setattr(rc, "claim_phone_alert_once", lambda *a, **k: True)
     calls = []
     monkeypatch.setattr(
-        "utils.telegram.notify_new_articles",
+        "helpers.phone_alerts.tell_phones_about_new_stories",
         lambda arts, stats=None: (calls.append((list(arts), stats)), {"sent": 1, "mode": "per_article", "reason": "ok"})[1],
     )
-    res = rc.fetch_and_filter_rss()
+    res = rc.collect_fresh_stories()
     assert int(res) == 2  # both per-target rows stored
     assert len(res.new_articles) == 1  # but a single alert dispatched
     assert len(calls) == 1 and calls[0][0][0]["player_name"] == "Abhishek Sharma"

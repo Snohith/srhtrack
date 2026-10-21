@@ -16,11 +16,11 @@ Review the current git diff (or the stated proposal, if no diff exists yet) agai
 
 Checklist — verify each item the change touches:
 
-- Per-target dedupe: `(link|title) + player_name + franchise` via `idx_news_link_target` / `idx_news_title_target` in `database/schema.sql`. Never accept a global `UNIQUE` on `news.link` or `news.title`.
-- Category default alignment: `schema.sql` category default and `insert_news()` default must both stay `'General News'`.
-- `TOP_50_CRICKET_SOURCES` and `RSS_FEEDS` must remain identity aliases of `CRICKET_SOURCES`.
+- Per-target dedupe: `(link|title) + player_name + franchise` via `idx_news_link_target` / `idx_news_title_target` in `saved_stories/tables.sql`. Never accept a global `UNIQUE` on `news.link` or `news.title`.
+- Category default alignment: `tables.sql` category default and `save_story()` default must both stay `'General News'`.
+- `TOP_50_CRICKET_SOURCES` and `RSS_FEEDS` must remain identity aliases of `NEWS_WEBSITES`.
 - Feed list: source count >= 48 with unique names and unique URLs.
-- `scheduler/worker.py` must never call `init_db()` (one-shot `run_collector_cycle()` only).
+- `regular_checks/check_news.py` must never call `set_up_story_box()` (one-shot `do_one_news_check()` only).
 - 24h retention semantics: ingest cutoff, `purge_expired_24h_news()`, and 7-day notification pruning must keep working together.
 - Roster source of truth: `data/squadofsunrisers.xlsx` canonical, root copy fallback; `MASTER_ROSTER` keys `SRH`/`SEC`/`Leeds_Men`/`Leeds_Women`.
 - Matcher edge cases: word-boundary matching, single-name aliases (no bare common surnames), `FALSE_POSITIVE_PHRASES` behavior, insert-default behavior (5.0 / 'General News').

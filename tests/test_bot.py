@@ -5,13 +5,13 @@ import threading
 import time
 from datetime import datetime
 
-import bot
-from bot import CommandBot, is_owner, parse_command
-from utils.matchday_cards import (
-    build_roster_franchise_map,
+import phone_bot as bot
+from phone_bot import CommandBot, is_owner, parse_command
+from helpers.match_cards import (
+    make_player_to_team_list,
     fixture_day_label,
     format_match_card,
-    format_matches_message,
+    write_match_list_for_phones,
     parse_fixture_dt,
 )
 
@@ -78,13 +78,13 @@ def test_start_and_status_reply():
     b = _bot()
     assert b.handle_update(_update(text="/start")) == "start"
     assert "/matches" in b.sent[-1] and "/refresh" in b.sent[-1]
-    import database.db_manager as dm
-    orig = dm.get_analytics_summary
-    dm.get_analytics_summary = lambda: {"total_news": 5, "total_players": 88}
+    import saved_stories.story_storage as dm
+    orig = dm.count_stories_and_players
+    dm.count_stories_and_players = lambda: {"total_news": 5, "total_players": 88}
     try:
         assert b.handle_update(_update(text="/status")) == "status"
     finally:
-        dm.get_analytics_summary = orig
+        dm.count_stories_and_players = orig
     assert "88" in b.sent[-1]
 
 
@@ -109,7 +109,8 @@ def test_refresh_runs_cycle_and_replies():
     while len(b.sent) < 2 and time.time() < deadline:
         time.sleep(0.05)
     assert calls == [1]
-    assert "Sweeping 193 feeds" in b.sent[0]
+    assert f"Sweeping {bot.FEED_COUNT} feeds" in b.sent[0]
+    assert bot.FEED_COUNT == 268  # audited 17 Oct 2026: 193 baseline + 75 deep-scan lanes
     assert "+3 new stories" in b.sent[1]
 
 
@@ -146,9 +147,9 @@ def test_matches_live_first_with_ist_and_players():
     assert "Abhishek Sharma" in text and "(Sunrisers Hyderabad ×2)" in text
     assert "https://crex.com/m/1" in text
     # Exact IST day labels, clock injected (Bot path uses real now).
-    live_text = format_matches_message([live], NOW)
+    live_text = write_match_list_for_phones([live], NOW)
     assert "Today, October 13, 2026 · 12:00 PM IST" in live_text
-    up_text = format_matches_message([upcoming], NOW)
+    up_text = write_match_list_for_phones([upcoming], NOW)
     assert "Tomorrow, October 14, 2026 · 7:30 PM IST" in up_text
 
 
@@ -208,10 +209,10 @@ def test_upcoming_cap_and_roster_map():
             time="7:30 PM IST", link=f"https://crex.com/m/{i}")
         for i in range(6)
     ]
-    text = format_matches_message(fixtures, NOW)
+    text = write_match_list_for_phones(fixtures, NOW)
     assert "+2 more in the 4-day window." in text
     assert "https://crex.com/m/5" not in text  # only first 4 shown
-    assert build_roster_franchise_map().get("Abhishek Sharma") == "Sunrisers Hyderabad"
+    assert make_player_to_team_list().get("Abhishek Sharma") == "Sunrisers Hyderabad"
 
 
 def test_weekday_label_does_not_repeat_date():

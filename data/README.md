@@ -1,15 +1,15 @@
-# 📊 SRHXtra Master Datasets
+# 📊 Our player lists
 
-This directory houses the structured reference data for the **SRHXtra** intelligence engine.
+This folder holds our player lists in plain Excel — the heart of the news hub.
 
 ---
 
 ## 📁 Datasets Overview
 
 ### 1. `squadofsunrisers.xlsx`
-The master squad roster registry covering all 4 franchises across the Sunrisers global franchise network:
+Our 4 Sunrisers family teams:
 
-| Franchise | League | Squad Count | Key Staff / Leadership | Home Venue |
+| Team | League | Players | Captain & coach | Home ground |
 | :--- | :--- | :---: | :--- | :--- |
 | **Sunrisers Hyderabad** | Indian Premier League (IPL) | 30 | Pat Cummins (C), Daniel Vettori (Coach) | Rajiv Gandhi Int'l Stadium, Hyderabad |
 | **Sunrisers Eastern Cape** | SA20 League | 18 | Tristan Stubbs (C), Adrian Birrell (Coach) | St George's Park, Gqeberha |
@@ -20,20 +20,20 @@ The master squad roster registry covering all 4 franchises across the Sunrisers 
 
 | Column | Type | Description |
 | :--- | :--- | :--- |
-| `Team` | `string` | Full franchise identifier (e.g. `Sunrisers Hyderabad IPL 2026`) |
-| `Player` | `string` | Official member name used for exact-boundary regex matching |
-| `Role` | `string` | Primary functional role (`Batter`, `Bowler`, `All-rounder`, `Head Coach`, `Wicket-keeper`) |
-| `Country` | `string` | Nationality / ICC national team representation |
-| `Notes` | `string` | Contractual designations (`Captain`, `Overseas`, `Wildcard`, `Replacement`, `Injury`) |
+| `Team` | `words` | Team name (like `Sunrisers Hyderabad IPL 2026`) |
+| `Player` | `words` | Player's full name (we match whole names only) |
+| `Role` | `words` | What they do (`Batter`, `Bowler`, `All-rounder`, `Head Coach`, `Wicket-keeper`) |
+| `Country` | `words` | Which country they play for |
+| `Notes` | `words` | Extra notes (`Captain`, `Overseas`, and so on) |
 
 ---
 
 ## 🔄 Updating Data
 
-To regenerate or synchronize squad rosters from code, execute:
+To refresh the player list, run:
 
 ```bash
-python scripts/update_squads.py
+python handy_tools/refresh_player_list.py
 ```
 
 This updates both `data/squadofsunrisers.xlsx` and the root fallback mirror.

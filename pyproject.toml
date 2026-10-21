@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "srhtrack"
 version = "14.1.0"
-description = "Real-time cricket intelligence and squad telemetry platform for the Sunrisers franchise network"
+description = "Friendly Sunrisers cricket news hub for all 4 family teams"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }

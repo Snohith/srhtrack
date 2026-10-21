@@ -11,12 +11,11 @@ Analyze the system architecture relevant to the question. Treat `AGENTS.md` as t
 Scope your analysis across the real dependency direction and data flow:
 
 - `app.py` as the Streamlit orchestration/UI layer (startup side effects, ingest scheduling, caching, tab rendering).
-- `scrapers/` (feed polling, retry, fallback, filtering pipeline).
-- `agents/` package (per-article scoring removed; articles stored with DB defaults).
-- `config/roster.py` (roster loading, matcher, aliases, false-positive guards).
-- `config/schedule.py` and `config/theme.py` (static data, rendering helpers, status computation).
-- `database/` (schema, CRUD, dedupe, retention, migrations, startup initialization).
-- `scheduler/worker.py` (one-shot collector cycle; must never call `init_db()`).
+- `news_collectors/` (feed polling, retry, fallback, filtering pipeline).
+- `our_teams/players.py` (roster loading, matcher, aliases, false-positive guards).
+- `our_teams/upcoming_matches.py` and `our_teams/website_look.py` (static data, rendering helpers, status computation).
+- `saved_stories/` (schema, CRUD, dedupe, retention, migrations, startup initialization).
+- `regular_checks/check_news.py` (one-shot collector cycle; must never call `set_up_story_box()`).
 - `tests/` (what the suite locks in as contract).
 
 Identify: duplicated logic, hidden side effects (especially at import/startup), cyclic or deep coupling, layer violations (e.g. UI logic leaking into data code or vice versa), ownership ambiguities, and architectural drift between docs and code.

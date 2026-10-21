@@ -3,7 +3,7 @@ name: Tracker Ingestion
 description: RSS and web-ingestion pipeline rules for source quality, normalization, retries, deduplication, matching, and ranking.
 ---
 
-`scrapers/rss_collector.py` contains the RSS source registry and ingestion behavior.
+`news_collectors/collect_news.py` contains the RSS source registry and ingestion behavior.
 
 ## Rules
 

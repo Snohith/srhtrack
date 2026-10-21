@@ -36,7 +36,7 @@
     { "action": "shell", "resource": "pip install pytest", "effect": "allow" },
     { "action": "shell", "resource": "pytest *", "effect": "allow" },
     { "action": "shell", "resource": "python -m pytest *", "effect": "allow" },
-    { "action": "shell", "resource": "python scripts/update_squads.py", "effect": "allow" },
+    { "action": "shell", "resource": "python handy_tools/refresh_player_list.py", "effect": "allow" },
     { "action": "shell", "resource": "venv/bin/python *", "effect": "allow" },
     { "action": "shell", "resource": "streamlit run app.py", "effect": "allow" },
     { "action": "shell", "resource": "make install", "effect": "allow" },

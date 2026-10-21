@@ -17,7 +17,7 @@ from contextlib import closing
 
 import pytest
 
-from utils import telegram as tg
+from helpers import phone_alerts as tg
 
 KLAASEN_TITLE = "Heinrich Klaasen Auction Price & Team - SA20 2027 - Cricbuzz"
 KLAASEN_LINK = "https://news.google.com/rss/articles/CBMiXklaasen-test?oc=5"
@@ -38,8 +38,8 @@ def isolated_db(monkeypatch, tmp_path):
     """Fresh private SQLite file per test (never touches the suite-shared DB)."""
     db = str(tmp_path / "freshness.db")
     monkeypatch.setenv("SRH_DB_PATH", db)
-    from database import db_manager
-    db_manager.init_db()
+    from saved_stories import story_storage as db_manager
+    db_manager.set_up_story_box()
     return db
 
 
@@ -58,69 +58,69 @@ def tg_env(monkeypatch):
 # ── Slice 1: title normalization ──────────────────────────────────────────
 
 def test_title_normalization_folds_case_whitespace_and_dashes():
-    from database.db_manager import normalize_title_for_dedupe
-    a = normalize_title_for_dedupe(KLAASEN_TITLE)
-    b = normalize_title_for_dedupe("heinrich  klaasen auction price & team \u2013 SA20 2027 \u2013 cricbuzz")
+    from saved_stories.story_storage import make_title_simple_to_compare
+    a = make_title_simple_to_compare(KLAASEN_TITLE)
+    b = make_title_simple_to_compare("heinrich  klaasen auction price & team \u2013 SA20 2027 \u2013 cricbuzz")
     assert a == b
-    assert normalize_title_for_dedupe("Totally Different Story - Cricbuzz") != a
+    assert make_title_simple_to_compare("Totally Different Story - Cricbuzz") != a
 
 
 # ── Slice 2: 14-day alert memory ──────────────────────────────────────────
 
 def test_alert_slot_claimed_once_per_target(isolated_db):
-    from database.db_manager import normalize_title_for_dedupe, try_claim_alert
-    norm = normalize_title_for_dedupe(KLAASEN_TITLE)
-    assert try_claim_alert(norm, "Heinrich Klaasen", "Sunrisers Hyderabad") is True
-    assert try_claim_alert(norm, "Heinrich Klaasen", "Sunrisers Hyderabad") is False
+    from saved_stories.story_storage import make_title_simple_to_compare, claim_phone_alert_once
+    norm = make_title_simple_to_compare(KLAASEN_TITLE)
+    assert claim_phone_alert_once(norm, "Heinrich Klaasen", "Sunrisers Hyderabad") is True
+    assert claim_phone_alert_once(norm, "Heinrich Klaasen", "Sunrisers Hyderabad") is False
 
 
 def test_alert_memory_is_per_target(isolated_db):
-    from database.db_manager import normalize_title_for_dedupe, try_claim_alert
-    norm = normalize_title_for_dedupe("Abhishek Sharma and Heinrich Klaasen star")
-    assert try_claim_alert(norm, "Abhishek Sharma", "Sunrisers Hyderabad") is True
-    assert try_claim_alert(norm, "Heinrich Klaasen", "Sunrisers Hyderabad") is True
+    from saved_stories.story_storage import make_title_simple_to_compare, claim_phone_alert_once
+    norm = make_title_simple_to_compare("Abhishek Sharma and Heinrich Klaasen star")
+    assert claim_phone_alert_once(norm, "Abhishek Sharma", "Sunrisers Hyderabad") is True
+    assert claim_phone_alert_once(norm, "Heinrich Klaasen", "Sunrisers Hyderabad") is True
 
 
 def test_alert_memory_survives_news_purge(isolated_db):
     """The exact incident: news row purged after 24h, re-stamp re-inserts the
     display row but must NOT win a second Telegram alert."""
-    from database import db_manager as dm
-    norm = dm.normalize_title_for_dedupe(KLAASEN_TITLE)
-    assert dm.try_claim_alert(norm, "Heinrich Klaasen", "Sunrisers Hyderabad") is True
-    with closing(dm.get_connection()) as conn:
+    from saved_stories import story_storage as dm
+    norm = dm.make_title_simple_to_compare(KLAASEN_TITLE)
+    assert dm.claim_phone_alert_once(norm, "Heinrich Klaasen", "Sunrisers Hyderabad") is True
+    with closing(dm.open_story_box()) as conn:
         conn.execute("DELETE FROM news")
         conn.commit()
-    assert dm.try_claim_alert(norm, "Heinrich Klaasen", "Sunrisers Hyderabad") is False
+    assert dm.claim_phone_alert_once(norm, "Heinrich Klaasen", "Sunrisers Hyderabad") is False
 
 
 def test_alert_slot_expires_after_memory_window(isolated_db):
-    from database.db_manager import normalize_title_for_dedupe, try_claim_alert
-    norm = normalize_title_for_dedupe(KLAASEN_TITLE)
+    from saved_stories.story_storage import make_title_simple_to_compare, claim_phone_alert_once
+    norm = make_title_simple_to_compare(KLAASEN_TITLE)
     old = time.time() - 15 * 24 * 3600
-    assert try_claim_alert(norm, "Heinrich Klaasen", "Sunrisers Hyderabad", seen_ts=old) is True
-    assert try_claim_alert(norm, "Heinrich Klaasen", "Sunrisers Hyderabad") is True
+    assert claim_phone_alert_once(norm, "Heinrich Klaasen", "Sunrisers Hyderabad", seen_ts=old) is True
+    assert claim_phone_alert_once(norm, "Heinrich Klaasen", "Sunrisers Hyderabad") is True
 
 
 # ── Slice 3: ingest wiring ────────────────────────────────────────────────
 
 def _wire_collector(monkeypatch, entry, age_hours=1.0, pub_ts=1000.0):
-    from scrapers import rss_collector as rc
+    from news_collectors import collect_news as rc
     monkeypatch.setattr(
-        rc, "CRICKET_SOURCES",
+        rc, "NEWS_WEBSITES",
         [{"name": "Google News: Heinrich Klaasen", "url": "https://example.com/fake"}],
     )
     monkeypatch.setattr(rc, "_poll_one_source", lambda fi: (fi, [dict(entry)], None))
     monkeypatch.setattr(
-        rc, "match_player_or_franchise_in_text",
+        rc, "find_our_players_in_story",
         lambda t: [{"player_name": "Heinrich Klaasen", "franchise": "Sunrisers Hyderabad"}],
     )
     monkeypatch.setattr(
-        rc, "parse_rss_date_to_ist",
+        rc, "read_story_date_as_indian_time",
         lambda e: ("Oct 13, 2026 @ 10:52 PM IST", age_hours, pub_ts),
     )
     sent = []
     monkeypatch.setattr(
-        "utils.telegram.notify_new_articles",
+        "helpers.phone_alerts.tell_phones_about_new_stories",
         lambda arts, stats=None: (
             sent.append(list(arts)),
             {"sent": len(arts), "mode": "per_article", "reason": "ok"},
@@ -132,7 +132,7 @@ def _wire_collector(monkeypatch, entry, age_hours=1.0, pub_ts=1000.0):
 def test_restamped_story_does_not_realert_after_purge(isolated_db, monkeypatch):
     """End-to-end incident replay: ingest -> purge display row -> re-ingest the
     same Google re-stamp. Display row returns, Telegram stays silent."""
-    from database import db_manager as dm
+    from saved_stories import story_storage as dm
     entry = {
         "title": KLAASEN_TITLE,
         "summary": "Evergreen auction tracker.",
@@ -140,12 +140,12 @@ def test_restamped_story_does_not_realert_after_purge(isolated_db, monkeypatch):
         "published_parsed": time.gmtime(time.time() - 3600),
     }
     rc, sent = _wire_collector(monkeypatch, entry)
-    res1 = rc.fetch_and_filter_rss()
+    res1 = rc.collect_fresh_stories()
     assert len(sent) == 1 and len(sent[0]) == 1
-    with closing(dm.get_connection()) as conn:
+    with closing(dm.open_story_box()) as conn:
         conn.execute("DELETE FROM news")  # simulate the 24h retention purge
         conn.commit()
-    res2 = rc.fetch_and_filter_rss()
+    res2 = rc.collect_fresh_stories()
     assert int(res2) == 1  # display row re-stored for the dashboard
     assert res2.new_articles == []  # ...but no second Telegram alert
     assert sent[-1] == []
@@ -159,16 +159,16 @@ def test_new_story_for_same_player_still_alerts(isolated_db, monkeypatch):
         "published_parsed": time.gmtime(time.time() - 3600),
     }
     rc, sent = _wire_collector(monkeypatch, entry)
-    rc.fetch_and_filter_rss()
+    rc.collect_fresh_stories()
     entry2 = dict(entry, title="Heinrich Klaasen smashes unbeaten ton",
                   link="https://news.google.com/rss/articles/CBMiXton-test?oc=5")
     monkeypatch.setattr(rc, "_poll_one_source", lambda fi: (fi, [entry2], None))
-    res = rc.fetch_and_filter_rss()
+    res = rc.collect_fresh_stories()
     assert len(res.new_articles) == 1
 
 
 def test_alert_candidates_carry_age_and_sort_newest_first(isolated_db, monkeypatch):
-    from scrapers import rss_collector as rc
+    from news_collectors import collect_news as rc
     old = {"title": "Old story for Klaasen", "summary": "S",
            "link": "https://news.google.com/rss/articles/CBMiXold?oc=5",
            "published_parsed": time.gmtime(time.time() - 20 * 3600)}
@@ -176,28 +176,28 @@ def test_alert_candidates_carry_age_and_sort_newest_first(isolated_db, monkeypat
            "link": "https://news.google.com/rss/articles/CBMiXnew?oc=5",
            "published_parsed": time.gmtime(time.time() - 3600)}
     monkeypatch.setattr(
-        rc, "CRICKET_SOURCES",
+        rc, "NEWS_WEBSITES",
         [{"name": "Google News: Heinrich Klaasen", "url": "https://example.com/fake"}],
     )
     monkeypatch.setattr(rc, "_poll_one_source", lambda fi: (fi, [old, new], None))
     monkeypatch.setattr(
-        rc, "match_player_or_franchise_in_text",
+        rc, "find_our_players_in_story",
         lambda t: [{"player_name": "Heinrich Klaasen", "franchise": "Sunrisers Hyderabad"}],
     )
     def _ages(entry):
         if "Old story" in entry["title"]:
             return ("Oct 13, 2026 @ 10:00 PM IST", 20.0, 1000.0)
         return ("Oct 14, 2026 @ 05:00 PM IST", 1.0, 2000.0)
-    monkeypatch.setattr(rc, "parse_rss_date_to_ist", _ages)
+    monkeypatch.setattr(rc, "read_story_date_as_indian_time", _ages)
     sent = []
     monkeypatch.setattr(
-        "utils.telegram.notify_new_articles",
+        "helpers.phone_alerts.tell_phones_about_new_stories",
         lambda arts, stats=None: (
             sent.append(list(arts)),
             {"sent": len(arts), "mode": "per_article", "reason": "ok"},
         )[1],
     )
-    rc.fetch_and_filter_rss()
+    rc.collect_fresh_stories()
     assert [a["title"] for a in sent[0]] == ["New story for Klaasen", "Old story for Klaasen"]
     assert sent[0][0]["age_hours"] == 1.0
     assert sent[0][1]["age_hours"] == 20.0
@@ -206,8 +206,8 @@ def test_alert_candidates_carry_age_and_sort_newest_first(isolated_db, monkeypat
 def test_multi_target_story_claims_every_slot(isolated_db, monkeypatch):
     """One story matching 2 players alerts once but claims both slots, so a
     post-purge re-ingest stays silent for every target."""
-    from database import db_manager as dm
-    from scrapers import rss_collector as rc
+    from saved_stories import story_storage as dm
+    from news_collectors import collect_news as rc
     entry = {
         "title": "Abhishek Sharma and Heinrich Klaasen star for Sunrisers",
         "summary": "S",
@@ -215,33 +215,33 @@ def test_multi_target_story_claims_every_slot(isolated_db, monkeypatch):
         "published_parsed": time.gmtime(time.time() - 3600),
     }
     monkeypatch.setattr(
-        rc, "CRICKET_SOURCES",
+        rc, "NEWS_WEBSITES",
         [{"name": "Google News: SRH", "url": "https://example.com/fake"}],
     )
     monkeypatch.setattr(rc, "_poll_one_source", lambda fi: (fi, [dict(entry)], None))
     monkeypatch.setattr(
-        rc, "match_player_or_franchise_in_text",
+        rc, "find_our_players_in_story",
         lambda t: [
             {"player_name": "Abhishek Sharma", "franchise": "Sunrisers Hyderabad"},
             {"player_name": "Heinrich Klaasen", "franchise": "Sunrisers Hyderabad"},
         ],
     )
     monkeypatch.setattr(
-        rc, "parse_rss_date_to_ist", lambda e: ("Oct 14, 2026 @ 05:00 PM IST", 1.0, 2000.0))
+        rc, "read_story_date_as_indian_time", lambda e: ("Oct 14, 2026 @ 05:00 PM IST", 1.0, 2000.0))
     sent = []
     monkeypatch.setattr(
-        "utils.telegram.notify_new_articles",
+        "helpers.phone_alerts.tell_phones_about_new_stories",
         lambda arts, stats=None: (
             sent.append(list(arts)),
             {"sent": len(arts), "mode": "per_article", "reason": "ok"},
         )[1],
     )
-    res1 = rc.fetch_and_filter_rss()
+    res1 = rc.collect_fresh_stories()
     assert len(sent[0]) == 1  # single alert for the shared story
-    with closing(dm.get_connection()) as conn:
+    with closing(dm.open_story_box()) as conn:
         conn.execute("DELETE FROM news")  # simulate the 24h retention purge
         conn.commit()
-    res2 = rc.fetch_and_filter_rss()
+    res2 = rc.collect_fresh_stories()
     assert int(res2) == 2  # both per-target display rows re-stored
     assert res2.new_articles == []  # ...but neither target re-alerts
 
@@ -250,30 +250,30 @@ def test_multi_target_story_claims_every_slot(isolated_db, monkeypatch):
 
 
 def test_title_normalization_strips_outlet_suffix():
-    from database.db_manager import normalize_title_for_dedupe
+    from saved_stories.story_storage import make_title_simple_to_compare
     direct = "Proteas Player Ratings: Markram outstanding, but Rickelton and Stubbs fail the test"
     mirror = "Proteas Player Ratings: Markram outstanding, but Rickelton and Stubbs fail the test - IOL"
-    assert normalize_title_for_dedupe(direct) == normalize_title_for_dedupe(mirror)
+    assert make_title_simple_to_compare(direct) == make_title_simple_to_compare(mirror)
     assert (
-        normalize_title_for_dedupe("Heinrich Klaasen Auction Price & Team - SA20 2027 - Cricbuzz")
-        == normalize_title_for_dedupe("Heinrich Klaasen Auction Price & Team - SA20 2027")
+        make_title_simple_to_compare("Heinrich Klaasen Auction Price & Team - SA20 2027 - Cricbuzz")
+        == make_title_simple_to_compare("Heinrich Klaasen Auction Price & Team - SA20 2027")
     )
 
 
 def test_title_normalization_keeps_distinct_endings():
-    from database.db_manager import normalize_title_for_dedupe
-    first = normalize_title_for_dedupe("Match tied - 1st T20I")
-    second = normalize_title_for_dedupe("Match tied - 2nd T20I")
+    from saved_stories.story_storage import make_title_simple_to_compare
+    first = make_title_simple_to_compare("Match tied - 1st T20I")
+    second = make_title_simple_to_compare("Match tied - 2nd T20I")
     assert first != second  # digit endings distinguish real fixtures
     long_title = "IND vs WI Prediction - Who will win India vs West Indies 4th T20I match?"
-    assert normalize_title_for_dedupe(long_title).endswith("4th t20i match?")
+    assert make_title_simple_to_compare(long_title).endswith("4th t20i match?")
 
 
 def test_direct_plus_mirror_alerts_once(isolated_db, monkeypatch):
     """Incident replay: SA IOL News direct item, then the Google mirror of the
     same story 21 min later with ' - IOL' appended. One Telegram alert total."""
-    from database import db_manager as dm
-    from scrapers import rss_collector as rc
+    from saved_stories import story_storage as dm
+    from news_collectors import collect_news as rc
     direct = {
         "title": "Proteas Player Ratings: Markram outstanding, but Rickelton and Stubbs fail the test",
         "summary": "S",
@@ -287,30 +287,30 @@ def test_direct_plus_mirror_alerts_once(isolated_db, monkeypatch):
         "published_parsed": time.gmtime(time.time() - 3600),
     }
     monkeypatch.setattr(
-        rc, "CRICKET_SOURCES",
+        rc, "NEWS_WEBSITES",
         [{"name": "SA IOL News", "url": "https://example.com/fake"}],
     )
     monkeypatch.setattr(rc, "_poll_one_source", lambda fi: (fi, [dict(direct)], None))
     monkeypatch.setattr(
-        rc, "match_player_or_franchise_in_text",
+        rc, "find_our_players_in_story",
         lambda t: [{"player_name": "Tristan Stubbs", "franchise": "Sunrisers Eastern Cape"}],
     )
     monkeypatch.setattr(
-        rc, "parse_rss_date_to_ist", lambda e: ("Oct 13, 2026 @ 07:00 PM IST", 2.0, 1000.0))
+        rc, "read_story_date_as_indian_time", lambda e: ("Oct 13, 2026 @ 07:00 PM IST", 2.0, 1000.0))
     sent = []
     monkeypatch.setattr(
-        "utils.telegram.notify_new_articles",
+        "helpers.phone_alerts.tell_phones_about_new_stories",
         lambda arts, stats=None: (
             sent.append(list(arts)),
             {"sent": len(arts), "mode": "per_article", "reason": "ok"},
         )[1],
     )
-    rc.fetch_and_filter_rss()
+    rc.collect_fresh_stories()
     assert len(sent[0]) == 1
     monkeypatch.setattr(rc, "_poll_one_source", lambda fi: (fi, [dict(mirror)], None))
     monkeypatch.setattr(
-        rc, "parse_rss_date_to_ist", lambda e: ("Oct 13, 2026 @ 07:21 PM IST", 1.0, 2000.0))
-    res = rc.fetch_and_filter_rss()
+        rc, "read_story_date_as_indian_time", lambda e: ("Oct 13, 2026 @ 07:21 PM IST", 1.0, 2000.0))
+    res = rc.collect_fresh_stories()
     assert res.new_articles == []
     assert sent[-1] == []
 
@@ -342,7 +342,7 @@ def test_mixed_fresh_and_stale_sends_cards_plus_catchup_digest(tg_env, monkeypat
     calls = _notify_setup(monkeypatch, tg_env)
     fresh = {**ARTICLE, "age_hours": 1.0}
     stale = {**ARTICLE, "title": "Day-old story", "age_hours": 20.0}
-    res = tg.notify_new_articles([stale, fresh])
+    res = tg.tell_phones_about_new_stories([stale, fresh])
     assert res["sent"] == 2
     texts = [c["body"]["text"] for c in calls]
     assert len(calls) == 2
@@ -357,37 +357,37 @@ def test_all_stale_cycle_sends_only_digest(tg_env, monkeypatch):
         {**ARTICLE, "title": f"Old story {i}", "age_hours": 10.0 + i}
         for i in range(3)
     ]
-    res = tg.notify_new_articles(stale)
+    res = tg.tell_phones_about_new_stories(stale)
     assert res["sent"] == 1 and res["reason"] == "ok"
     assert "Catch-up" in calls[0]["body"]["text"]
 
 
 def test_ageless_articles_still_go_per_article(tg_env, monkeypatch):
     calls = _notify_setup(monkeypatch, tg_env)
-    res = tg.notify_new_articles([ARTICLE])
+    res = tg.tell_phones_about_new_stories([ARTICLE])
     assert res["sent"] == 1
     assert "SRHXtra · Fresh" in calls[0]["body"]["text"]
 
 # ── Slice 4: honest Telegram headers ──────────────────────────────────────
 
 def test_nineteen_hour_old_article_is_labeled_catchup():
-    card = tg.format_article_message({**ARTICLE, "age_hours": 18.6})
+    card = tg.write_story_card_for_phone({**ARTICLE, "age_hours": 18.6})
     assert "Catch-up" in card and "19h old" in card
     assert "SRHXtra · Fresh" not in card
 
 
 def test_fresh_article_keeps_fresh_label():
-    card = tg.format_article_message({**ARTICLE, "age_hours": 1.0})
+    card = tg.write_story_card_for_phone({**ARTICLE, "age_hours": 1.0})
     assert "SRHXtra · Fresh" in card
 
 
 def test_missing_timestamp_is_not_called_fresh():
-    card = tg.format_article_message({**ARTICLE, "age_hours": None})
+    card = tg.write_story_card_for_phone({**ARTICLE, "age_hours": None})
     assert "SRHXtra · Fresh" not in card
 
 
 def test_legacy_articles_without_age_stay_fresh():
-    assert "SRHXtra · Fresh" in tg.format_article_message(ARTICLE)
+    assert "SRHXtra · Fresh" in tg.write_story_card_for_phone(ARTICLE)
 
 
 def test_photo_caption_mirrors_header_honesty():

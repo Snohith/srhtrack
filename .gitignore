@@ -17,7 +17,8 @@ venv.bak/
 .streamlit/secrets.toml
 
 # Local SQLite Database
-database/srh_tracker.db
+saved_stories/*.db
+saved_stories/*.db-*
 
 # Log files (anywhere in the repo)
 logs/*.log

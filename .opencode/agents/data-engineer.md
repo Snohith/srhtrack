@@ -6,7 +6,7 @@ permissions:
   - { action: shell, resource: "*", effect: deny }
 ---
 
-Audit the data layer. Treat `database/schema.sql` and `database/db_manager.py` as the primary sources of truth; verify every claim against the actual SQL and code, never against docs or comments alone.
+Audit the data layer. Treat `saved_stories/tables.sql` and `saved_stories/story_storage.py` as the primary sources of truth; verify every claim against the actual SQL and code, never against docs or comments alone.
 
 Inspect: schema and index design; uniqueness and deduplication invariants; query parameterization; transaction boundaries and commit placement; connection lifecycle (`get_connection`, `closing` usage); WAL mode and busy-timeout configuration; concurrent access from background ingest, manual refresh, and the scheduler worker; purge semantics; notification retention; migrations and startup initialization; destructive cleanup behavior (`DELETE FROM players` reseed, hardcoded deletes, `cleanup_invalid_matches`).
 

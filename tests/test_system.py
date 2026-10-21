@@ -4,8 +4,8 @@ Tests Master Roster Ingestion, Strict Deduplication Engine, Deep Search,
 Analytics Summary, and Logging.
 V2.0 improvements:
   - Uses an isolated temp DB (via SRH_DB_PATH env var) — never touches production DB
-  - Fixed import: match_player_or_franchise_in_text (correct function name)
-  - Removed invalid kwargs from insert_news() calls (importance_score, category)
+  - Fixed import: find_our_players_in_story (correct function name)
+  - Removed invalid kwargs from save_story() calls (importance_score, category)
   - Log file assertions use absolute paths (works from any working directory)
   - Compatible with pytest (pytest.ini sets pythonpath = .)
 """
@@ -15,16 +15,16 @@ import pytest
 _tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
 _tmp_db.close()
 os.environ["SRH_DB_PATH"] = _tmp_db.name
-from config.roster import MASTER_ROSTER, match_player_or_franchise_in_text
-from database.db_manager import (
-    init_db, get_all_players, insert_news, search_news,
-    get_recent_news, get_analytics_summary
+from our_teams.players import PLAYERS_BY_TEAM, find_our_players_in_story
+from saved_stories.story_storage import (
+    set_up_story_box, get_all_players, save_story, search_stories,
+    get_latest_stories, count_stories_and_players
 )
-from utils.logger import rss_logger, db_logger
+from helpers.log_books import news_diary, storage_diary
 @pytest.fixture(scope="module", autouse=True)
 def setup_db():
     """Initialise the isolated test DB once for the whole module."""
-    init_db()
+    set_up_story_box()
     yield
     try:
         os.unlink(_tmp_db.name)
@@ -33,13 +33,13 @@ def setup_db():
 def test_master_roster_count():
     """Distinct players must be seeded into the DB from the Excel roster."""
     players = get_all_players()
-    expected_distinct = len({p["name"] for data in MASTER_ROSTER.values() for p in data["players"]})
+    expected_distinct = len({p["name"] for data in PLAYERS_BY_TEAM.values() for p in data["players"]})
     assert len(players) == expected_distinct, f"Expected {expected_distinct} distinct players, got {len(players)}"
     print(f"✅ Master Roster: {len(players)} distinct players verified across 4 squads.")
 def test_deduplication_by_url():
     """Second insert with same URL must be rejected (returns None)."""
     test_link = "https://example.com/dedup-url-test-001"
-    id1 = insert_news(
+    id1 = save_story(
         title="Dedup URL Test Article",
         source="Test Source",
         summary="Test Summary",
@@ -49,7 +49,7 @@ def test_deduplication_by_url():
         franchise="Sunrisers Hyderabad",
     )
     assert id1 is not None, "First insert should succeed"
-    id2 = insert_news(
+    id2 = save_story(
         title="Different Title Same URL",
         source="Test Source 2",
         summary="Different summary",
@@ -64,7 +64,7 @@ def test_same_article_can_track_multiple_targets():
     """One URL/title mentioning multiple players must be stored for each matched target."""
     test_link = "https://example.com/multi-target-article-001"
     test_title = "Abhishek Sharma and Heinrich Klaasen star for Sunrisers"
-    id1 = insert_news(
+    id1 = save_story(
         title=test_title,
         source="Test Source",
         summary="Both Sunrisers players were in the news.",
@@ -73,7 +73,7 @@ def test_same_article_can_track_multiple_targets():
         player_name="Abhishek Sharma",
         franchise="Sunrisers Hyderabad",
     )
-    id2 = insert_news(
+    id2 = save_story(
         title=test_title,
         source="Test Source",
         summary="Both Sunrisers players were in the news.",
@@ -82,7 +82,7 @@ def test_same_article_can_track_multiple_targets():
         player_name="Heinrich Klaasen",
         franchise="Sunrisers Hyderabad",
     )
-    id3 = insert_news(
+    id3 = save_story(
         title=test_title,
         source="Test Source",
         summary="Duplicate same target should still be rejected.",
@@ -98,7 +98,7 @@ def test_same_article_can_track_multiple_targets():
 def test_deduplication_by_title():
     """Second insert with same title (different URL) must be rejected."""
     test_title = "Dedup Title Test Article — Unique String XYZ987"
-    id1 = insert_news(
+    id1 = save_story(
         title=test_title,
         source="Test Source A",
         summary="Summary A",
@@ -108,7 +108,7 @@ def test_deduplication_by_title():
         franchise="Sunrisers Hyderabad",
     )
     assert id1 is not None, "First insert should succeed"
-    id2 = insert_news(
+    id2 = save_story(
         title=test_title,
         source="Test Source B",
         summary="Summary B",
@@ -120,19 +120,19 @@ def test_deduplication_by_title():
     assert id2 is None, "Duplicate title must be rejected"
     print("✅ Deduplication by Title: passed.")
 def test_search_news():
-    """search_news() must return at least one result for a known player."""
-    results = search_news("Abhishek")
-    assert len(results) > 0, "search_news('Abhishek') returned no results"
+    """search_stories() must return at least one result for a known player."""
+    results = search_stories("Abhishek")
+    assert len(results) > 0, "search_stories('Abhishek') returned no results"
     print(f"✅ Search: found {len(results)} results for 'Abhishek'.")
 def test_analytics_summary():
-    """get_analytics_summary() must report > 0 news and players."""
-    metrics = get_analytics_summary()
+    """count_stories_and_players() must report > 0 news and players."""
+    metrics = count_stories_and_players()
     assert metrics["total_news"] > 0,    "Analytics: total_news should be > 0"
     assert metrics["total_players"] > 0, "Analytics: total_players should be > 0"
     print(f"✅ Analytics: {metrics['total_news']} news, {metrics['total_players']} players.")
 def test_insert_news_uses_database_defaults():
-    """insert_news() without score/category must store 5.0 / 'General News' (no ranker)."""
-    nid = insert_news(
+    """save_story() without score/category must store 5.0 / 'General News' (no ranker)."""
+    nid = save_story(
         title="Default Fields Test Article — Unique String QWE123",
         source="Test Source",
         summary="No scoring is performed at ingest.",
@@ -142,80 +142,80 @@ def test_insert_news_uses_database_defaults():
         franchise="Sunrisers Hyderabad",
     )
     assert nid is not None, "Insert should succeed"
-    res = search_news("Default Fields Test Article")
+    res = search_stories("Default Fields Test Article")
     assert len(res) == 1, f"Expected 1 row, got {len(res)}"
     assert res[0]["importance_score"] == 5.0, res[0]
     assert res[0]["category"] == "General News", res[0]
     print("✅ Insert defaults (5.0 / 'General News'): passed.")
 def test_match_player_function():
-    """match_player_or_franchise_in_text must match a known player name."""
-    results = match_player_or_franchise_in_text("Heinrich Klaasen played brilliantly today")
+    """find_our_players_in_story must match a known player name."""
+    results = find_our_players_in_story("Heinrich Klaasen played brilliantly today")
     names = [r["player_name"] for r in results]
     assert "Heinrich Klaasen" in names, f"Expected 'Heinrich Klaasen' in {names}"
     print("✅ Player name matching: passed.")
 def test_franchise_name_matching_is_case_insensitive():
     """Title-case franchise names must not fall through to the generic SRH fallback."""
-    sec_matches = match_player_or_franchise_in_text("Sunrisers Eastern Cape announce their SA20 squad")
+    sec_matches = find_our_players_in_story("Sunrisers Eastern Cape announce their SA20 squad")
     assert sec_matches[0]["franchise"] == "Sunrisers Eastern Cape", sec_matches
-    srh_matches = match_player_or_franchise_in_text("sunrisers hyderabad prepare for IPL auction")
+    srh_matches = find_our_players_in_story("sunrisers hyderabad prepare for IPL auction")
     assert srh_matches[0]["franchise"] == "Sunrisers Hyderabad", srh_matches
-    leeds_women_matches = match_player_or_franchise_in_text("Sunrisers Leeds Women announce squad changes")
+    leeds_women_matches = find_our_players_in_story("Sunrisers Leeds Women announce squad changes")
     assert leeds_women_matches[0]["franchise"] == "Sunrisers Leeds Women", leeds_women_matches
-    assert match_player_or_franchise_in_text("The timer runs for 30 sec before reset") == []
+    assert find_our_players_in_story("The timer runs for 30 sec before reset") == []
     print("✅ Franchise name case-insensitive matching: passed.")
 def test_head_coach_phrase_matching():
     """Valid player news must NOT be dropped when 'head coach' phrase is present."""
     text = "Abhishek Sharma spoke with head coach VVS Laxman ahead of the match"
-    matches = match_player_or_franchise_in_text(text)
+    matches = find_our_players_in_story(text)
     names = [m["player_name"] for m in matches]
     assert "Abhishek Sharma" in names, f"Expected Abhishek Sharma to match despite 'head coach', got {names}"
     non_cricket_text = "Abhishek Sharma in padres trade baseball update"
-    assert match_player_or_franchise_in_text(non_cricket_text) == [], "Non-cricket false positive should return empty list"
+    assert find_our_players_in_story(non_cricket_text) == [], "Non-cricket false positive should return empty list"
     print("✅ Head coach & false-positive phrase filtering: passed.")
 def test_tilly_kesteven_tracking():
     """Verify Tilly Kesteven is loaded into roster and tracked cleanly."""
     players = get_all_players(franchise_filter="Sunrisers Leeds Women")
     p_names = [p["name"] for p in players]
     assert "Tilly Kesteven" in p_names, f"Expected Tilly Kesteven in Sunrisers Leeds Women, got {p_names}"
-    matches = match_player_or_franchise_in_text("Tilly Kesteven joined the Sunrisers Leeds Women camp recently")
+    matches = find_our_players_in_story("Tilly Kesteven joined the Sunrisers Leeds Women camp recently")
     m_names = [m["player_name"] for m in matches]
     assert "Tilly Kesteven" in m_names, f"Expected Tilly Kesteven match, got {m_names}"
     print("✅ Tilly Kesteven tracking: verified successfully.")
 def test_ownership_entity_matching():
     """Kavya/Kalanithi Maran, Sun Group and Sun TV Network must match as ownership entities."""
-    kavya = {m["player_name"] for m in match_player_or_franchise_in_text("Kavya Maran on SRH auction plans")}
+    kavya = {m["player_name"] for m in find_our_players_in_story("Kavya Maran on SRH auction plans")}
     assert "Kavya Maran" in kavya, kavya
-    kalanithi = {m["player_name"] for m in match_player_or_franchise_in_text("Kalanithi Maran on Sun Group results")}
+    kalanithi = {m["player_name"] for m in find_our_players_in_story("Kalanithi Maran on Sun Group results")}
     assert "Kalanithi Maran" in kalanithi, kalanithi
-    group = match_player_or_franchise_in_text("Sun Group discloses stake filing")
+    group = find_our_players_in_story("Sun Group discloses stake filing")
     assert group and group[0]["franchise"] == "Sunrisers Hyderabad", group
-    suntv = match_player_or_franchise_in_text("Sun TV Network quarterly results")
+    suntv = find_our_players_in_story("Sun TV Network quarterly results")
     assert suntv and suntv[0]["franchise"] == "Sunrisers Hyderabad", suntv
-    assert match_player_or_franchise_in_text("Sunrise breakfast menu launched") == []
+    assert find_our_players_in_story("Sunrise breakfast menu launched") == []
     print("✅ Ownership entity matching: verified successfully.")
 def test_logging_files_exist():
     """Logger must have created rss.log and database.log files."""
-    rss_logger.info("Test RSS logger verification entry")
-    db_logger.info("Test DB logger verification entry")
+    news_diary.info("Test RSS logger verification entry")
+    storage_diary.info("Test DB logger verification entry")
     logs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
     assert os.path.exists(os.path.join(logs_dir, "rss.log")),      "rss.log not found"
     assert os.path.exists(os.path.join(logs_dir, "database.log")), "database.log not found"
     print("✅ Logging files: rss.log and database.log confirmed.")
 def test_source_count_dynamic():
-    """CRICKET_SOURCES must have >= 48 verified entries (audited 2026-07-31 — dead feeds removed)."""
-    from scrapers.rss_collector import CRICKET_SOURCES, TOP_50_CRICKET_SOURCES, RSS_FEEDS
-    assert len(CRICKET_SOURCES) >= 48, f"Expected ≥ 48 sources, got {len(CRICKET_SOURCES)}"
-    assert CRICKET_SOURCES is TOP_50_CRICKET_SOURCES, "TOP_50_CRICKET_SOURCES alias must point to CRICKET_SOURCES"
-    assert CRICKET_SOURCES is RSS_FEEDS, "RSS_FEEDS alias must point to CRICKET_SOURCES"
-    names = [s['name'] for s in CRICKET_SOURCES]
+    """NEWS_WEBSITES must have >= 48 verified entries (audited 2026-07-31 — dead feeds removed)."""
+    from news_collectors.collect_news import NEWS_WEBSITES, TOP_50_CRICKET_SOURCES, RSS_FEEDS
+    assert len(NEWS_WEBSITES) >= 48, f"Expected ≥ 48 sources, got {len(NEWS_WEBSITES)}"
+    assert TOP_50_CRICKET_SOURCES is NEWS_WEBSITES, "TOP_50_CRICKET_SOURCES alias must point to NEWS_WEBSITES"
+    assert RSS_FEEDS is NEWS_WEBSITES, "RSS_FEEDS alias must point to NEWS_WEBSITES"
+    names = [s['name'] for s in NEWS_WEBSITES]
     assert len(names) == len(set(names)), f"Duplicate source names found: {[n for n in names if names.count(n) > 1]}"
-    urls = [s['url'] for s in CRICKET_SOURCES]
+    urls = [s['url'] for s in NEWS_WEBSITES]
     assert len(urls) == len(set(urls)), f"Duplicate source URLs found"
     assert not any("bing.com/news" in u for u in urls), "Bing News aggregator mirrors falsify dates and must stay out"
-    print(f"✅ Source count dynamic: {len(CRICKET_SOURCES)} sources, no duplicates.")
+    print(f"✅ Source count dynamic: {len(NEWS_WEBSITES)} sources, no duplicates.")
 def test_schema_uses_target_aware_news_dedupe():
     """Schema must not globally unique-constrain article links."""
-    schema_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "database", "schema.sql")
+    schema_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "saved_stories", "tables.sql")
     with open(schema_path) as f:
         schema_text = f.read()
     assert "link TEXT UNIQUE" not in schema_text, "news.link must not be globally unique"
@@ -223,33 +223,33 @@ def test_schema_uses_target_aware_news_dedupe():
     assert "idx_news_title_target" in schema_text, "schema must dedupe titles per tracked target"
     print("✅ Target-aware news dedupe schema: passed.")
 def test_category_default_alignment():
-    """The schema.sql category DEFAULT and insert_news() default must both be 'General News'."""
+    """The schema.sql category DEFAULT and save_story() default must both be 'General News'."""
     import inspect
-    from database.db_manager import insert_news
-    sig = inspect.signature(insert_news)
+    from saved_stories.story_storage import save_story
+    sig = inspect.signature(save_story)
     code_default = sig.parameters['category'].default
-    assert code_default == 'General News', f"insert_news category default is '{code_default}', expected 'General News'"
-    schema_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "database", "schema.sql")
+    assert code_default == 'General News', f"save_story category default is '{code_default}', expected 'General News'"
+    schema_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "saved_stories", "tables.sql")
     with open(schema_path) as f:
         schema_text = f.read()
     assert "DEFAULT 'General News'" in schema_text, "schema.sql category default must be 'General News'"
     assert "DEFAULT 'General'" not in schema_text, "schema.sql still has old DEFAULT 'General'"
-    print("✅ Category default alignment: schema.sql and insert_news() both use 'General News'.")
+    print("✅ Category default alignment: schema.sql and save_story() both use 'General News'.")
 def test_scheduler_no_init_db():
-    """scheduler/worker.py must NOT call init_db() (to avoid redundant migrations on every cycle).
+    """regular_checks/check_news.py must NOT call init_db() (to avoid redundant migrations on every cycle).
     Checks for actual function call — ignores any mention in comments/docstrings.
     """
     import re
-    scheduler_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scheduler", "worker.py")
+    scheduler_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "regular_checks", "check_news.py")
     with open(scheduler_path) as f:
         source = f.read()
     source_no_comments = re.sub(r'(#[^\n]*|\'\'\'[\s\S]*?\'\'\'|"""[\s\S]*?""")', '', source)
-    assert 'init_db()' not in source_no_comments, "scheduler/worker.py must not call init_db() — it runs migrations on every cycle"
+    assert 'init_db()' not in source_no_comments, "regular_checks/check_news.py must not call init_db() — it runs migrations on every cycle"
     print("✅ Scheduler isolation: init_db() not called in worker.py.")
 def test_single_name_alias_matching():
     """Verify that headlines using single names like 'Salil' or 'Klaasen' match the player's profile."""
     text = "Ayush Mhatre to SRH trade deal called off SRH offered Salil in return"
-    matches = match_player_or_franchise_in_text(text)
+    matches = find_our_players_in_story(text)
     p_names = [m["player_name"] for m in matches]
     assert "Salil Arora" in p_names, f"Expected Salil Arora in matches, got {p_names}"
     print("✅ Single-name alias matching ('Salil' -> 'Salil Arora'): verified successfully.")
@@ -258,26 +258,26 @@ def test_four_franchises_alias_matching():
     """Verify player aliases match correctly across all 4 Sunrisers franchises."""
     # Sunrisers Hyderabad
     srh_text = "Abhishek and Ishan starred in thrilling win"
-    srh_matches = {m["player_name"] for m in match_player_or_franchise_in_text(srh_text)}
+    srh_matches = {m["player_name"] for m in find_our_players_in_story(srh_text)}
     assert "Abhishek Sharma" in srh_matches
     assert "Ishan Kishan" in srh_matches
 
     # Sunrisers Eastern Cape
     sec_text = "Stubbs and Jansen lead the attack with Nortje"
-    sec_matches = {m["player_name"] for m in match_player_or_franchise_in_text(sec_text)}
+    sec_matches = {m["player_name"] for m in find_our_players_in_story(sec_text)}
     assert "Tristan Stubbs" in sec_matches
     assert "Marco Jansen" in sec_matches
     assert "Anrich Nortje" in sec_matches
 
     # Sunrisers Leeds Men
     leeds_men_text = "Brook and Crawley hit rapid fifties for Leeds"
-    lm_matches = {m["player_name"] for m in match_player_or_franchise_in_text(leeds_men_text)}
+    lm_matches = {m["player_name"] for m in find_our_players_in_story(leeds_men_text)}
     assert "Harry Brook" in lm_matches
     assert "Zak Crawley" in lm_matches
 
     # Sunrisers Leeds Women
     leeds_women_text = "Gibson, Litchfield, and Deepti spark victory"
-    lw_matches = {m["player_name"] for m in match_player_or_franchise_in_text(leeds_women_text)}
+    lw_matches = {m["player_name"] for m in find_our_players_in_story(leeds_women_text)}
     assert "Dani Gibson" in lw_matches
     assert "Phoebe Litchfield" in lw_matches
     assert "Deepti Sharma" in lw_matches
@@ -286,7 +286,7 @@ def test_four_franchises_alias_matching():
 def test_sakib_hussain_retention():
     """Legitimate Sakib Hussain news must NOT be purged by init_db()."""
     test_link = "https://example.com/sakib-hussain-test-retention"
-    nid = insert_news(
+    nid = save_story(
         title="Sakib Hussain bowls match-winning spell",
         source="Test Source",
         summary="Sakib took 3 wickets in domestic match.",
@@ -296,24 +296,24 @@ def test_sakib_hussain_retention():
         franchise="Sunrisers Hyderabad",
     )
     assert nid is not None
-    init_db()
-    res = search_news("Sakib")
+    set_up_story_box()
+    res = search_stories("Sakib")
     names = [r["player_name"] for r in res]
     assert "Sakib Hussain" in names, "Sakib Hussain article must be retained after init_db()"
     print("✅ Sakib Hussain news retention: passed.")
 
 def test_web_scraper_fallback_availability():
     """Verify web scraper fallback functions are imported and callable."""
-    from scrapers.web_scraper import scrape_google_news_topic, scrape_web_headlines, scrape_match_highlights
-    assert callable(scrape_google_news_topic)
-    assert callable(scrape_web_headlines)
-    assert callable(scrape_match_highlights)
+    from news_collectors.backup_news_finder import find_news_on_google, find_headlines_on_a_page, find_match_highlights
+    assert callable(find_news_on_google)
+    assert callable(find_headlines_on_a_page)
+    assert callable(find_match_highlights)
     print("✅ Web scraper fallback availability: verified.")
 
 
 def test_abhishek_porel_not_matched_to_sharma():
     """'Abhishek Porel' (Bengal) must NOT match Abhishek Sharma (precision)."""
-    matches = match_player_or_franchise_in_text("Bengal Pick Abhishek Porel For Ranji Trophy Opener")
+    matches = find_our_players_in_story("Bengal Pick Abhishek Porel For Ranji Trophy Opener")
     names = [m["player_name"] for m in matches]
     assert "Abhishek Sharma" not in names, f"False positive: Abhishek Porel matched {names}"
     print("✅ Abhishek Porel precision: no false match to Abhishek Sharma.")
@@ -321,7 +321,7 @@ def test_abhishek_porel_not_matched_to_sharma():
 
 def test_ishan_porel_not_matched_to_kishan():
     """'Ishan Porel' (Bengal pacer) must NOT match Ishan Kishan (precision)."""
-    matches = match_player_or_franchise_in_text("Ishan Porel takes five wickets for Bengal")
+    matches = find_our_players_in_story("Ishan Porel takes five wickets for Bengal")
     names = [m["player_name"] for m in matches]
     assert "Ishan Kishan" not in names, f"False positive: Ishan Porel matched {names}"
     print("✅ Ishan Porel precision: no false match to Ishan Kishan.")
@@ -329,10 +329,10 @@ def test_ishan_porel_not_matched_to_kishan():
 
 def test_bare_abhishek_ishan_still_match():
     """Bare 'Abhishek and Ishan' (no colliding surname) must still match SRH stars."""
-    matches = {m["player_name"] for m in match_player_or_franchise_in_text("Abhishek and Ishan starred in thrilling win")}
+    matches = {m["player_name"] for m in find_our_players_in_story("Abhishek and Ishan starred in thrilling win")}
     assert "Abhishek Sharma" in matches, matches
     assert "Ishan Kishan" in matches, matches
-    full = {m["player_name"] for m in match_player_or_franchise_in_text("Abhishek Sharma smashes fifty")}
+    full = {m["player_name"] for m in find_our_players_in_story("Abhishek Sharma smashes fifty")}
     assert "Abhishek Sharma" in full, full
     print("✅ Bare Abhishek/Ishan recall preserved.")
 
@@ -341,16 +341,16 @@ def test_insert_news_duplicate_race_is_silent():
     """A UNIQUE race past the SELECT check must return None, not raise."""
     import sqlite3
     from unittest.mock import patch
-    from database import db_manager
+    from saved_stories import story_storage as db_manager
 
     title = "Race Condition Test Article — Unique String ZZZ999"
-    nid = db_manager.insert_news(
+    nid = db_manager.save_story(
         title=title, source="Test Source", summary="race test",
         link="https://example.com/race-zzz999", published_at="Jul 24, 2026 @ 10:30 AM IST",
         player_name="Abhishek Sharma", franchise="Sunrisers Hyderabad",
     )
     assert nid is not None
-    real_get = db_manager.get_connection
+    real_get = db_manager.open_story_box
 
     class _BoomCursor:
         def __init__(self, cur):
@@ -377,43 +377,43 @@ def test_insert_news_duplicate_race_is_silent():
         def close(self):
             self._c.close()
 
-    with patch.object(db_manager, "get_connection", lambda: _BoomConn(real_get())):
-        assert db_manager.insert_news(
+    with patch.object(db_manager, "open_story_box", lambda: _BoomConn(real_get())):
+        assert db_manager.save_story(
             title=title, source="Test Source", summary="race test",
             link="https://example.com/race-zzz999", published_at="Jul 24, 2026 @ 10:30 AM IST",
             player_name="Abhishek Sharma", franchise="Sunrisers Hyderabad",
         ) is None
-    print("✅ insert_news UNIQUE race handled silently.")
+    print("✅ save_story UNIQUE race handled silently.")
 
 
 def test_fetch_feed_retry_returns_none_on_http_error():
-    """fetch_feed_with_retry must return None (not raise) on HTTP 403."""
+    """try_to_download_one_website must return None (not raise) on HTTP 403."""
     from unittest.mock import patch, MagicMock
-    from scrapers import rss_collector
+    from news_collectors import collect_news as rss_collector
     resp = MagicMock(status_code=403, content=b"forbidden")
     with patch.object(rss_collector.requests, "get", return_value=resp):
-        assert rss_collector.fetch_feed_with_retry("https://example.com/feed", retries=1, delay=0) is None
-    print("✅ fetch_feed_with_retry handles HTTP errors without raising.")
+        assert rss_collector.try_to_download_one_website("https://example.com/feed", retries=1, delay=0) is None
+    print("✅ try_to_download_one_website handles HTTP errors without raising.")
 
 
 def test_fetch_feed_retry_returns_feed_on_200():
-    """fetch_feed_with_retry must return parsed entries on HTTP 200."""
+    """try_to_download_one_website must return parsed entries on HTTP 200."""
     from unittest.mock import patch, MagicMock
-    from scrapers import rss_collector
+    from news_collectors import collect_news as rss_collector
     rss = (b'<?xml version="1.0"?><rss version="2.0"><channel><title>T</title>'
            b'<item><title>Abhishek Sharma fifty</title><link>https://example.com/x</link>'
            b'<pubDate>Sat, 11 Oct 2026 10:00:00 +0530</pubDate></item>'
            b'</channel></rss>')
     resp = MagicMock(status_code=200, content=rss)
     with patch.object(rss_collector.requests, "get", return_value=resp):
-        feed = rss_collector.fetch_feed_with_retry("https://example.com/feed", retries=1, delay=0)
+        feed = rss_collector.try_to_download_one_website("https://example.com/feed", retries=1, delay=0)
     assert feed is not None and len(feed.entries) == 1
-    print("✅ fetch_feed_with_retry parses HTTP 200 feeds.")
+    print("✅ try_to_download_one_website parses HTTP 200 feeds.")
 
 
 def test_fallback_query_none_for_google_mirror():
     """Google News mirrors have no meaningful fallback query (avoids garbage results)."""
-    from scrapers.rss_collector import _fallback_query_for_source
+    from news_collectors.collect_news import _fallback_query_for_source
     mirror = {"name": "Google News: SEC Official Site",
               "url": "https://news.google.com/rss/search?q=site:sunriserseasterncape.co&hl=en-ZA&gl=ZA&ceid=ZA:en"}
     assert _fallback_query_for_source(mirror) is None
@@ -425,11 +425,11 @@ def test_fallback_query_none_for_google_mirror():
 def test_poll_one_source_skips_garbage_fallback():
     """A dead Google mirror must NOT trigger an unrelated fallback search."""
     from unittest.mock import patch
-    from scrapers import rss_collector
+    from news_collectors import collect_news as rss_collector
     mirror = {"name": "Google News: SEC Official Site",
               "url": "https://news.google.com/rss/search?q=site:sunriserseasterncape.co&hl=en-ZA&gl=ZA&ceid=ZA:en"}
-    with patch.object(rss_collector, "fetch_feed_with_retry", return_value=None), \
-         patch("scrapers.web_scraper.scrape_google_news_topic") as fb:
+    with patch.object(rss_collector, "try_to_download_one_website", return_value=None), \
+         patch("news_collectors.backup_news_finder.find_news_on_google") as fb:
         _, entries, err = rss_collector._poll_one_source(mirror)
     assert entries == [] and err is not None
     fb.assert_not_called()
@@ -437,7 +437,7 @@ def test_poll_one_source_skips_garbage_fallback():
 
 if __name__ == "__main__":
     print("🧪 Starting @SRHXtra System Verification Suite...\n")
-    init_db()
+    set_up_story_box()
     test_master_roster_count()
     test_deduplication_by_url()
     test_deduplication_by_title()

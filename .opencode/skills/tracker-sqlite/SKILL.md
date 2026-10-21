@@ -3,7 +3,7 @@ name: Tracker SQLite
 description: SQLite schema, transaction, concurrency, deduplication, retention, and migration rules for Tracker.
 ---
 
-`database/schema.sql` and `database/db_manager.py` are the primary data-layer references. Verify claims against the actual SQL and code, not against docs or comments.
+`saved_stories/tables.sql` and `saved_stories/story_storage.py` are the primary data-layer references. Verify claims against the actual SQL and code, not against docs or comments.
 
 ## Rules
 
