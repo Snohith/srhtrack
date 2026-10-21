@@ -1,46 +1,70 @@
+"""Rotating log files for the collector.
+
+Logs never contain the Telegram token or chat id.  Set SUNRISERS_LOG_DIR to
+put the files somewhere other than the repository's logs/ directory.
 """
-Centralized Structured Logging Module for @SRHXtra.
-Creates isolated log files in logs/ directory for rss, scheduler, database, graphics, and errors.
-Uses RotatingFileHandler (5 MB max, 3 backups) to prevent unbounded log growth.
-"""
-import os
+from __future__ import annotations
+
 import logging
+import os
 from logging.handlers import RotatingFileHandler
-WHERE_WE_WRITE_DIARIES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOG_DIR = os.environ.get("SUNRISERS_LOG_DIR", os.path.join(PROJECT_ROOT, "logs"))
+_LOG_FILES = (("RSS", "rss.log"), ("DB", "database.log"), ("Error", "errors.log"))
+
+
 def make_sure_diary_folder_exists():
-    if not os.path.exists(WHERE_WE_WRITE_DIARIES):
-        os.makedirs(WHERE_WE_WRITE_DIARIES)
+    os.makedirs(LOG_DIR, exist_ok=True)
+
+
+def _make_handler(filename):
+    make_sure_diary_folder_exists()
+    handler = RotatingFileHandler(
+        os.path.join(LOG_DIR, filename),
+        maxBytes=5 * 1024 * 1024,
+        backupCount=3,
+        encoding="utf-8",
+    )
+    handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            "%Y-%m-%d %H:%M:%S",
+        )
+    )
+    return handler
+
+
 def make_a_diary(name, filename):
-    """Creates a custom logger writing to a rotating log file (5 MB max, 3 backups)."""
     make_sure_diary_folder_exists()
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
     if not logger.handlers:
-        file_path = os.path.join(WHERE_WE_WRITE_DIARIES, filename)
-        handler = RotatingFileHandler(
-            file_path,
-            maxBytes=5 * 1024 * 1024,  
-            backupCount=3,              
-            encoding="utf-8",
-        )
-        formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s', '%Y-%m-%d %H:%M:%S')
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
+        logger.addHandler(_make_handler(filename))
+        logger.propagate = False
     return logger
-news_diary       = make_a_diary("RSS",       "rss.log")
-storage_diary        = make_a_diary("DB",        "database.log")
-app_diary       = make_a_diary("App",       "app.log")
-pictures_diary  = make_a_diary("Graphics",  "graphics.log")
-checker_diary = make_a_diary("Scheduler", "scheduler.log")
-problems_diary     = make_a_diary("Error",     "errors.log")
 
-# Old names, kept so older guides and tests still work.
+
+news_diary = make_a_diary("RSS", "rss.log")
+storage_diary = make_a_diary("DB", "database.log")
+problems_diary = make_a_diary("Error", "errors.log")
+
+
+def configure_logs():
+    """Re-point the diaries after the entry point has loaded .env."""
+    global LOG_DIR
+    LOG_DIR = os.environ.get("SUNRISERS_LOG_DIR", os.path.join(PROJECT_ROOT, "logs"))
+    for name, filename in _LOG_FILES:
+        logger = logging.getLogger(name)
+        for handler in list(logger.handlers):
+            handler.close()
+            logger.removeHandler(handler)
+        logger.addHandler(_make_handler(filename))
+        logger.propagate = False
+
+LOGS_DIR = LOG_DIR
 get_logger = make_a_diary
 ensure_logs_dir = make_sure_diary_folder_exists
-LOGS_DIR = WHERE_WE_WRITE_DIARIES
 rss_logger = news_diary
 db_logger = storage_diary
-app_logger = app_diary
-graphics_logger = pictures_diary
-scheduler_logger = checker_diary
 error_logger = problems_diary

@@ -1,9 +1,10 @@
-# Byte-compiled / optimized / DLL files
+# Byte-compiled / caches
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
+.pytest_cache/
 
 # Virtual environments
 env/
@@ -12,28 +13,22 @@ ENV/
 env.bak/
 venv.bak/
 
-# Streamlit local settings
-.streamlit/credentials.toml
-.streamlit/secrets.toml
-
-# Local SQLite Database
+# Local SQLite ledger and lock files
 saved_stories/*.db
 saved_stories/*.db-*
+saved_stories/*.lock
 
-# Log files (anywhere in the repo)
+# Logs
 logs/*.log
+logs/*.log.*
 *.log
 
-# Generated Stat Cards
-generated/*.png
-!generated/.gitkeep
+# Local secrets
+.env
+.env.*
+!.env.example
 
-# Generated images at repo root (test artifacts)
-*.png
-*.jpg
-*.jpeg
-
-# OS / Editor junk
+# OS / editor junk
 .DS_Store
 .vscode/
 .idea/
@@ -41,11 +36,5 @@ generated/*.png
 *.swo
 *~
 
-# Test cache
-.pytest_cache/
-
-# Dev container (local only)
+# Local agent/IDE state
 .devcontainer/
-
-# Local secrets (never commit)
-.env

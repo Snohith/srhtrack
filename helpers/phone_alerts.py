@@ -1,132 +1,71 @@
+"""Telegram delivery for the SRHXtra collector.
+
+Only the Bot API sendMessage call is used.  There is no polling bot, no
+command handler, no image fetching, and no heartbeat.  A queued article is
+claimed atomically from SQLite, sent once, and then marked sent.  Failures
+stay in the ledger for a bounded, backed-off retry.
 """
-Friendly phone texts about fresh Sunrisers stories.
+from __future__ import annotations
 
-Sends a Bot API message whenever newly matched articles are stored.
-Best-effort by design: texting must never break or slow the news check —
-every public function returns a status instead of raising, and sends are
-skipped silently when the bot is not configured.
-
-Texts go out inside the news check (in order, before the check counts as done;
-delivery before the cycle is marked complete). Each POST typically takes
-<1s; the per-call timeout below bounds the pathological case to
-max_alerts × timeout seconds.
-
-Configuration (environment or `.env`; see `.env.example`):
-  TELEGRAM_ENABLED=yes|no            master switch (default: yes)
-  TELEGRAM_BOT_TOKEN=...             token from @BotFather (secret — never logged)
-  TELEGRAM_CHAT_ID=...               target chat / channel id from @userinfobot
-  TELEGRAM_MODE=per_article|digest   default: per_article
-  TELEGRAM_MAX_ALERTS_PER_CYCLE=10   cap for per-article mode (1-50); overflow
-                                     is collapsed into one digest message.
-
-Security notes:
-  - RSS titles/summaries/links are untrusted: all interpolated values are
-    HTML-escaped, and article URLs are restricted to http/https only.
-  - The bot token is a secret: it is never written to logs. Request
-    exceptions may embed the request URL (which contains the token), so only
-    the exception *type* is logged, never its message. Bot API error
-    descriptions are generic strings (e.g. "Bad Request: chat not found")
-    and are safe to log.
-"""
-import concurrent.futures
 import html
 import os
-from urllib.parse import urlparse, urljoin
+import time
+from dataclasses import dataclass
 
-import bs4
 import requests
 
+from helpers.config import env_bool
+from helpers.links import canonicalize_url
 from helpers.log_books import problems_diary
+from saved_stories.story_storage import (
+    claim_due_deliveries,
+    mark_delivery_dead,
+    mark_delivery_failed,
+    mark_delivery_sent,
+)
 
-PHONE_SEND_TIMEOUT_SECS = 6
-PHONE_PHOTO_FETCH_TIMEOUT_SECS = 5
-PHONE_MAX_MESSAGE_CHARS = 4096
-PHONE_MAX_CAPTION_CHARS = 1024
-DEFAULT_MAX_PHONE_ALERTS_PER_CHECK = 10
-
-
-def _load_dotenv(path=".env"):
-    """Minimal .env loader (no extra dependency): KEY=VALUE lines only."""
-    try:
-        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        env_path = path if os.path.isabs(path) else os.path.join(base, path)
-        if not os.path.exists(env_path):
-            return
-        with open(env_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                key, val = line.split("=", 1)
-                key, val = key.strip(), val.strip().strip("'\"")
-                if key and key not in os.environ:
-                    os.environ[key] = val
-    except Exception:
-        pass
+TELEGRAM_TIMEOUT_SECS = 10
+MAX_MESSAGE_CHARS = 4096
+MAX_ALERTS_PER_RUN = 20
+TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
 
 
-_load_dotenv()
+@dataclass
+class SendResult:
+    ok: bool
+    retryable: bool = True
+    retry_after: float = 0.0
+    error: str = ""
 
 
-def _secret(name, default=""):
-    """Env first, Streamlit secrets fallback (Cloud dashboard → Secrets).
-
-    TOML values may be non-strings (e.g. an unquoted numeric chat id),
-    so everything is coerced to str. Values are never logged.
-    """
-    val = os.environ.get(name, "")
-    if str(val).strip():
-        return str(val).strip()
-    try:
-        import streamlit as st
-        return str(st.secrets.get(name, default) or default).strip()
-    except Exception:
-        return default
-
-
-def what_are_our_phone_settings():
-    """Reads Telegram settings from env / Streamlit secrets. Never includes secrets in logs."""
-    enabled = _secret("TELEGRAM_ENABLED", "true").lower() in (
-        "1", "true", "yes", "y", "on",
-    )
-    token = _secret("TELEGRAM_BOT_TOKEN")
-    chat_id = _secret("TELEGRAM_CHAT_ID")
-    mode = _secret("TELEGRAM_MODE", "per_article").lower()
-    if mode not in ("per_article", "digest"):
-        mode = "per_article"
-    heartbeat = _secret("TELEGRAM_HEARTBEAT", "true").lower() in (
-        "1", "true", "yes", "y", "on",
-    )
-    try:
-        max_alerts = max(1, min(50, int(
-            _secret("TELEGRAM_MAX_ALERTS_PER_CYCLE", str(DEFAULT_MAX_PHONE_ALERTS_PER_CHECK)))))
-    except (TypeError, ValueError):
-        max_alerts = DEFAULT_MAX_PHONE_ALERTS_PER_CHECK
+def telegram_settings():
+    token = str(os.environ.get("TELEGRAM_BOT_TOKEN", "")).strip()
+    chat_id = str(os.environ.get("TELEGRAM_CHAT_ID", "")).strip()
     return {
-        "enabled": enabled,
+        "enabled": env_bool("TELEGRAM_ENABLED", True),
         "token": token,
         "chat_id": chat_id,
-        "mode": mode,
-        "heartbeat": heartbeat,
-        "max_alerts": max_alerts,
     }
 
 
 def are_phone_alerts_ready():
-    """True only when alerting is enabled AND credentials are present."""
-    cfg = what_are_our_phone_settings()
-    return bool(cfg["enabled"] and cfg["token"] and cfg["chat_id"])
+    settings = telegram_settings()
+    return bool(settings["enabled"] and settings["token"] and settings["chat_id"])
 
 
-def _safe_url(url):
-    """Choke point for article URLs: only http/https links are ever sent."""
-    try:
-        scheme = urlparse(str(url or "").strip()).scheme.lower()
-        if scheme in ("http", "https"):
-            return str(url).strip()
-    except Exception:
-        pass
-    return ""
+def _as_list(value):
+    if isinstance(value, (list, tuple)):
+        return [str(item) for item in value if str(item).strip()]
+    if isinstance(value, str) and value.strip():
+        try:
+            import json
+            loaded = json.loads(value)
+            if isinstance(loaded, list):
+                return [str(item) for item in loaded if str(item).strip()]
+        except (TypeError, ValueError):
+            pass
+        return [value.strip()]
+    return []
 
 
 def _clip(text, limit):
@@ -134,390 +73,143 @@ def _clip(text, limit):
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
-TEAM_SYMBOLS = {
-    "Sunrisers Hyderabad": "🟠",
-    "Sunrisers Eastern Cape": "🟢",
-    "Sunrisers Leeds Men": "🔵",
-    "Sunrisers Leeds Women": "🟣",
-}
+def _team_symbol(franchises):
+    joined = " ".join(franchises).lower()
+    if "women" in joined:
+        return "🟣"
+    if "leeds" in joined:
+        return "🔵"
+    if "eastern cape" in joined:
+        return "🟢"
+    return "🟠"
 
 
-def _team_symbol(franchise):
-    return TEAM_SYMBOLS.get(str(franchise or ""), "🟠")
-
-
-FRESH_STORY_MAX_AGE_HOURS = 6.0
-
-
-def _freshness_header(article):
-    """Honest alert header from the article's age at ingest time.
-
-    Google News re-stamps evergreen pages (same link, fresh pubDate), so the
-    stored timestamp can lag the alert by many hours. Only genuinely fresh
-    items may claim "Fresh"; late catch-up carries its age, and entries with
-    no feed timestamp make no freshness claim at all. Articles predating the
-    age signal (no "age_hours" key) keep the legacy "Fresh" header.
-    """
-    if "age_hours" not in article:
-        return "SRHXtra · Fresh"
-    age = article.get("age_hours")
-    if age is None:
-        return "SRHXtra · New"
-    try:
-        age_hours = float(age)
-    except (TypeError, ValueError):
-        return "SRHXtra · New"
-    if age_hours <= FRESH_STORY_MAX_AGE_HOURS:
-        return "SRHXtra · Fresh"
-    return f"SRHXtra · Catch-up · {age_hours:.0f}h old"
-
-
-def write_story_card_for_phone(article):
-    """One alert card per fresh article. All values escaped (untrusted RSS).
-
-    Layout: accent header + bold title + expandable summary quote (collapsed
-    to 3 lines, tap to expand — degrades to a plain quote on old clients) +
-    meta lines + story link (drives the large link-preview card).
-    """
-    title = html.escape(_clip(article.get("title", "New Sunrisers update"), 250))
-    player = html.escape(str(article.get("player_name", "")))
-    franchise = html.escape(str(article.get("franchise", "")))
+def format_article_alert(article):
+    """One escaped Telegram card for one unique article."""
+    people = _as_list(article.get("people"))
+    franchises = _as_list(article.get("franchises"))
+    topics = _as_list(article.get("topics"))
+    title = html.escape(_clip(article.get("title", "Sunrisers update"), 300))
+    summary = html.escape(_clip(article.get("summary", ""), 350))
     source = html.escape(str(article.get("source", "")))
     published = html.escape(str(article.get("published_at", "")))
-    summary = html.escape(_clip(article.get("summary", ""), 400))
-    link = _safe_url(article.get("link", ""))
-    lines = [
-        f"{_team_symbol(article.get('franchise', ''))} <b>{_freshness_header(article)}</b>",
-        "",
-        f"<b>{title}</b>",
-    ]
+    link = canonicalize_url(article.get("link", ""))
+
+    lines = [f"{_team_symbol(franchises)} <b>SRHXtra</b>", "", f"<b>{title}</b>"]
     if summary:
         lines += ["", f"<blockquote expandable>{summary}</blockquote>"]
-    lines += [
-        "",
-        f"⚡ {player} · {franchise}",
-        f"📰 {source} · {published}",
-    ]
+    if people:
+        lines += ["", f"👤 {html.escape(', '.join(people))}"]
+    if franchises:
+        lines.append(f"🏏 {html.escape(', '.join(franchises))}")
+    if topics:
+        lines.append(f"🏷️ {html.escape(', '.join(topics))}")
+    meta = " · ".join(part for part in (source, published) if part)
+    if meta:
+        lines += ["", f"📰 {meta}"]
     if link:
         lines += ["", f'<a href="{html.escape(link, quote=True)}">Read full story →</a>']
-    return "\n".join(lines)[:PHONE_MAX_MESSAGE_CHARS]
+    return "\n".join(lines)[:MAX_MESSAGE_CHARS]
 
 
-def _is_fresh_for_alert(article):
-    """True when an article deserves its own per-article card.
+def send_telegram_message(text, preview_url=None):
+    """POST one message. Never raises and never logs the token."""
+    settings = telegram_settings()
+    if not (settings["enabled"] and settings["token"] and settings["chat_id"]):
+        return SendResult(False, retryable=False, error="Telegram is not configured")
 
-    Backlog floods (cold-start reboots, ingest gaps) can queue dozens of
-    day-old stories; each would otherwise arrive as its own "Fresh" DM.
-    Stale items (>6h) ride in one catch-up digest instead. Ageless articles
-    (no timestamp in the feed) keep per-article treatment with a "New" label.
-    """
-    age = (article or {}).get("age_hours")
-    if age is None:
-        return True
-    try:
-        return float(age) <= FRESH_STORY_MAX_AGE_HOURS
-    except (TypeError, ValueError):
-        return True
-
-
-def _format_age_short(age):
-    try:
-        return f"{float(age):.0f}h old"
-    except (TypeError, ValueError):
-        return "age unknown"
-
-
-def write_catchup_note_for_phone(articles):
-    """One collapsed DM for a cycle's stale backlog (already on the dashboard)."""
-    shown = list(articles or [])[:10]
-    lines = ["📦 <b>SRHXtra — Catch-up</b>", ""]
-    lines.append(
-        f"{len(articles)} older update(s) already on your dashboard:"
-    )
-    for a in shown:
-        title = html.escape(_clip(a.get("title", ""), 120))
-        player = html.escape(str(a.get("player_name", "")))
-        source = html.escape(str(a.get("source", "")))
-        lines.append(
-            f"• <b>{player}</b> — {title} ({source}, {_format_age_short(a.get('age_hours'))})"
-        )
-    if len(articles) > len(shown):
-        lines.append(f"…and {len(articles) - len(shown)} more in the app.")
-    return "\n".join(lines)[:PHONE_MAX_MESSAGE_CHARS]
-
-
-def write_summary_for_phone(articles, total_inserted, total_cycle=None):
-    """Single-cycle overflow/digest summary (used for overflow + digest mode)."""
-    shown = articles[:10]
-    lines = ["🟠 <b>SRHXtra — fresh updates</b>", ""]
-    if total_cycle and total_cycle > total_inserted:
-        lines.append(f"{total_inserted} further update(s) — {total_cycle} new this cycle:")
-    else:
-        lines.append(f"{total_inserted} new article(s) captured this cycle:")
-    for a in shown:
-        title = html.escape(_clip(a.get("title", ""), 120))
-        player = html.escape(str(a.get("player_name", "")))
-        source = html.escape(str(a.get("source", "")))
-        lines.append(f"• <b>{player}</b> — {title} ({source})")
-    if total_inserted > len(shown):
-        lines.append(f"…and {total_inserted - len(shown)} more in the app.")
-    return "\n".join(lines)[:PHONE_MAX_MESSAGE_CHARS]
-
-
-def send_a_phone_message(text, preview_url=None):
-    """POSTs one message via Bot API. Returns True/False, never raises.
-
-    preview_url must already be sanitized (_safe_url): when given, Telegram
-    renders the large link-preview card for it (prefer_large_media only
-    applies to an explicitly specified URL — first-link fallback stays small).
-    """
-    cfg = what_are_our_phone_settings()
-    if not (cfg["enabled"] and cfg["token"] and cfg["chat_id"]):
-        return False
     body = {
-        "chat_id": cfg["chat_id"],
-        "text": text[:PHONE_MAX_MESSAGE_CHARS],
+        "chat_id": settings["chat_id"],
+        "text": str(text or "")[:MAX_MESSAGE_CHARS],
         "parse_mode": "HTML",
     }
-    if preview_url:
+    safe_preview = canonicalize_url(preview_url) if preview_url else ""
+    if safe_preview:
         body["link_preview_options"] = {
-            "url": preview_url,
+            "url": safe_preview,
             "prefer_large_media": True,
             "show_above_text": False,
         }
     try:
-        resp = requests.post(
-            f"https://api.telegram.org/bot{cfg['token']}/sendMessage",
+        response = requests.post(
+            TELEGRAM_API.format(token=settings["token"], method="sendMessage"),
             json=body,
-            timeout=PHONE_SEND_TIMEOUT_SECS,
+            timeout=TELEGRAM_TIMEOUT_SECS,
         )
-        try:
-            payload = resp.json()
-        except Exception:
-            payload = {}
-        ok = resp.status_code == 200 and bool(payload.get("ok"))
-        desc = str(payload.get("description") or "")
-        if not ok:
-            problems_diary.warning(f"Telegram send failed: HTTP {resp.status_code} {desc}".rstrip())
-        return ok
     except Exception as exc:
-        # Log only the exception type: messages may embed the request URL,
-        # which contains the bot token.
         problems_diary.warning(f"Telegram send failed: {type(exc).__name__}.")
-        return False
+        return SendResult(False, retryable=True, error=type(exc).__name__)
 
-
-def write_all_quiet_note(stats=None):
-    """Short 'sweep clean' DM so a quiet cycle is distinguishable from a dead
-    pipeline. stats={total_polled, failed} comes from the collector."""
-    stats = stats or {}
     try:
-        total = int(stats.get("total_polled") or 0)
-    except (TypeError, ValueError):
-        total = 0
-    try:
-        failed = int(stats.get("failed") or 0)
-    except (TypeError, ValueError):
-        failed = 0
-    if total:
-        line = f"All {total} sources scanned — no fresh stories."
-    else:
-        line = "Sweep complete — no fresh stories."
-    if failed:
-        line += f" ({failed} feed{'s' if failed != 1 else ''} down)"
-    return f"✅ {line}\nNothing new since the last check — the watch continues. 🔭"
-
-
-def tell_phones_about_new_stories(articles, stats=None):
-    """Dispatches alerts for one ingest cycle's fresh articles.
-
-    Empty cycle + heartbeat enabled → one "sweep clean" DM so the owner can
-    tell a quiet cycle apart from a dead pipeline. Returns
-    {"sent": int, "mode": str, "reason": str}; never raises.
-    """
-    articles = list(articles or [])
-    cfg = what_are_our_phone_settings()
-    if not cfg["enabled"]:
-        return {"sent": 0, "mode": cfg["mode"], "reason": "disabled"}
-    if not (cfg["token"] and cfg["chat_id"]):
-        return {"sent": 0, "mode": cfg["mode"], "reason": "unconfigured"}
-    if not articles:
-        if not cfg["heartbeat"]:
-            return {"sent": 0, "mode": cfg["mode"], "reason": "heartbeat_off"}
-        ok = send_a_phone_message(write_all_quiet_note(stats))
-        return {"sent": 1 if ok else 0, "mode": cfg["mode"], "reason": "heartbeat"}
-    sent = 0
-    try:
-        if cfg["mode"] == "digest":
-            if send_a_phone_message(
-                write_summary_for_phone(articles, len(articles)),
-                _first_preview_link(articles),
-            ):
-                sent = 1
-        else:
-            fresh = [a for a in articles if _is_fresh_for_alert(a)]
-            stale = [a for a in articles if not _is_fresh_for_alert(a)]
-            batch = fresh[: cfg["max_alerts"]]
-            images = _prefetch_images(batch)
-            for article in batch:
-                if _send_article(article, images.get(id(article))):
-                    sent += 1
-            if len(fresh) > cfg["max_alerts"]:
-                rest = fresh[cfg["max_alerts"]:]
-                if send_a_phone_message(
-                    write_summary_for_phone(rest,
-                                          len(rest),
-                                          total_cycle=len(articles)),
-                    _first_preview_link(rest),
-                ):
-                    sent += 1
-            if stale:
-                if send_a_phone_message(
-                    write_catchup_note_for_phone(stale),
-                    _first_preview_link(stale),
-                ):
-                    sent += 1
-    except Exception as exc:
-        problems_diary.warning(f"Telegram dispatch failed: {type(exc).__name__}.")
-    return {"sent": sent, "mode": cfg["mode"], "reason": "ok"}
-
-
-def _fetch_og_image(page_url, timeout=PHONE_PHOTO_FETCH_TIMEOUT_SECS):
-    """Best-effort article hero image (og:image → twitter:image). Never raises."""
-    page_url = _safe_url(page_url)
-    if not page_url:
-        return None
-    try:
-        resp = requests.get(
-            page_url,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; SRHXtra/1.0)"},
-            timeout=timeout,
-        )
-        if resp.status_code != 200:
-            return None
-        soup = bs4.BeautifulSoup((resp.text or "")[:200000], "html.parser")
-        for attrs in ({"property": "og:image"}, {"name": "twitter:image"}):
-            tag = soup.find("meta", attrs)
-            if tag and tag.get("content"):
-                img = _safe_url(urljoin(page_url, tag["content"].strip()))
-                if img:
-                    return img
+        payload = response.json()
     except Exception:
-        pass
-    return None
-
-
-def _prefetch_images(batch):
-    """Resolves hero images concurrently ({id(article): url}); never raises."""
-    out = {}
-    try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
-            futs = {pool.submit(_fetch_og_image, (a or {}).get("link", "")): a for a in batch}
-            for fut, art in futs.items():
-                try:
-                    img = fut.result(timeout=PHONE_PHOTO_FETCH_TIMEOUT_SECS + 3)
-                except Exception:
-                    img = None
-                if img:
-                    out[id(art)] = img
-    except Exception:
-        pass
-    return out
-
-
-def format_photo_caption(article):
-    """Compact card caption (≤1024 chars). Fields are pre-clipped so the final
-    guard can never split an entity — overlong captions drop the quote block
-    deterministically instead."""
-    title = html.escape(_clip(article.get("title", "New Sunrisers update"), 150))
-    player = html.escape(str(article.get("player_name", "")))
-    franchise = html.escape(str(article.get("franchise", "")))
-    source = html.escape(str(article.get("source", "")))
-    summary = html.escape(_clip(article.get("summary", ""), 220))
-    link = _safe_url(article.get("link", ""))
-    lines = [
-        f"{_team_symbol(article.get('franchise', ''))} <b>{_freshness_header(article)}</b>",
-        "",
-        f"<b>{title}</b>",
-    ]
-    if summary:
-        lines += ["", f"<blockquote expandable>{summary}</blockquote>"]
-    lines += [f"⚡ {player} · {franchise}", f"📰 {source}"]
-    if link:
-        lines += [f'<a href="{html.escape(link, quote=True)}">Read full story →</a>']
-    caption = "\n".join(lines)
-    if len(caption) > PHONE_MAX_CAPTION_CHARS - 24:
-        lines = [ln for ln in lines if not ln.startswith("<blockquote")]
-        caption = "\n".join(lines)
-    return caption[:PHONE_MAX_CAPTION_CHARS]
-
-
-def send_a_phone_photo(photo_url, caption):
-    """POSTs a photo card via Bot API. Returns True/False, never raises."""
-    cfg = what_are_our_phone_settings()
-    if not (cfg["enabled"] and cfg["token"] and cfg["chat_id"]):
-        return False
-    try:
-        resp = requests.post(
-            f"https://api.telegram.org/bot{cfg['token']}/sendPhoto",
-            json={
-                "chat_id": cfg["chat_id"],
-                "photo": photo_url,
-                "caption": caption[:PHONE_MAX_CAPTION_CHARS],
-                "parse_mode": "HTML",
-            },
-            timeout=PHONE_SEND_TIMEOUT_SECS,
-        )
+        payload = {}
+    description = str(payload.get("description") or "")[:300]
+    if response.status_code == 200 and payload.get("ok"):
+        return SendResult(True)
+    if response.status_code == 429:
+        parameters = payload.get("parameters") or {}
         try:
-            payload = resp.json()
-        except Exception:
-            payload = {}
-        ok = resp.status_code == 200 and bool(payload.get("ok"))
-        if not ok:
-            desc = str(payload.get("description") or "")
-            problems_diary.warning(f"Telegram photo failed: HTTP {resp.status_code} {desc}".rstrip())
-        return ok
-    except Exception as exc:
-        problems_diary.warning(f"Telegram photo failed: {type(exc).__name__}.")
-        return False
+            retry_after = float(parameters.get("retry_after") or 30)
+        except (TypeError, ValueError):
+            retry_after = 30.0
+        problems_diary.warning(f"Telegram rate limit; retry after {retry_after:.0f}s.")
+        return SendResult(False, retryable=True, retry_after=retry_after, error="rate limited")
+    retryable = response.status_code >= 500 or response.status_code == 408
+    problems_diary.warning(
+        f"Telegram send failed: HTTP {response.status_code} {description}".rstrip()
+    )
+    return SendResult(False, retryable=retryable, error=description or f"HTTP {response.status_code}")
 
 
-def _send_article(article, image_url):
-    """Photo card when a hero image resolved, else the text card. Never raises."""
-    try:
-        if image_url:
-            if send_a_phone_photo(image_url, format_photo_caption(article)):
-                return True
-            # Photo rejected (hotlink protection, bad file…) → text fallback.
-        return send_a_phone_message(
-            write_story_card_for_phone(article),
-            _safe_url(article.get("link", "")) or None,
+def send_pending_alerts(limit=MAX_ALERTS_PER_RUN):
+    """Send due articles one by one; stop on a transient outage."""
+    settings = telegram_settings()
+    stats = {"claimed": 0, "sent": 0, "retried": 0, "failed": 0, "reason": "ok"}
+    if not settings["enabled"]:
+        stats["reason"] = "disabled"
+        return stats
+    if not (settings["token"] and settings["chat_id"]):
+        stats["reason"] = "unconfigured"
+        problems_diary.warning(
+            "TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID are missing; "
+            "alerts stay pending in the database."
         )
-    except Exception as exc:
-        problems_diary.warning(f"Article dispatch failed: {type(exc).__name__}.")
-        return False
+        return stats
+
+    for _ in range(max(1, int(limit))):
+        claimed = claim_due_deliveries(1)
+        if not claimed:
+            break
+        stats["claimed"] += 1
+        article = claimed[0]
+        link = canonicalize_url(article.get("link", ""))
+        if not link:
+            mark_delivery_dead(article["id"], "unsafe article link")
+            stats["failed"] += 1
+            continue
+        result = send_telegram_message(format_article_alert(article), link)
+        if result.ok:
+            mark_delivery_sent(article["id"])
+            stats["sent"] += 1
+            time.sleep(0.2)
+            continue
+
+        if result.retryable:
+            outcome = mark_delivery_failed(
+                article["id"], result.error, retry_after=result.retry_after
+            )
+            stats["retried" if outcome == "retry" else "failed"] += 1
+            # Telegram is rate-limiting or unreachable; do not hammer it.
+            break
+        mark_delivery_dead(article["id"], result.error)
+        stats["failed"] += 1
+        # A 400/401/403 is usually configuration-wide; stop this run.
+        break
+    return stats
 
 
-def _first_preview_link(articles):
-    """First sanitized article URL for the digest preview card (None if none)."""
-    for article in articles or []:
-        link = _safe_url((article or {}).get("link", ""))
-        if link:
-            return link
-    return None
-
-# Old names, kept so older guides and tests still work.
-get_telegram_config = what_are_our_phone_settings
-is_telegram_configured = are_phone_alerts_ready
-send_telegram_message = send_a_phone_message
-send_telegram_photo = send_a_phone_photo
-notify_new_articles = tell_phones_about_new_stories
-format_article_message = write_story_card_for_phone
-format_digest_message = write_summary_for_phone
-format_catchup_digest_message = write_catchup_note_for_phone
-format_heartbeat_message = write_all_quiet_note
-FRANCHISE_ACCENTS = TEAM_SYMBOLS
-_accent = _team_symbol
-TELEGRAM_API_TIMEOUT_SECS = PHONE_SEND_TIMEOUT_SECS
-TELEGRAM_MAX_MESSAGE_CHARS = PHONE_MAX_MESSAGE_CHARS
-TELEGRAM_MAX_CAPTION_CHARS = PHONE_MAX_CAPTION_CHARS
+def send_test_message():
+    """Explicit manual setup check. Does not touch the delivery ledger."""
+    result = send_telegram_message("✅ SRHXtra test alert — Telegram wiring works.")
+    return result

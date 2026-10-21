@@ -1,308 +1,223 @@
-"""
-Telegram alerting tests for @SRHXtra (no network, no production DB).
+"""Telegram formatting and delivery-ledger tests (the HTTP call is always mocked)."""
+from __future__ import annotations
 
-Covers helpers/phone_alerts.py dispatch/formatting/security behaviour, the
-ingest→Telegram wiring in news_collectors/collect_news.py (fully mocked, no DB),
-photo cards with fallback, and the _RssResult backwards-compatible extension.
-"""
+import os
+import sqlite3
+import time
+
 import pytest
 
-from helpers import phone_alerts as tg
-from news_collectors.collect_news import _RssResult
-
-ARTICLE = {
-    "title": "Abhishek Sharma smashes fifty",
-    "source": "Test Source",
-    "summary": "Fifty off 30 balls.",
-    "link": "https://example.com/story-1",
-    "published_at": "Oct 13, 2026 @ 10:00 AM IST",
-    "player_name": "Abhishek Sharma",
-    "franchise": "Sunrisers Hyderabad",
-}
-
-# Real implementation, captured before the autouse fixture below replaces it.
-_real_fetch_og_image = tg._fetch_og_image
+from helpers import phone_alerts
+from saved_stories.story_storage import (
+    MAX_DELIVERY_ATTEMPTS,
+    delivery_counts,
+    get_delivery,
+    save_article,
+)
 
 
-@pytest.fixture()
-def tg_env(monkeypatch):
-    """Hermetic Telegram env: configured per-article by default."""
-    monkeypatch.setenv("TELEGRAM_ENABLED", "true")
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-token")
-    monkeypatch.setenv("TELEGRAM_CHAT_ID", "12345")
-    monkeypatch.setenv("TELEGRAM_MODE", "per_article")
-    monkeypatch.setenv("TELEGRAM_MAX_ALERTS_PER_CYCLE", "10")
-    return monkeypatch
+class FakeResponse:
+    def __init__(self, status_code, payload):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self):
+        return self._payload
 
 
-@pytest.fixture(autouse=True)
-def _no_og_images(monkeypatch):
-    """Unit tests never hit the network for hero images (unless re-patched)."""
-    monkeypatch.setattr(tg, "_fetch_og_image", lambda url, timeout=5: None)
+def _make_article(title="Pat Cummins takes five", link="https://example.com/story"):
+    article_id = save_article(
+        title,
+        "Test Feed",
+        "A report about Pat Cummins.",
+        link,
+        "Oct 21, 2026 @ 10:00 AM IST",
+        time.time(),
+        ["Pat Cummins"],
+        ["Sunrisers Hyderabad"],
+        [],
+    )
+    assert article_id
+    return article_id
 
 
-def _ok_post(calls):
-    def _post(url, **kwargs):
-        body = kwargs.get("json") if kwargs.get("json") is not None else kwargs.get("data")
-        calls.append({"url": url, "body": body})
-        assert "test-token" in url  # token goes in the URL path (Bot API scheme)
-
-        class _Resp:
-            status_code = 200
-
-            @staticmethod
-            def json():
-                return {"ok": True}
-
-        return _Resp()
-
-    return _post
-
-
-def test_disabled_sends_nothing(monkeypatch, tg_env):
-    monkeypatch.setenv("TELEGRAM_ENABLED", "false")
-    monkeypatch.setattr(tg.requests, "post", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no HTTP when disabled")))
-    res = tg.tell_phones_about_new_stories([ARTICLE])
-    assert res == {"sent": 0, "mode": "per_article", "reason": "disabled"}
-
-
-def test_unconfigured_sends_nothing(monkeypatch, tg_env):
-    monkeypatch.delenv("TELEGRAM_BOT_TOKEN")
-    monkeypatch.setattr(tg.requests, "post", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no HTTP when unconfigured")))
-    res = tg.tell_phones_about_new_stories([ARTICLE])
-    assert res["sent"] == 0 and res["reason"] == "unconfigured"
-    assert tg.are_phone_alerts_ready() is False
-
-
-def test_empty_cycle_sends_heartbeat(tg_env, monkeypatch):
+def _post_calls(monkeypatch, responses):
     calls = []
-    monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
-    res = tg.tell_phones_about_new_stories([], {"total_polled": 268, "failed": 2})
-    assert res == {"sent": 1, "mode": "per_article", "reason": "heartbeat"}
+    queue = list(responses)
+
+    def fake_post(url, **kwargs):
+        calls.append((url, kwargs))
+        item = queue.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+    monkeypatch.setattr(phone_alerts.requests, "post", fake_post)
+    return calls
+
+
+def _make_due(article_id):
+    with sqlite3.connect(os.environ["SUNRISERS_DB_PATH"]) as conn:
+        conn.execute(
+            "UPDATE deliveries SET next_attempt_ts = 0 WHERE article_id = ?",
+            (article_id,),
+        )
+
+
+def test_successful_send_is_marked_sent_and_is_not_resent(telegram_env, monkeypatch):
+    article_id = _make_article()
+    calls = _post_calls(monkeypatch, [FakeResponse(200, {"ok": True})])
+    monkeypatch.setattr(phone_alerts.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        phone_alerts.requests,
+        "get",
+        lambda *args, **kwargs: pytest.fail("Telegram delivery must not fetch article images"),
+    )
+
+    first = phone_alerts.send_pending_alerts()
+    assert first == {"claimed": 1, "sent": 1, "retried": 0, "failed": 0, "reason": "ok"}
+    assert get_delivery(article_id)["status"] == "sent"
+    assert get_delivery(article_id)["sent_at"] is not None
     assert len(calls) == 1
-    text = calls[0]["body"]["text"]
-    assert "All 268 sources scanned" in text and "2 feeds down" in text
-    assert "link_preview_options" not in calls[0]["body"]  # plain text, no card
+    url, kwargs = calls[0]
+    assert "sendMessage" in url
+    assert kwargs["json"]["chat_id"] == "12345"
+    assert kwargs["json"]["parse_mode"] == "HTML"
+    assert kwargs["json"]["link_preview_options"]["url"] == "https://example.com/story"
+    assert "Pat Cummins" in kwargs["json"]["text"]
+
+    second = phone_alerts.send_pending_alerts()
+    assert second["claimed"] == 0
+    assert second["sent"] == 0
+    assert len(calls) == 1
 
 
-def test_heartbeat_off_stays_silent(tg_env, monkeypatch):
-    monkeypatch.setenv("TELEGRAM_HEARTBEAT", "false")
-    monkeypatch.setattr(tg.requests, "post", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no HTTP when heartbeat off")))
-    assert tg.tell_phones_about_new_stories([])["reason"] == "heartbeat_off"
+def test_network_failure_stays_pending_and_retries_with_backoff(telegram_env, monkeypatch):
+    article_id = _make_article()
+    calls = _post_calls(
+        monkeypatch,
+        [ConnectionError("offline"), FakeResponse(200, {"ok": True})],
+    )
+    monkeypatch.setattr(phone_alerts.time, "sleep", lambda _seconds: None)
+
+    first = phone_alerts.send_pending_alerts()
+    assert first["retried"] == 1
+    delivery = get_delivery(article_id)
+    assert delivery["status"] == "pending"
+    assert delivery["attempts"] == 1
+    assert delivery["next_attempt_ts"] > time.time()
+    assert "ConnectionError" in delivery["last_error"]
+
+    # A retry is only attempted once the backoff expires.
+    assert phone_alerts.send_pending_alerts()["claimed"] == 0
+    assert len(calls) == 1
+
+    _make_due(article_id)
+    second = phone_alerts.send_pending_alerts()
+    assert second["sent"] == 1
+    assert get_delivery(article_id)["status"] == "sent"
+    assert get_delivery(article_id)["attempts"] == 2
 
 
-def test_heartbeat_without_stats_or_unconfigured(tg_env, monkeypatch):
-    calls = []
-    monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
-    assert tg.tell_phones_about_new_stories([])["reason"] == "heartbeat"
-    assert "Sweep complete" in calls[0]["body"]["text"]
-    monkeypatch.delenv("TELEGRAM_BOT_TOKEN")
-    monkeypatch.setattr(tg.requests, "post", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no HTTP when unconfigured")))
-    assert tg.tell_phones_about_new_stories([])["reason"] == "unconfigured"
+def test_delivery_retries_are_bounded(telegram_env, monkeypatch):
+    article_id = _make_article()
+    calls = _post_calls(
+        monkeypatch,
+        [ConnectionError("offline")] * MAX_DELIVERY_ATTEMPTS,
+    )
+    monkeypatch.setattr(phone_alerts.time, "sleep", lambda _seconds: None)
+
+    for attempt in range(1, MAX_DELIVERY_ATTEMPTS + 1):
+        _make_due(article_id)
+        stats = phone_alerts.send_pending_alerts()
+        delivery = get_delivery(article_id)
+        assert delivery["attempts"] == attempt
+        if attempt < MAX_DELIVERY_ATTEMPTS:
+            assert delivery["status"] == "pending"
+            assert stats["retried"] == 1
+        else:
+            assert delivery["status"] == "failed"
+            assert stats["failed"] == 1
+
+    assert phone_alerts.send_pending_alerts()["claimed"] == 0
+    assert len(calls) == MAX_DELIVERY_ATTEMPTS
 
 
-def test_per_article_sends_one_message_each(tg_env, monkeypatch):
-    calls = []
-    monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
-    res = tg.tell_phones_about_new_stories([ARTICLE, {**ARTICLE, "title": "Second story"}])
-    assert res["sent"] == 2 and res["mode"] == "per_article"
-    assert len(calls) == 2
-    body = calls[0]["body"]
-    assert "Abhishek Sharma" in body["text"]
-    assert body["parse_mode"] == "HTML"
-    assert "<blockquote expandable>" in body["text"]
-    assert body["link_preview_options"]["prefer_large_media"] is True
-    assert body["link_preview_options"]["url"] == "https://example.com/story-1"
-
-
-def test_cap_collapses_overflow_into_digest(tg_env, monkeypatch):
-    monkeypatch.setenv("TELEGRAM_MAX_ALERTS_PER_CYCLE", "2")
-    calls = []
-    monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
-    articles = [{**ARTICLE, "title": f"Story {i}"} for i in range(5)]
-    res = tg.tell_phones_about_new_stories(articles)
-    assert res["sent"] == 3  # 2 per-article + 1 overflow digest
-    assert len(calls) == 3
-    assert "3 further update(s) — 5 new this cycle:" in calls[-1]["body"]["text"]
-
-
-def test_digest_mode_sends_single_summary(tg_env, monkeypatch):
-    monkeypatch.setenv("TELEGRAM_MODE", "digest")
-    calls = []
-    monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
-    res = tg.tell_phones_about_new_stories([{**ARTICLE, "title": f"Story {i}"} for i in range(4)])
-    assert res["sent"] == 1 and res["mode"] == "digest"
-    assert "4 new article(s)" in calls[0]["body"]["text"]
-
-
-def test_franchise_accents():
-    assert tg._team_symbol("Sunrisers Hyderabad") == "🟠"
-    assert tg._team_symbol("Sunrisers Eastern Cape") == "🟢"
-    assert tg._team_symbol("Sunrisers Leeds Men") == "🔵"
-    assert tg._team_symbol("Sunrisers Leeds Women") == "🟣"
-    assert tg._team_symbol("Something Else") == "🟠"
-    card = tg.write_story_card_for_phone({**ARTICLE, "franchise": "Sunrisers Eastern Cape"})
-    assert card.startswith("🟢 <b>SRHXtra · Fresh</b>")
-
-
-def test_expandable_quote_only_with_summary():
-    assert "<blockquote expandable>" in tg.write_story_card_for_phone(ARTICLE)
-    assert "<blockquote" not in tg.write_story_card_for_phone({**ARTICLE, "summary": ""})
-
-
-def test_no_preview_options_without_safe_link(tg_env, monkeypatch):
-    calls = []
-    monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
-    tg.tell_phones_about_new_stories([{**ARTICLE, "link": "javascript:alert(1)"}])
-    assert "link_preview_options" not in calls[0]["body"]
-
-
-def test_untrusted_content_is_escaped_and_schemes_rejected(tg_env, monkeypatch):
-    calls = []
-    monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
-    evil = {
-        **ARTICLE,
-        "title": '<script>alert("x")</script> Klaasen',
-        "summary": "Quote \"break\" <b>bold</b>",
-        "link": "javascript:alert(1)",
-    }
-    tg.tell_phones_about_new_stories([evil])
-    text = calls[0]["body"]["text"]
-    assert "<script>" not in text and "&lt;script&gt;" in text
-    assert "javascript:" not in text  # executable scheme stripped at choke point
-    good = {**ARTICLE, "link": "https://example.com/ok"}
-    assert "https://example.com/ok" in tg.write_story_card_for_phone(good)
-
-
-def test_send_failure_never_raises(tg_env, monkeypatch):
-    def _boom(*a, **k):
-        raise TimeoutError("https://api.telegram.org/botSECRET/sendMessage timed out")
-
-    monkeypatch.setattr(tg.requests, "post", _boom)
-    assert tg.send_a_phone_message("hi") is False  # no raise, no secret leak
-    res = tg.tell_phones_about_new_stories([ARTICLE])
-    assert res["sent"] == 0 and res["reason"] == "ok"
-
-
-def test_api_error_returns_false_with_description(tg_env, monkeypatch):
-    class _Resp:
-        status_code = 400
-
-        @staticmethod
-        def json():
-            return {"ok": False, "description": "Bad Request: chat not found"}
-
-    monkeypatch.setattr(tg.requests, "post", lambda *a, **k: _Resp())
-    assert tg.send_a_phone_message("hi") is False
-
-
-def test_og_image_extraction(monkeypatch):
-    html_doc = (
-        '<html><head>'
-        '<meta property="og:image" content="https://cdn.example.com/hero.jpg">'
-        "</head></html>"
+def test_rate_limit_uses_retry_after(telegram_env, monkeypatch):
+    article_id = _make_article()
+    before = time.time()
+    _post_calls(
+        monkeypatch,
+        [FakeResponse(429, {"ok": False, "parameters": {"retry_after": 90}})],
     )
 
-    class _Resp:
-        status_code = 200
-        text = html_doc
+    stats = phone_alerts.send_pending_alerts()
 
-    monkeypatch.setattr(tg.requests, "get", lambda *a, **k: _Resp())
-    assert _real_fetch_og_image("https://example.com/story") == "https://cdn.example.com/hero.jpg"
-
-
-def test_og_image_relative_url_resolved_and_bad_cases_empty(monkeypatch):
-    class _Resp:
-        status_code = 200
-        text = '<html><head><meta name="twitter:image" content="/img/x.jpg"></head></html>'
-
-    monkeypatch.setattr(tg.requests, "get", lambda *a, **k: _Resp())
-    assert _real_fetch_og_image("https://example.com/a/b") == "https://example.com/img/x.jpg"
-    monkeypatch.setattr(tg.requests, "get", lambda *a, **k: (_ for _ in ()).throw(TimeoutError("down")))
-    assert _real_fetch_og_image("https://example.com/a") is None
-    calls = []
-    monkeypatch.setattr(tg.requests, "get", lambda *a, **k: (calls.append(1), _Resp())[1])
-    assert _real_fetch_og_image("javascript:alert(1)") is None
-    assert calls == []  # unsafe page URL never fetched
+    assert stats["retried"] == 1
+    delivery = get_delivery(article_id)
+    assert delivery["status"] == "pending"
+    assert delivery["next_attempt_ts"] >= before + 90
+    assert "rate limited" in delivery["last_error"]
 
 
-def test_photo_card_payload_and_caption_budget(tg_env, monkeypatch):
-    calls = []
-    monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
-    assert tg.send_a_phone_photo("https://cdn.example.com/hero.jpg", "<b>Hi</b>") is True
-    body = calls[0]["body"]
-    assert calls[0]["url"].endswith("/sendPhoto")
-    assert body["photo"] == "https://cdn.example.com/hero.jpg"
-    assert body["parse_mode"] == "HTML"
-    giant_link = {**ARTICLE, "link": "https://example.com/" + "x" * 900}
-    capped = tg.format_photo_caption(giant_link)
-    assert len(capped) <= 1024 and "<blockquote" not in capped
-    short_caption = tg.format_photo_caption(ARTICLE)
-    assert "<blockquote expandable>" in short_caption and len(short_caption) <= 1024
-
-
-def test_photo_preferred_then_text_fallback(tg_env, monkeypatch):
-    calls = []
-    monkeypatch.setattr(tg, "_fetch_og_image", lambda url, timeout=5: "https://cdn.example.com/hero.jpg")
-    monkeypatch.setattr(tg.requests, "post", _ok_post(calls))
-    assert tg.tell_phones_about_new_stories([ARTICLE])["sent"] == 1
-    assert calls[0]["url"].endswith("/sendPhoto")
-
-    def _flaky(url, **kwargs):
-        calls.append({"url": url})
-        if url.endswith("/sendPhoto"):
-            class _Bad:
-                status_code = 400
-
-                @staticmethod
-                def json():
-                    return {"ok": False, "description": "Bad Request: wrong file"}
-            return _Bad()
-        return _ok_post(calls)(url, **kwargs)
-
-    calls.clear()
-    monkeypatch.setattr(tg.requests, "post", _flaky)
-    assert tg.tell_phones_about_new_stories([ARTICLE])["sent"] == 1
-    assert calls[0]["url"].endswith("/sendPhoto")
-    assert calls[1]["url"].endswith("/sendMessage")  # fallback delivered
-
-
-def test_rss_result_backwards_compatible():
-    legacy = _RssResult(3, ["Feed X"], 268)  # old 3-arg call style still works
-    assert int(legacy) == 3 and legacy.new_articles == []
-    assert legacy.inserted == 3 and legacy.failed_feeds == ["Feed X"]
-    extended = _RssResult(1, [], 268, [ARTICLE])
-    assert extended.new_articles == [ARTICLE] and int(extended) == 1
-
-
-def test_ingest_dispatches_one_alert_per_unique_story(tg_env, monkeypatch):
-    """One URL matching 2 players stores 2 rows but alerts once (no DB touched)."""
-    from news_collectors import collect_news as rc
-
-    monkeypatch.setattr(rc, "NEWS_WEBSITES", [{"name": "Fake", "url": "https://example.com/fake"}])
-    monkeypatch.setattr(
-        rc, "_poll_one_source",
-        lambda fi: (fi, [{"title": "Shared story", "summary": "S", "link": "https://example.com/x"}], None),
+def test_permanent_telegram_error_fails_without_retrying(telegram_env, monkeypatch):
+    article_id = _make_article()
+    calls = _post_calls(
+        monkeypatch,
+        [FakeResponse(400, {"ok": False, "description": "Bad Request"})],
     )
-    monkeypatch.setattr(rc, "read_story_date_as_indian_time", lambda e: ("Oct 13, 2026 @ 10:00 AM IST", 1.0, 12345.0))
-    monkeypatch.setattr(
-        rc, "find_our_players_in_story",
-        lambda t: [
-            {"player_name": "Abhishek Sharma", "franchise": "Sunrisers Hyderabad"},
-            {"player_name": "Ishan Kishan", "franchise": "Sunrisers Hyderabad"},
-        ],
+
+    stats = phone_alerts.send_pending_alerts()
+
+    assert stats["failed"] == 1
+    assert get_delivery(article_id)["status"] == "failed"
+    assert get_delivery(article_id)["attempts"] == 1
+    assert phone_alerts.send_pending_alerts()["claimed"] == 0
+    assert len(calls) == 1
+
+
+def test_unconfigured_telegram_leaves_alerts_pending(telegram_env, monkeypatch):
+    article_id = _make_article()
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "")
+    calls = _post_calls(monkeypatch, [])
+
+    stats = phone_alerts.send_pending_alerts()
+
+    assert stats["reason"] == "unconfigured"
+    assert stats["claimed"] == 0
+    assert get_delivery(article_id)["status"] == "pending"
+    assert calls == []
+
+
+def test_format_escapes_html_and_drops_unsafe_links():
+    text = phone_alerts.format_article_alert(
+        {
+            "title": '<script>alert("x")</script>',
+            "summary": "<b>summary</b> & more",
+            "source": "A & B",
+            "published_at": "",
+            "people": ["Pat Cummins"],
+            "franchises": ["Sunrisers Hyderabad"],
+            "topics": [],
+            "link": "javascript:alert(1)",
+        }
     )
-    monkeypatch.setattr(rc, "save_story", lambda **k: 999)
-    monkeypatch.setattr(rc, "leave_a_note", lambda *a, **k: None)
-    # Alert memory is a real DB write: keep this hermetic test DB-free.
-    monkeypatch.setattr(rc, "claim_phone_alert_once", lambda *a, **k: True)
-    calls = []
-    monkeypatch.setattr(
-        "helpers.phone_alerts.tell_phones_about_new_stories",
-        lambda arts, stats=None: (calls.append((list(arts), stats)), {"sent": 1, "mode": "per_article", "reason": "ok"})[1],
-    )
-    res = rc.collect_fresh_stories()
-    assert int(res) == 2  # both per-target rows stored
-    assert len(res.new_articles) == 1  # but a single alert dispatched
-    assert len(calls) == 1 and calls[0][0][0]["player_name"] == "Abhishek Sharma"
-    assert calls[0][1] == {"total_polled": 1, "failed": 0}  # cycle stats passed through
+
+    assert "<script>" not in text
+    assert "&lt;script&gt;" in text
+    assert "<b>summary</b>" not in text
+    assert "A &amp; B" in text
+    assert "href=" not in text
+    assert "Read full story" not in text
+
+
+def test_test_message_does_not_touch_the_delivery_ledger(telegram_env, monkeypatch):
+    article_id = _make_article()
+    calls = _post_calls(monkeypatch, [FakeResponse(200, {"ok": True})])
+
+    result = phone_alerts.send_test_message()
+
+    assert result.ok is True
+    assert len(calls) == 1
+    assert delivery_counts()["pending"] == 1
+    assert get_delivery(article_id)["status"] == "pending"
