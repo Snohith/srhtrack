@@ -4,15 +4,26 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "srhtrack"
-version = "15.0.0"
-description = "Telegram-only Sunrisers cricket news alerts"
+version = "14.1.0"
+description = "Friendly Sunrisers cricket news hub for all 4 family teams"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [
     { name = "Chiluveru Snohith", email = "snohith@users.noreply.github.com" }
 ]
-keywords = ["cricket", "sunrisers-hyderabad", "srh", "telegram", "rss"]
+keywords = [
+    "cricket",
+    "sunrisers-hyderabad",
+    "srh",
+    "sec",
+    "the-hundred",
+    "ipl",
+    "sa20",
+    "streamlit",
+    "telemetry",
+    "rss-crawler"
+]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
@@ -21,7 +32,15 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Topic :: Communications :: BBS",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
 ]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra -q --tb=short"
 
 [tool.black]
 line-length = 100

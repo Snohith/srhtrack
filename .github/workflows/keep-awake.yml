@@ -1,0 +1,36 @@
+name: Keep Streamlit Awake
+
+# Streamlit Community Cloud sleeps apps after ~12h with no visit or repo
+# commit. An empty commit to the deployed branch resets that timer
+# (official docs: "Manage your app"). Plain URL pingers (UptimeRobot-style)
+# no longer reliably count as activity, so this pushes a scheduled
+# empty commit every 10h instead. Pushes made with GITHUB_TOKEN do not
+# re-trigger workflows, so this cannot loop; `[skip ci]` is belt-and-braces.
+# NOTE: this only *prevents* sleep of a running app — manually wake the app
+# once after merging, then the schedule holds it.
+
+on:
+  schedule:
+    - cron: "20 */10 * * *"  # every 10h, offset to avoid top-of-hour load
+  workflow_dispatch: {}       # manual "Run workflow" button for on-demand ping
+
+permissions:
+  contents: write
+
+jobs:
+  keepalive:
+    name: Empty-commit keep-alive ping
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history: shallow checkouts cannot push new commits
+
+      - name: Push empty keep-alive commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "chore: keep-alive ping [skip ci]"
+          git push origin HEAD:${{ github.ref_name }}

@@ -1,246 +1,467 @@
-"""Schema, roster, matching, URL safety, and cleanup tests."""
-from __future__ import annotations
-
-import hashlib
+"""
+Automated Verification Test Suite for @SRHXtra Zero-API Command Center.
+Tests Master Roster Ingestion, Strict Deduplication Engine, Deep Search,
+Analytics Summary, and Logging.
+V2.0 improvements:
+  - Uses an isolated temp DB (via SRH_DB_PATH env var) — never touches production DB
+  - Fixed import: find_our_players_in_story (correct function name)
+  - Removed invalid kwargs from save_story() calls (importance_score, category)
+  - Log file assertions use absolute paths (works from any working directory)
+  - Compatible with pytest (pytest.ini sets pythonpath = .)
+"""
 import os
-import sqlite3
-
+import tempfile
 import pytest
-
-from helpers.links import article_key, canonicalize_url, normalize_title
+_tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+_tmp_db.close()
+os.environ["SRH_DB_PATH"] = _tmp_db.name
 from our_teams.players import PLAYERS_BY_TEAM, find_our_players_in_story
-from saved_stories.story_storage import open_story_box, set_up_story_box
-
-
-def _tables(path):
-    with sqlite3.connect(path) as conn:
-        return {
-            row[0] for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            ).fetchall()
-        }
-
-
-def test_fresh_install_creates_ledger_and_roster():
-    tables = _tables(os.environ["SUNRISERS_DB_PATH"])
-    assert {"articles", "deliveries", "feed_health", "suppressed_titles"} <= tables
-    assert "news" not in tables and "alerted_stories" not in tables
-
-    rows = sum(len(team["players"]) for team in PLAYERS_BY_TEAM.values())
-    unique = {
-        player["name"]
-        for team in PLAYERS_BY_TEAM.values()
-        for player in team["players"]
-    }
-    assert len(PLAYERS_BY_TEAM) == 4
-    assert rows == 90
-    assert len(unique) == 88
-
-    from contextlib import closing
-
-    with closing(open_story_box()) as conn:
-        article_columns = {row["name"] for row in conn.execute("PRAGMA table_info(articles)")}
-        delivery_columns = {row["name"] for row in conn.execute("PRAGMA table_info(deliveries)")}
-    assert {"people", "franchises", "topics", "title_key", "dedupe_key"} <= article_columns
-    assert {"status", "attempts", "next_attempt_ts", "claimed_at"} <= delivery_columns
-
-
-def test_schema_setup_is_idempotent():
-    from saved_stories.story_storage import save_article
-    article_id = save_article(
-        "Heinrich Klaasen fifty", "Test", "Summary", "https://example.com/a",
-        "", 0, ["Heinrich Klaasen"], ["Sunrisers Hyderabad"], [],
-    )
-    assert article_id is not None
+from saved_stories.story_storage import (
+    set_up_story_box, get_all_players, save_story, search_stories,
+    get_latest_stories, count_stories_and_players
+)
+from helpers.log_books import news_diary, storage_diary
+@pytest.fixture(scope="module", autouse=True)
+def setup_db():
+    """Initialise the isolated test DB once for the whole module."""
     set_up_story_box()
-    from contextlib import closing
-
-    with closing(open_story_box()) as conn:
-        assert conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0] == 1
-
-
-def test_multi_franchise_player_matches_every_team():
-    marsh = find_our_players_in_story("Mitch Marsh signs a new deal")
-    assert {match["franchise"] for match in marsh} == {
-        "Sunrisers Eastern Cape", "Sunrisers Leeds Men",
-    }
-    carse = find_our_players_in_story("Brydon Carse is fit again")
-    assert {match["franchise"] for match in carse} == {
-        "Sunrisers Hyderabad", "Sunrisers Leeds Men",
-    }
-    vettori = find_our_players_in_story("Vettori plans the bowling attack")
-    assert {match["franchise"] for match in vettori} == {
-        "Sunrisers Hyderabad", "Sunrisers Leeds Men",
-    }
-
-
-def test_team_name_matching_and_leeds_gender():
-    assert find_our_players_in_story("Sunrisers Eastern Cape name a squad")[0]["franchise"] == (
-        "Sunrisers Eastern Cape"
+    yield
+    try:
+        os.unlink(_tmp_db.name)
+    except OSError:
+        pass
+def test_master_roster_count():
+    """Distinct players must be seeded into the DB from the Excel roster."""
+    players = get_all_players()
+    expected_distinct = len({p["name"] for data in PLAYERS_BY_TEAM.values() for p in data["players"]})
+    assert len(players) == expected_distinct, f"Expected {expected_distinct} distinct players, got {len(players)}"
+    print(f"✅ Master Roster: {len(players)} distinct players verified across 4 squads.")
+def test_deduplication_by_url():
+    """Second insert with same URL must be rejected (returns None)."""
+    test_link = "https://example.com/dedup-url-test-001"
+    id1 = save_story(
+        title="Dedup URL Test Article",
+        source="Test Source",
+        summary="Test Summary",
+        link=test_link,
+        published_at="Jul 24, 2026 @ 10:00 AM IST",
+        player_name="Abhishek Sharma",
+        franchise="Sunrisers Hyderabad",
     )
-    generic = find_our_players_in_story("Sunrisers Leeds announce a signing")
-    assert {match["franchise"] for match in generic} == {
-        "Sunrisers Leeds Men", "Sunrisers Leeds Women",
-    }
-    women = find_our_players_in_story("Sunrisers Leeds Women announce a signing")
-    assert {match["franchise"] for match in women} == {"Sunrisers Leeds Women"}
-
-
-def test_alias_precision_guards_common_false_positives():
-    assert "Abhishek Sharma" not in {
-        match["player_name"] for match in find_our_players_in_story("Bengal pick Abhishek Porel")
-    }
-    assert "Ishan Kishan" not in {
-        match["player_name"] for match in find_our_players_in_story("Ishan Porel takes five")
-    }
-    assert find_our_players_in_story("SEC filing shows revenue growth") == []
-    assert find_our_players_in_story("Cummins quarterly results beat estimates") == []
-    assert find_our_players_in_story("Brookfield buys a site") == []
-    assert find_our_players_in_story("head coach speaks to the media") == []
-    assert "Travis Head" in {
-        match["player_name"] for match in find_our_players_in_story("Travis Head hits a fifty")
-    }
-
-
-def test_management_topics_are_tracked():
-    topics = find_our_players_in_story("Sun Group discloses a stake filing")
-    assert any(match["player_name"] == "Sun Group" for match in topics)
-    people = find_our_players_in_story("Kavya Maran speaks about the auction")
-    assert any(match["player_name"] == "Kavya Maran" for match in people)
-
-
-def test_srh_abbreviation_and_injury_alias_context():
-    srh = find_our_players_in_story("SRH announce new captain")
-    assert {match["franchise"] for match in srh} == {"Sunrisers Hyderabad"}
-    injury = find_our_players_in_story("Cummins ruled out with a injury")
-    assert "Pat Cummins" in {match["player_name"] for match in injury}
-    assert find_our_players_in_story("SEC filing shows revenue growth") == []
-
-
-def test_roster_surname_aliases_stay_usable():
-    fixtures = find_our_players_in_story("Crawley hits a fifty")
-    assert "Zak Crawley" in {match["player_name"] for match in fixtures}
-    potts = find_our_players_in_story("Potts takes three wickets")
-    assert "Matthew Potts" in {match["player_name"] for match in potts}
-    assert find_our_players_in_story("Brookfield buys a site") == []
-
-
-def test_url_safety_and_identity():
-    assert canonicalize_url("https://example.com/a?utm_source=x&id=7#frag") == (
-        "https://example.com/a?id=7"
+    assert id1 is not None, "First insert should succeed"
+    id2 = save_story(
+        title="Different Title Same URL",
+        source="Test Source 2",
+        summary="Different summary",
+        link=test_link,
+        published_at="Jul 24, 2026 @ 10:05 AM IST",
+        player_name="Abhishek Sharma",
+        franchise="Sunrisers Hyderabad",
     )
-    for unsafe in (
-        "javascript:alert(1)",
-        "data:text/html,x",
-        "file:///etc/passwd",
-        "ftp://example.com/x",
-        "http://127.0.0.1/x",
-        "http://localhost/x",
-        "http://169.254.169.254/latest/meta-data",
-        "http://metadata.google.internal/x",
-        "http://user:pass@example.com/x",
-        "http://foo.internal/x",
-        "http://[::1]/x",
-        "http://10.0.0.1/x",
-        "https://exa mple.com/x",
-        "https://example..com/x",
-        "https://-bad.example/x",
-        "http://2130706433/x",
-        "http://0x7f000001/x",
-        "http://0177.0.0.1/x",
-        "http://999.999.999.999/x",
-    ):
-        assert canonicalize_url(unsafe) == "", unsafe
-    assert canonicalize_url("https://[2606:4700:4700::1111]/x") == (
-        "https://[2606:4700:4700::1111]/x"
+    assert id2 is None, "Duplicate URL must be rejected"
+    print("✅ Deduplication by URL: passed.")
+def test_same_article_can_track_multiple_targets():
+    """One URL/title mentioning multiple players must be stored for each matched target."""
+    test_link = "https://example.com/multi-target-article-001"
+    test_title = "Abhishek Sharma and Heinrich Klaasen star for Sunrisers"
+    id1 = save_story(
+        title=test_title,
+        source="Test Source",
+        summary="Both Sunrisers players were in the news.",
+        link=test_link,
+        published_at="Jul 24, 2026 @ 11:00 AM IST",
+        player_name="Abhishek Sharma",
+        franchise="Sunrisers Hyderabad",
     )
-    assert canonicalize_url("https://news.google.com/rss/articles/abc?oc=5")
-    assert article_key("", "Same title") == article_key("", "same  title")
-    assert article_key("https://example.com/a", "x") != article_key("", "x")
+    id2 = save_story(
+        title=test_title,
+        source="Test Source",
+        summary="Both Sunrisers players were in the news.",
+        link=test_link,
+        published_at="Jul 24, 2026 @ 11:00 AM IST",
+        player_name="Heinrich Klaasen",
+        franchise="Sunrisers Hyderabad",
+    )
+    id3 = save_story(
+        title=test_title,
+        source="Test Source",
+        summary="Duplicate same target should still be rejected.",
+        link=test_link,
+        published_at="Jul 24, 2026 @ 11:00 AM IST",
+        player_name="Abhishek Sharma",
+        franchise="Sunrisers Hyderabad",
+    )
+    assert id1 is not None, "First target insert should succeed"
+    assert id2 is not None, "Second target from same article should succeed"
+    assert id3 is None, "Duplicate same URL/title and target must be rejected"
+    print("✅ Multi-target article dedupe: passed.")
+def test_deduplication_by_title():
+    """Second insert with same title (different URL) must be rejected."""
+    test_title = "Dedup Title Test Article — Unique String XYZ987"
+    id1 = save_story(
+        title=test_title,
+        source="Test Source A",
+        summary="Summary A",
+        link="https://example.com/title-dedup-link-001",
+        published_at="Jul 24, 2026 @ 10:10 AM IST",
+        player_name="Abhishek Sharma",
+        franchise="Sunrisers Hyderabad",
+    )
+    assert id1 is not None, "First insert should succeed"
+    id2 = save_story(
+        title=test_title,
+        source="Test Source B",
+        summary="Summary B",
+        link="https://example.com/title-dedup-link-002",
+        published_at="Jul 24, 2026 @ 10:15 AM IST",
+        player_name="Abhishek Sharma",
+        franchise="Sunrisers Hyderabad",
+    )
+    assert id2 is None, "Duplicate title must be rejected"
+    print("✅ Deduplication by Title: passed.")
+def test_search_news():
+    """search_stories() must return at least one result for a known player."""
+    results = search_stories("Abhishek")
+    assert len(results) > 0, "search_stories('Abhishek') returned no results"
+    print(f"✅ Search: found {len(results)} results for 'Abhishek'.")
+def test_analytics_summary():
+    """count_stories_and_players() must report > 0 news and players."""
+    metrics = count_stories_and_players()
+    assert metrics["total_news"] > 0,    "Analytics: total_news should be > 0"
+    assert metrics["total_players"] > 0, "Analytics: total_players should be > 0"
+    print(f"✅ Analytics: {metrics['total_news']} news, {metrics['total_players']} players.")
+def test_insert_news_uses_database_defaults():
+    """save_story() without score/category must store 5.0 / 'General News' (no ranker)."""
+    nid = save_story(
+        title="Default Fields Test Article — Unique String QWE123",
+        source="Test Source",
+        summary="No scoring is performed at ingest.",
+        link="https://example.com/default-fields-test-001",
+        published_at="Jul 24, 2026 @ 10:20 AM IST",
+        player_name="Abhishek Sharma",
+        franchise="Sunrisers Hyderabad",
+    )
+    assert nid is not None, "Insert should succeed"
+    res = search_stories("Default Fields Test Article")
+    assert len(res) == 1, f"Expected 1 row, got {len(res)}"
+    assert res[0]["importance_score"] == 5.0, res[0]
+    assert res[0]["category"] == "General News", res[0]
+    print("✅ Insert defaults (5.0 / 'General News'): passed.")
+def test_match_player_function():
+    """find_our_players_in_story must match a known player name."""
+    results = find_our_players_in_story("Heinrich Klaasen played brilliantly today")
+    names = [r["player_name"] for r in results]
+    assert "Heinrich Klaasen" in names, f"Expected 'Heinrich Klaasen' in {names}"
+    print("✅ Player name matching: passed.")
+def test_franchise_name_matching_is_case_insensitive():
+    """Title-case franchise names must not fall through to the generic SRH fallback."""
+    sec_matches = find_our_players_in_story("Sunrisers Eastern Cape announce their SA20 squad")
+    assert sec_matches[0]["franchise"] == "Sunrisers Eastern Cape", sec_matches
+    srh_matches = find_our_players_in_story("sunrisers hyderabad prepare for IPL auction")
+    assert srh_matches[0]["franchise"] == "Sunrisers Hyderabad", srh_matches
+    leeds_women_matches = find_our_players_in_story("Sunrisers Leeds Women announce squad changes")
+    assert leeds_women_matches[0]["franchise"] == "Sunrisers Leeds Women", leeds_women_matches
+    assert find_our_players_in_story("The timer runs for 30 sec before reset") == []
+    print("✅ Franchise name case-insensitive matching: passed.")
+def test_head_coach_phrase_matching():
+    """Valid player news must NOT be dropped when 'head coach' phrase is present."""
+    text = "Abhishek Sharma spoke with head coach VVS Laxman ahead of the match"
+    matches = find_our_players_in_story(text)
+    names = [m["player_name"] for m in matches]
+    assert "Abhishek Sharma" in names, f"Expected Abhishek Sharma to match despite 'head coach', got {names}"
+    non_cricket_text = "Abhishek Sharma in padres trade baseball update"
+    assert find_our_players_in_story(non_cricket_text) == [], "Non-cricket false positive should return empty list"
+    print("✅ Head coach & false-positive phrase filtering: passed.")
+def test_tilly_kesteven_tracking():
+    """Verify Tilly Kesteven is loaded into roster and tracked cleanly."""
+    players = get_all_players(franchise_filter="Sunrisers Leeds Women")
+    p_names = [p["name"] for p in players]
+    assert "Tilly Kesteven" in p_names, f"Expected Tilly Kesteven in Sunrisers Leeds Women, got {p_names}"
+    matches = find_our_players_in_story("Tilly Kesteven joined the Sunrisers Leeds Women camp recently")
+    m_names = [m["player_name"] for m in matches]
+    assert "Tilly Kesteven" in m_names, f"Expected Tilly Kesteven match, got {m_names}"
+    print("✅ Tilly Kesteven tracking: verified successfully.")
+def test_ownership_entity_matching():
+    """Kavya/Kalanithi Maran, Sun Group and Sun TV Network must match as ownership entities."""
+    kavya = {m["player_name"] for m in find_our_players_in_story("Kavya Maran on SRH auction plans")}
+    assert "Kavya Maran" in kavya, kavya
+    kalanithi = {m["player_name"] for m in find_our_players_in_story("Kalanithi Maran on Sun Group results")}
+    assert "Kalanithi Maran" in kalanithi, kalanithi
+    group = find_our_players_in_story("Sun Group discloses stake filing")
+    assert group and group[0]["franchise"] == "Sunrisers Hyderabad", group
+    suntv = find_our_players_in_story("Sun TV Network quarterly results")
+    assert suntv and suntv[0]["franchise"] == "Sunrisers Hyderabad", suntv
+    assert find_our_players_in_story("Sunrise breakfast menu launched") == []
+    print("✅ Ownership entity matching: verified successfully.")
+def test_logging_files_exist():
+    """Logger must have created rss.log and database.log files."""
+    news_diary.info("Test RSS logger verification entry")
+    storage_diary.info("Test DB logger verification entry")
+    logs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
+    assert os.path.exists(os.path.join(logs_dir, "rss.log")),      "rss.log not found"
+    assert os.path.exists(os.path.join(logs_dir, "database.log")), "database.log not found"
+    print("✅ Logging files: rss.log and database.log confirmed.")
+def test_source_count_dynamic():
+    """NEWS_WEBSITES must have >= 48 verified entries (audited 2026-07-31 — dead feeds removed)."""
+    from news_collectors.collect_news import NEWS_WEBSITES, TOP_50_CRICKET_SOURCES, RSS_FEEDS
+    assert len(NEWS_WEBSITES) >= 48, f"Expected ≥ 48 sources, got {len(NEWS_WEBSITES)}"
+    assert TOP_50_CRICKET_SOURCES is NEWS_WEBSITES, "TOP_50_CRICKET_SOURCES alias must point to NEWS_WEBSITES"
+    assert RSS_FEEDS is NEWS_WEBSITES, "RSS_FEEDS alias must point to NEWS_WEBSITES"
+    names = [s['name'] for s in NEWS_WEBSITES]
+    assert len(names) == len(set(names)), f"Duplicate source names found: {[n for n in names if names.count(n) > 1]}"
+    urls = [s['url'] for s in NEWS_WEBSITES]
+    assert len(urls) == len(set(urls)), f"Duplicate source URLs found"
+    assert not any("bing.com/news" in u for u in urls), "Bing News aggregator mirrors falsify dates and must stay out"
+    print(f"✅ Source count dynamic: {len(NEWS_WEBSITES)} sources, no duplicates.")
+def test_schema_uses_target_aware_news_dedupe():
+    """Schema must not globally unique-constrain article links."""
+    schema_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "saved_stories", "tables.sql")
+    with open(schema_path) as f:
+        schema_text = f.read()
+    assert "link TEXT UNIQUE" not in schema_text, "news.link must not be globally unique"
+    assert "idx_news_link_target" in schema_text, "schema must dedupe links per tracked target"
+    assert "idx_news_title_target" in schema_text, "schema must dedupe titles per tracked target"
+    print("✅ Target-aware news dedupe schema: passed.")
+def test_category_default_alignment():
+    """The schema.sql category DEFAULT and save_story() default must both be 'General News'."""
+    import inspect
+    from saved_stories.story_storage import save_story
+    sig = inspect.signature(save_story)
+    code_default = sig.parameters['category'].default
+    assert code_default == 'General News', f"save_story category default is '{code_default}', expected 'General News'"
+    schema_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "saved_stories", "tables.sql")
+    with open(schema_path) as f:
+        schema_text = f.read()
+    assert "DEFAULT 'General News'" in schema_text, "schema.sql category default must be 'General News'"
+    assert "DEFAULT 'General'" not in schema_text, "schema.sql still has old DEFAULT 'General'"
+    print("✅ Category default alignment: schema.sql and save_story() both use 'General News'.")
+def test_scheduler_no_init_db():
+    """regular_checks/check_news.py must NOT call init_db() (to avoid redundant migrations on every cycle).
+    Checks for actual function call — ignores any mention in comments/docstrings.
+    """
+    import re
+    scheduler_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "regular_checks", "check_news.py")
+    with open(scheduler_path) as f:
+        source = f.read()
+    source_no_comments = re.sub(r'(#[^\n]*|\'\'\'[\s\S]*?\'\'\'|"""[\s\S]*?""")', '', source)
+    assert 'init_db()' not in source_no_comments, "regular_checks/check_news.py must not call init_db() — it runs migrations on every cycle"
+    print("✅ Scheduler isolation: init_db() not called in worker.py.")
+def test_single_name_alias_matching():
+    """Verify that headlines using single names like 'Salil' or 'Klaasen' match the player's profile."""
+    text = "Ayush Mhatre to SRH trade deal called off SRH offered Salil in return"
+    matches = find_our_players_in_story(text)
+    p_names = [m["player_name"] for m in matches]
+    assert "Salil Arora" in p_names, f"Expected Salil Arora in matches, got {p_names}"
+    print("✅ Single-name alias matching ('Salil' -> 'Salil Arora'): verified successfully.")
 
+def test_four_franchises_alias_matching():
+    """Verify player aliases match correctly across all 4 Sunrisers franchises."""
+    # Sunrisers Hyderabad
+    srh_text = "Abhishek and Ishan starred in thrilling win"
+    srh_matches = {m["player_name"] for m in find_our_players_in_story(srh_text)}
+    assert "Abhishek Sharma" in srh_matches
+    assert "Ishan Kishan" in srh_matches
 
-def test_title_normalization_folds_outlet_suffix():
-    direct = "Proteas Player Ratings: Markram outstanding, but Rickelton and Stubbs fail"
-    mirror = direct + " - IOL"
-    assert normalize_title(direct) == normalize_title(mirror)
-    assert normalize_title("Match tied - 1st T20I") != normalize_title("Match tied - 2nd T20I")
+    # Sunrisers Eastern Cape
+    sec_text = "Stubbs and Jansen lead the attack with Nortje"
+    sec_matches = {m["player_name"] for m in find_our_players_in_story(sec_text)}
+    assert "Tristan Stubbs" in sec_matches
+    assert "Marco Jansen" in sec_matches
+    assert "Anrich Nortje" in sec_matches
 
+    # Sunrisers Leeds Men
+    leeds_men_text = "Brook and Crawley hit rapid fifties for Leeds"
+    lm_matches = {m["player_name"] for m in find_our_players_in_story(leeds_men_text)}
+    assert "Harry Brook" in lm_matches
+    assert "Zak Crawley" in lm_matches
 
-def test_legacy_tables_are_migrated_and_dropped(tmp_path, monkeypatch):
-    import time
+    # Sunrisers Leeds Women
+    leeds_women_text = "Gibson, Litchfield, and Deepti spark victory"
+    lw_matches = {m["player_name"] for m in find_our_players_in_story(leeds_women_text)}
+    assert "Dani Gibson" in lw_matches
+    assert "Phoebe Litchfield" in lw_matches
+    assert "Deepti Sharma" in lw_matches
+    print("✅ 4-Franchise alias matching: verified for SRH, SEC, Leeds Men, and Leeds Women.")
 
-    legacy = tmp_path / "legacy.db"
-    with sqlite3.connect(legacy) as conn:
-        conn.executescript(
-            """
-            CREATE TABLE news (id INTEGER PRIMARY KEY, title TEXT);
-            CREATE TABLE alerted_stories (
-                id INTEGER PRIMARY KEY, title_norm TEXT, player_name TEXT,
-                franchise TEXT, first_seen_ts REAL
-            );
-            INSERT INTO news (title) VALUES ('old dashboard row');
-            """
-        )
-        conn.execute(
-            "INSERT INTO alerted_stories (title_norm, player_name, franchise, first_seen_ts) "
-            "VALUES ('recently sent title', 'Abhishek Sharma', 'Sunrisers Hyderabad', ?)",
-            (time.time(),),
-        )
-    monkeypatch.setenv("SUNRISERS_DB_PATH", str(legacy))
+def test_sakib_hussain_retention():
+    """Legitimate Sakib Hussain news must NOT be purged by init_db()."""
+    test_link = "https://example.com/sakib-hussain-test-retention"
+    nid = save_story(
+        title="Sakib Hussain bowls match-winning spell",
+        source="Test Source",
+        summary="Sakib took 3 wickets in domestic match.",
+        link=test_link,
+        published_at="Jul 24, 2026 @ 12:00 PM IST",
+        player_name="Sakib Hussain",
+        franchise="Sunrisers Hyderabad",
+    )
+    assert nid is not None
     set_up_story_box()
-    tables = _tables(str(legacy))
-    assert "news" not in tables and "alerted_stories" not in tables
-    with sqlite3.connect(legacy) as conn:
-        row = conn.execute(
-            "SELECT title_key FROM suppressed_titles WHERE title_key = 'recently sent title'"
-        ).fetchone()
-    assert row is not None
+    res = search_stories("Sakib")
+    names = [r["player_name"] for r in res]
+    assert "Sakib Hussain" in names, "Sakib Hussain article must be retained after init_db()"
+    print("✅ Sakib Hussain news retention: passed.")
+
+def test_web_scraper_fallback_availability():
+    """Verify web scraper fallback functions are imported and callable."""
+    from news_collectors.backup_news_finder import find_news_on_google, find_headlines_on_a_page, find_match_highlights
+    assert callable(find_news_on_google)
+    assert callable(find_headlines_on_a_page)
+    assert callable(find_match_highlights)
+    print("✅ Web scraper fallback availability: verified.")
 
 
-def test_roster_load_failure_is_actionable(monkeypatch):
-    from our_teams import players
+def test_abhishek_porel_not_matched_to_sharma():
+    """'Abhishek Porel' (Bengal) must NOT match Abhishek Sharma (precision)."""
+    matches = find_our_players_in_story("Bengal Pick Abhishek Porel For Ranji Trophy Opener")
+    names = [m["player_name"] for m in matches]
+    assert "Abhishek Sharma" not in names, f"False positive: Abhishek Porel matched {names}"
+    print("✅ Abhishek Porel precision: no false match to Abhishek Sharma.")
 
-    monkeypatch.setattr(
-        players, "ROSTER_LOAD_ERROR", players.RosterError("missing workbook")
+
+def test_ishan_porel_not_matched_to_kishan():
+    """'Ishan Porel' (Bengal pacer) must NOT match Ishan Kishan (precision)."""
+    matches = find_our_players_in_story("Ishan Porel takes five wickets for Bengal")
+    names = [m["player_name"] for m in matches]
+    assert "Ishan Kishan" not in names, f"False positive: Ishan Porel matched {names}"
+    print("✅ Ishan Porel precision: no false match to Ishan Kishan.")
+
+
+def test_bare_abhishek_ishan_still_match():
+    """Bare 'Abhishek and Ishan' (no colliding surname) must still match SRH stars."""
+    matches = {m["player_name"] for m in find_our_players_in_story("Abhishek and Ishan starred in thrilling win")}
+    assert "Abhishek Sharma" in matches, matches
+    assert "Ishan Kishan" in matches, matches
+    full = {m["player_name"] for m in find_our_players_in_story("Abhishek Sharma smashes fifty")}
+    assert "Abhishek Sharma" in full, full
+    print("✅ Bare Abhishek/Ishan recall preserved.")
+
+
+def test_insert_news_duplicate_race_is_silent():
+    """A UNIQUE race past the SELECT check must return None, not raise."""
+    import sqlite3
+    from unittest.mock import patch
+    from saved_stories import story_storage as db_manager
+
+    title = "Race Condition Test Article — Unique String ZZZ999"
+    nid = db_manager.save_story(
+        title=title, source="Test Source", summary="race test",
+        link="https://example.com/race-zzz999", published_at="Jul 24, 2026 @ 10:30 AM IST",
+        player_name="Abhishek Sharma", franchise="Sunrisers Hyderabad",
     )
-    with pytest.raises(players.RosterError, match="missing workbook"):
-        players.player_entries()
+    assert nid is not None
+    real_get = db_manager.open_story_box
+
+    class _BoomCursor:
+        def __init__(self, cur):
+            self._c = cur
+        def execute(self, sql, params=()):
+            if sql.lstrip().upper().startswith("INSERT"):
+                raise sqlite3.IntegrityError(
+                    "UNIQUE constraint failed: news.title, news.player_name, news.franchise"
+                )
+            return self._c.execute(sql, params)
+        def fetchone(self):
+            return None  # pretend SELECT found nothing, forcing the INSERT path
+        @property
+        def lastrowid(self):
+            return self._c.lastrowid
+
+    class _BoomConn:
+        def __init__(self, conn):
+            self._c = conn
+        def cursor(self):
+            return _BoomCursor(self._c.cursor())
+        def commit(self):
+            self._c.commit()
+        def close(self):
+            self._c.close()
+
+    with patch.object(db_manager, "open_story_box", lambda: _BoomConn(real_get())):
+        assert db_manager.save_story(
+            title=title, source="Test Source", summary="race test",
+            link="https://example.com/race-zzz999", published_at="Jul 24, 2026 @ 10:30 AM IST",
+            player_name="Abhishek Sharma", franchise="Sunrisers Hyderabad",
+        ) is None
+    print("✅ save_story UNIQUE race handled silently.")
 
 
-def test_roster_validator_is_read_only(capsys):
-    from handy_tools.validate_roster import validate
-
-    path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "data", "squadofsunrisers.xlsx",
-    )
-    with open(path, "rb") as workbook:
-        before = hashlib.sha256(workbook.read()).hexdigest()
-    assert validate(path) is True
-    with open(path, "rb") as workbook:
-        after = hashlib.sha256(workbook.read()).hexdigest()
-    assert before == after
-    assert "Roster OK" in capsys.readouterr().out
+def test_fetch_feed_retry_returns_none_on_http_error():
+    """try_to_download_one_website must return None (not raise) on HTTP 403."""
+    from unittest.mock import patch, MagicMock
+    from news_collectors import collect_news as rss_collector
+    resp = MagicMock(status_code=403, content=b"forbidden")
+    with patch.object(rss_collector.requests, "get", return_value=resp):
+        assert rss_collector.try_to_download_one_website("https://example.com/feed", retries=1, delay=0) is None
+    print("✅ try_to_download_one_website handles HTTP errors without raising.")
 
 
-def test_source_list_is_complete_and_unique():
-    from news_collectors.collect_news import NEWS_WEBSITES
+def test_fetch_feed_retry_returns_feed_on_200():
+    """try_to_download_one_website must return parsed entries on HTTP 200."""
+    from unittest.mock import patch, MagicMock
+    from news_collectors import collect_news as rss_collector
+    rss = (b'<?xml version="1.0"?><rss version="2.0"><channel><title>T</title>'
+           b'<item><title>Abhishek Sharma fifty</title><link>https://example.com/x</link>'
+           b'<pubDate>Sat, 11 Oct 2026 10:00:00 +0530</pubDate></item>'
+           b'</channel></rss>')
+    resp = MagicMock(status_code=200, content=rss)
+    with patch.object(rss_collector.requests, "get", return_value=resp):
+        feed = rss_collector.try_to_download_one_website("https://example.com/feed", retries=1, delay=0)
+    assert feed is not None and len(feed.entries) == 1
+    print("✅ try_to_download_one_website parses HTTP 200 feeds.")
 
-    assert len(NEWS_WEBSITES) == 268
-    assert len({feed["url"] for feed in NEWS_WEBSITES}) == 268
-    assert len({feed["name"] for feed in NEWS_WEBSITES}) == 268
+
+def test_fallback_query_none_for_google_mirror():
+    """Google News mirrors have no meaningful fallback query (avoids garbage results)."""
+    from news_collectors.collect_news import _fallback_query_for_source
+    mirror = {"name": "Google News: SEC Official Site",
+              "url": "https://news.google.com/rss/search?q=site:sunriserseasterncape.co&hl=en-ZA&gl=ZA&ceid=ZA:en"}
+    assert _fallback_query_for_source(mirror) is None
+    direct = {"name": "The Citizen SA", "url": "https://www.citizen.co.za/feed/"}
+    assert _fallback_query_for_source(direct) == "The Citizen SA cricket"
+    print("✅ Fallback query derivation: mirrors report honestly, direct feeds fall back.")
 
 
-def test_removed_dashboard_and_bot_modules_are_gone():
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    for removed in (
-        "app.py", "phone_bot.py", "bot.py",
-        "our_teams/website_look.py",
-        "news_collectors/find_matches.py",
-        "news_collectors/backup_news_finder.py",
-        "helpers/match_cards.py",
-    ):
-        assert not os.path.exists(os.path.join(root, removed)), removed
-    import sys
-    import regular_checks.check_news  # noqa: F401
-    assert "streamlit" not in sys.modules
+def test_poll_one_source_skips_garbage_fallback():
+    """A dead Google mirror must NOT trigger an unrelated fallback search."""
+    from unittest.mock import patch
+    from news_collectors import collect_news as rss_collector
+    mirror = {"name": "Google News: SEC Official Site",
+              "url": "https://news.google.com/rss/search?q=site:sunriserseasterncape.co&hl=en-ZA&gl=ZA&ceid=ZA:en"}
+    with patch.object(rss_collector, "try_to_download_one_website", return_value=None), \
+         patch("news_collectors.backup_news_finder.find_news_on_google") as fb:
+        _, entries, err = rss_collector._poll_one_source(mirror)
+    assert entries == [] and err is not None
+    fb.assert_not_called()
+    print("✅ Dead mirror yields honest failure with no garbage fallback.")
+
+if __name__ == "__main__":
+    print("🧪 Starting @SRHXtra System Verification Suite...\n")
+    set_up_story_box()
+    test_master_roster_count()
+    test_deduplication_by_url()
+    test_deduplication_by_title()
+    test_search_news()
+    test_analytics_summary()
+    test_insert_news_uses_database_defaults()
+    test_match_player_function()
+    test_head_coach_phrase_matching()
+    test_tilly_kesteven_tracking()
+    test_logging_files_exist()
+    test_source_count_dynamic()
+    test_category_default_alignment()
+    test_scheduler_no_init_db()
+    test_single_name_alias_matching()
+    test_four_franchises_alias_matching()
+    test_sakib_hussain_retention()
+    test_ownership_entity_matching()
+    test_web_scraper_fallback_availability()
+    test_abhishek_porel_not_matched_to_sharma()
+    test_ishan_porel_not_matched_to_kishan()
+    test_bare_abhishek_ishan_still_match()
+    test_insert_news_duplicate_race_is_silent()
+    test_fetch_feed_retry_returns_none_on_http_error()
+    test_fetch_feed_retry_returns_feed_on_200()
+    test_fallback_query_none_for_google_mirror()
+    test_poll_one_source_skips_garbage_fallback()
+    print("\n🎉 ALL SYSTEM VERIFICATION TESTS PASSED CLEANLY!")

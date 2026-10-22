@@ -1,65 +1,26 @@
-"""RSS discovery for SRHXtra.
-
-This module only collects and stores articles.  Telegram delivery happens in
-helpers/phone_alerts.py after the sweep, so a network failure in either half
-cannot silently lose the other half.
-
-The feed list below is the existing 268-source list from the repository.  A
-broken feed is logged, given exponential backoff in SQLite, and never stops
-the rest of the sweep.
 """
-from __future__ import annotations
-
-import concurrent.futures
+Expanded RSS Feed Collector for @SRHXtra V10.0 — Hyper-Local Expansion.
+Polls the configured Top-Tier Global & Hyper-Local outlets for all rostered squad members & 4 Franchise Team Names.
+Stores EXACT raw source titles and descriptions for direct ESPNcricinfo-style cards.
+Scoring removed: articles are stored with database defaults (importance_score=5.0,
+category='General News'); no per-article scoring or categorization is performed.
+"""
 import time
-from dataclasses import dataclass, field
-
-import bs4
-import feedparser
-import html
+import concurrent.futures
 import requests
-
-from helpers.dates_and_times import read_story_date_as_indian_time
-from helpers.links import canonicalize_url
-from helpers.log_books import news_diary, problems_diary
+import feedparser
+import bs4
+import html
+from urllib.parse import urlparse, parse_qs
 from our_teams.players import find_our_players_in_story
 from saved_stories.story_storage import (
-    feed_is_due,
-    record_feed_failure,
-    record_feed_success,
-    save_article,
-    service_started_at,
+    save_story,
+    leave_a_note,
+    make_title_simple_to_compare,
+    claim_phone_alert_once,
 )
-
-MAX_ARTICLE_AGE_HOURS = 2.0
-FIRST_RUN_GRACE_SECS = 3600
-FETCH_TIMEOUT_SECS = 8
-FETCH_RETRIES = 1
-MAX_WORKERS = 16
-USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
-)
-
-
-@dataclass
-class CollectionResult:
-    inserted: int = 0
-    matched: int = 0
-    duplicates: int = 0
-    stale: int = 0
-    historical: int = 0
-    invalid_links: int = 0
-    total_feeds: int = 0
-    polled_feeds: int = 0
-    skipped_feeds: int = 0
-    failed_feeds: list = field(default_factory=list)
-    new_articles: list = field(default_factory=list)
-
-    def __int__(self):
-        return self.inserted
-
-
+from helpers.log_books import news_diary, problems_diary
+from helpers.dates_and_times import read_story_date_as_indian_time, show_indian_time
 NEWS_WEBSITES = [
     # ── Global & Multi-National Cricket Coverage ───────────────────────────
     {"name": "ESPNcricinfo England",        "url": "https://www.espncricinfo.com/rss/content/story/feeds/1.xml"},  
@@ -418,172 +379,259 @@ NEWS_WEBSITES = [
     {"name": "YouTube: Ashwin Ravi",         "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCYKlz4OFBA-ZInrNWB91BWg"},
 ]
 
-def clean_up_story_text(raw):
-    """Strip HTML tags and unescape double-encoded feed text."""
-    if not raw:
-        return ""
-    first = bs4.BeautifulSoup(raw, "html.parser").get_text()
-    first = html.unescape(first)
-    second = bs4.BeautifulSoup(first, "html.parser").get_text()
-    return " ".join(second.split()).strip()
-
-
-def _download_feed(url, retries=FETCH_RETRIES, timeout=FETCH_TIMEOUT_SECS):
-    """Return (parsed_feed_or_None, short_reason). Never raises."""
-    safe_url = canonicalize_url(url)
-    if not safe_url:
-        return None, "unsafe feed URL"
-    last_reason = "unknown error"
-    for attempt in range(max(1, int(retries))):
-        try:
-            response = requests.get(
-                safe_url,
-                headers={"User-Agent": USER_AGENT},
-                timeout=timeout,
-            )
-            if response.status_code == 200:
-                feed = feedparser.parse(response.content)
-                if feed and feed.entries:
-                    return feed, ""
-                last_reason = "HTTP 200 but 0 entries"
-            else:
-                last_reason = f"HTTP {response.status_code}"
-                if 400 <= response.status_code < 500:
-                    break
-        except Exception as exc:
-            last_reason = type(exc).__name__
-        if attempt + 1 < retries:
-            time.sleep(min(4, 2 ** attempt))
-    return None, last_reason
-
-
-def try_to_download_one_website(url, retries=FETCH_RETRIES, delay=1, timeout=FETCH_TIMEOUT_SECS):
-    """Fetch and parse one RSS feed; retry only transient failures."""
-    feed, reason = _download_feed(url, retries=retries, timeout=timeout)
-    if feed is None:
-        problems_diary.warning(f"Feed unavailable '{url}': {reason}.")
-    return feed
-
-
-def _poll_one_source(feed_info):
-    """Network-only worker. One bad source never aborts the sweep."""
-    try:
-        feed, reason = _download_feed(feed_info["url"])
-        if feed and feed.entries:
-            return feed_info, feed.entries, None
-        return feed_info, [], reason or "no entries"
-    except Exception as exc:
-        return feed_info, [], f"poll crashed: {type(exc).__name__}"
-
-
-def _summarise_matches(matches):
-    people = sorted({
-        match["player_name"] for match in matches
-        if match.get("kind") in ("player", "person")
-    })
-    franchises = sorted({match["franchise"] for match in matches if match.get("franchise")})
-    topics = sorted({
-        match["player_name"] for match in matches if match.get("kind") == "topic"
-    })
-    return people, franchises, topics
-
-
-def collect_fresh_stories(feeds=None, max_workers=MAX_WORKERS):
-    """Poll due feeds, keep relevant fresh stories, and queue alert deliveries."""
-    feed_list = list(feeds if feeds is not None else NEWS_WEBSITES)
-    result = CollectionResult(total_feeds=len(feed_list))
-    due_feeds = []
-    for feed_info in feed_list:
-        if feed_is_due(feed_info["url"]):
-            due_feeds.append(feed_info)
-    result.polled_feeds = len(due_feeds)
-    result.skipped_feeds = len(feed_list) - len(due_feeds)
-    news_diary.info(
-        f"Starting sweep: {len(due_feeds)} due feeds, {result.skipped_feeds} backing off."
-    )
-    if not due_feeds:
-        return result
-
-    started_at, _ = service_started_at()
-    history_cutoff = started_at - FIRST_RUN_GRACE_SECS
-    polled = []
-    workers = max(1, min(int(max_workers), len(due_feeds)))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        for item in pool.map(_poll_one_source, due_feeds):
-            polled.append(item)
-
-    for feed_info, entries, fetch_error in polled:
-        if not entries:
-            result.failed_feeds.append(feed_info["name"])
-            record_feed_failure(feed_info["url"], feed_info["name"], fetch_error)
-            problems_diary.warning(
-                f"Feed '{feed_info['name']}' unavailable: {fetch_error}."
-            )
-            continue
-        record_feed_success(feed_info["url"])
-        for entry in entries:
-            title = clean_up_story_text(entry.get("title", ""))
-            summary = clean_up_story_text(
-                entry.get("summary", "") or entry.get("description", "")
-            )
-            link = canonicalize_url(entry.get("link", ""))
-            published_at, age_hours, published_ts = read_story_date_as_indian_time(entry)
-            if not title or not link:
-                result.invalid_links += 1
-                continue
-            if age_hours is not None and age_hours > MAX_ARTICLE_AGE_HOURS:
-                result.stale += 1
-                continue
-            if published_ts and published_ts < history_cutoff:
-                result.historical += 1
-                continue
-            matches = find_our_players_in_story(f"{title} {summary}")
-            if not matches:
-                continue
-            result.matched += 1
-            people, franchises, topics = _summarise_matches(matches)
-            article_id = save_article(
-                title=title,
-                source=feed_info["name"],
-                summary=summary,
-                link=link,
-                published_at=published_at,
-                published_ts=published_ts,
-                people=people,
-                franchises=franchises,
-                topics=topics,
-            )
-            if article_id:
-                result.inserted += 1
-                result.new_articles.append(
-                    {
-                        "id": article_id,
-                        "title": title,
-                        "source": feed_info["name"],
-                        "link": link,
-                        "published_at": published_at,
-                        "published_ts": published_ts,
-                        "people": people,
-                        "franchises": franchises,
-                        "topics": topics,
-                    }
-                )
-            else:
-                result.duplicates += 1
-
-    news_diary.info(
-        f"Sweep complete: {result.inserted} new, {result.matched} matched, "
-        f"{result.duplicates} duplicate, {result.stale} stale, "
-        f"{result.historical} pre-start, {result.invalid_links} invalid links, "
-        f"{len(result.failed_feeds)}/{result.polled_feeds} feeds failed."
-    )
-    return result
-
-
-# Old names used by earlier guides and scripts.
-fetch_and_filter_rss = collect_fresh_stories
-fetch_feed_with_retry = try_to_download_one_website
-clean_text = clean_up_story_text
+# Old names, kept so older guides and tests still work.
 TOP_50_CRICKET_SOURCES = NEWS_WEBSITES
 RSS_FEEDS = NEWS_WEBSITES
 CRICKET_SOURCES = NEWS_WEBSITES
+def clean_up_story_text(raw):
+    """
+    Strips HTML tags and unescapes HTML entities, handling double-encoded feeds.
+    Some RSS sources (e.g. ABP Live, NTV Telugu) store HTML as entity-encoded text:
+      &lt;p&gt;Some text&lt;/p&gt;
+    BeautifulSoup parses these as plain text (no tags), then html.unescape() decodes
+    them into real <p> tags — which then remain in the output string.
+    Fix: run a second BeautifulSoup pass after unescaping to strip any tags that
+    appeared after entity decoding.
+    """
+    if not raw:
+        return ""
+    pass1 = bs4.BeautifulSoup(raw, "html.parser").get_text()
+    pass1 = html.unescape(pass1)
+    pass2 = bs4.BeautifulSoup(pass1, "html.parser").get_text()
+    return " ".join(pass2.split()).strip()
+def try_to_download_one_website(url, retries=2, delay=1, timeout=6):
+    """Fetches RSS feed with exponential backoff and browser-grade User-Agent.
+
+    Failures are logged with their root cause (HTTP status / exception type)
+    so dead or blocked feeds are diagnosable instead of failing silently.
+    Returns the parsed feed on success, else None.
+    """
+    user_agents = [
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+    ]
+    last_reason = "unknown"
+    for attempt in range(1, retries + 1):
+        try:
+            ua = user_agents[(attempt - 1) % len(user_agents)]
+            response = requests.get(url, headers={"User-Agent": ua}, timeout=timeout)
+            if response.status_code == 200:
+                feed = feedparser.parse(response.content)
+                if feed and feed.entries:
+                    return feed
+                last_reason = (
+                    f"HTTP 200 but 0 entries"
+                    + (f" (bozo: {feed.bozo_exception})" if getattr(feed, "bozo", False) and getattr(feed, "bozo_exception", None) else "")
+                )
+            else:
+                last_reason = f"HTTP {response.status_code}"
+        except Exception as exc:
+            last_reason = f"{type(exc).__name__}: {exc}"
+        time.sleep(delay * attempt)
+    problems_diary.warning(f"Feed unavailable '{url}' after {retries} attempts ({last_reason}).")
+    return None
+
+
+def _gl_hl_from_url(url):
+    """Extracts (hl, gl) locale params from a Google News RSS mirror URL.
+
+    Falls back to ("en-IN", "IN") for direct publisher feeds that carry
+    no locale params.
+    """
+    try:
+        qs = parse_qs(urlparse(url).query)
+        hl = qs.get("hl", ["en-IN"])[0]
+        gl = qs.get("gl", ["IN"])[0]
+        return hl, gl
+    except Exception:
+        return "en-IN", "IN"
+
+
+def _fallback_query_for_source(feed_info):
+    """Builds an honest fallback query for a dead feed.
+
+    Google News mirror feeds already encode a precise site/topic query in
+    their URL — re-issuing a mangled "{mirror label} cricket" query would
+    return unrelated results and mask the outage. For those, the caller
+    should record the failure honestly instead of using a fallback.
+    Returns None when no meaningful fallback query exists.
+    """
+    url = feed_info.get("url", "")
+    if "news.google.com/rss" in url:
+        return None
+    return f"{feed_info.get('name', '')} cricket"
+
+
+def _poll_one_source(feed_info):
+    """Polls a single source (primary + conditional fallback).
+
+    Runs in worker threads: performs network I/O only, no DB writes.
+    Returns (feed_info, entries, fetch_error_or_None).
+    Never raises: one malformed source must not abort the whole cycle.
+    """
+    try:
+        from news_collectors.backup_news_finder import find_news_on_google
+
+        feed = try_to_download_one_website(feed_info["url"])
+        if feed and feed.entries:
+            return feed_info, feed.entries, None
+        fallback_query = _fallback_query_for_source(feed_info)
+        if fallback_query is None:
+            # Precise Google News mirror legitimately returned 0 results
+            # (e.g. a site: query with no fresh stories) — report honestly.
+            return feed_info, [], f"mirror returned 0 items for '{feed_info['name']}'"
+        hl, gl = _gl_hl_from_url(feed_info["url"])
+        fallback_entries = find_news_on_google(fallback_query, lang=hl, gl=gl)
+        if fallback_entries:
+            news_diary.info(
+                f"Recovered {len(fallback_entries)} articles for '{feed_info['name']}' via resilient fallback."
+            )
+            return feed_info, fallback_entries, None
+        return feed_info, [], f"primary and fallback yielded 0 items for '{feed_info['name']}'"
+    except Exception as exc:
+        return feed_info, [], f"poll crashed: {type(exc).__name__}: {exc}"
+def collect_fresh_stories():
+    """
+    Polls all sources in NEWS_WEBSITES, filters for rostered players OR 4 franchise team names.
+    STRICTLY DISCARDS any article older than 24 hours.
+    Stores EXACT raw headline and description from sources.
+    Articles are stored with database defaults (no per-article scoring).
+    Returns:
+        _RssResult — int subclass with .inserted, .failed_feeds, .total_polled
+    """
+    total_inserted = 0
+    failed_feeds   = []
+    matched_articles = 0
+    stale_discarded  = 0
+    new_articles     = []
+    seen_stories     = set()  # (title, link): alerts go out once per unique story
+    news_diary.info(
+        f"Starting 24-Hour Ingestion Cycle across {len(NEWS_WEBSITES)} sources..."
+    )
+
+    # Phase 1 — fetch all feeds concurrently (network-bound). A sequential
+    # sweep of ~268 feeds takes several minutes and overlaps with the next
+    # auto-ingest tick; 20 workers bring a full cycle down to ~20-30s.
+    # DB writes stay in the main thread below (SQLite + deterministic order).
+    polled = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as pool:
+        for result in pool.map(_poll_one_source, NEWS_WEBSITES):
+            polled.append(result)
+
+    # Phase 2 — match + store, in source order.
+    for feed_info, entries, fetch_error in polled:
+        if not entries:
+            failed_feeds.append(feed_info["name"])
+            problems_diary.warning(
+                f"Feed '{feed_info['url']}' unavailable: {fetch_error}."
+            )
+            continue
+        for entry in entries:
+            title   = clean_up_story_text(entry.get("title", ""))
+            summary = clean_up_story_text(entry.get("summary", "") or entry.get("description", ""))
+            link    = entry.get("link", "")
+            pub_date, age_hours, pub_ts = read_story_date_as_indian_time(entry)
+            if age_hours > 24.0:
+                stale_discarded += 1
+                continue
+            matched_targets = find_our_players_in_story(f"{title} {summary}")
+            if matched_targets:
+                matched_articles += 1
+            for mt in matched_targets:
+                news_id = save_story(
+                    title=title,
+                    source=feed_info["name"],
+                    summary=summary,
+                    link=link,
+                    published_at=pub_date,
+                    player_name=mt["player_name"],
+                    franchise=mt["franchise"],
+                    pub_timestamp=pub_ts,
+                )
+                if news_id:
+                    total_inserted += 1
+                    # Alert memory (14d) outlives the 24h news purge: Google
+                    # News re-stamps evergreen pages in place (same link,
+                    # mutated pubDate), so a re-stored row must not re-alert.
+                    # Every matched target claims its own slot even though the
+                    # Telegram alert below goes out only once per story.
+                    # Claim time is "now" (not the article pubDate): the window
+                    # measures time since the last alert.
+                    claimed = claim_phone_alert_once(
+                        make_title_simple_to_compare(title),
+                        mt["player_name"],
+                        mt["franchise"],
+                    )
+                    # DB + in-app notifications stay per-target; Telegram alerts
+                    # go out once per unique story (one URL can match N players).
+                    story_key = (title, link)
+                    if story_key not in seen_stories:
+                        seen_stories.add(story_key)
+                        has_timestamp = bool(
+                            entry.get("published_parsed") or entry.get("updated_parsed")
+                        )
+                        if claimed:
+                            new_articles.append({
+                                "title": title,
+                                "source": feed_info["name"],
+                                "summary": summary,
+                                "link": link,
+                                "published_at": pub_date,
+                                "player_name": mt["player_name"],
+                                "franchise": mt["franchise"],
+                                "age_hours": age_hours if has_timestamp else None,
+                                "pub_timestamp": pub_ts,
+                            })
+                        else:
+                            news_diary.info(
+                                f"  ↳ skip re-alert (already sent within 14d) — {title[:60]}"
+                            )
+                    leave_a_note(
+                        message=(
+                            f"⚡ {mt['player_name']} ({mt['franchise']})"
+                        ),
+                        type_str="INFO",
+                    )
+                    news_diary.info(
+                        f"  ↳ {mt['player_name']} — {title[:60]}"
+                    )
+    news_diary.info(
+        f"Ingestion Cycle complete. {total_inserted} fresh items stored "
+        f"({matched_articles} matched, {stale_discarded} stale >24h discarded). "
+        f"{len(failed_feeds)}/{len(NEWS_WEBSITES)} feeds failed."
+    )
+    # Newest first: feeds arrive in source order, alerts must lead with the
+    # freshest story so a catch-up backlog never buries breaking news.
+    new_articles.sort(key=lambda a: a.get("pub_timestamp") or 0, reverse=True)
+    # Telegram alerts for every fresh article (plus a heartbeat DM on empty
+    # cycles) — best-effort, never fails ingest.
+    try:
+        from helpers.phone_alerts import tell_phones_about_new_stories
+        tg = tell_phones_about_new_stories(
+            new_articles,
+            {"total_polled": len(NEWS_WEBSITES), "failed": len(failed_feeds)},
+        )
+        if tg["sent"]:
+            news_diary.info(f"Telegram alerts dispatched: {tg['sent']} sent ({tg['mode']}, {tg['reason']}).")
+    except Exception as exc:
+        problems_diary.warning(f"Telegram hook failed: {type(exc).__name__}.")
+    return _RssResult(total_inserted, failed_feeds, len(NEWS_WEBSITES), new_articles)
+class _RssResult(int):
+    """
+    Backwards-compatible return value that behaves like an int (for legacy callers
+    that do `count = collect_fresh_stories()` and display it as a number) while also
+    carrying the full structured result as attributes.
+    """
+    def __new__(cls, inserted, failed_feeds, total_polled, new_articles=None):
+        obj = super().__new__(cls, inserted)
+        obj.inserted     = inserted
+        obj.failed_feeds = failed_feeds
+        obj.total_polled = total_polled
+        obj.new_articles = list(new_articles or [])
+        return obj
+
+# Old names, kept so older guides and tests still work.
+fetch_and_filter_rss = collect_fresh_stories
+fetch_feed_with_retry = try_to_download_one_website
+clean_text = clean_up_story_text
+_RssResult = _RssResult
