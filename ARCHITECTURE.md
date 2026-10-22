@@ -21,7 +21,7 @@ and the delivery ledger.
 ## Runtime topology
 
 ```
-cron (every 5 minutes)
+local scheduler (every 5 minutes)
   └─ python -m regular_checks.check_news
        ├─ collector_lock()                  one non-blocking flock
        ├─ load_env() + configure_logs()
@@ -192,25 +192,25 @@ so the design favors not losing alerts over absolute exactly-once delivery.
 ## Concurrency and locking
 
 `collector_lock()` uses `fcntl.flock(..., LOCK_EX | LOCK_NB)` on a lock file next
-to the database. A second cron run exits with status 0 and a log line rather
-than waiting. SQLite uniqueness and atomic claims are the second line of
+to the database. A second scheduler run exits with status 0 and a log line
+rather than waiting. SQLite uniqueness and atomic claims are the second line of
 defense. WAL mode and a 30-second busy timeout allow the short-lived storage
 connections to coexist with each other.
 
 On platforms without `fcntl`, the lock degrades to no-op; the SQLite constraints
 still prevent duplicate articles and claims, but overlapping runs can do
-redundant work. The documented deployment target is a Unix-like local cron
-machine.
+redundant work. The documented deployment target is a Unix-like local machine
+using cron (Linux) or launchd (macOS).
 
 ## Scheduler decision
 
-Local cron with persistent disk is the chosen scheduler because the delivery
-ledger is local SQLite. GitHub Actions caches and ephemeral runners cannot be
-treated as a reliable ledger. All scheduled workflows were removed; CI remains
-the only GitHub Actions workflow.
+A local scheduler with persistent disk is the chosen design because the
+delivery ledger is local SQLite. GitHub Actions caches and ephemeral runners
+cannot be treated as a reliable ledger. All scheduled workflows were removed;
+CI remains the only GitHub Actions workflow.
 
-The exact cron line is documented in `README.md`. Five minutes is the target
-interval. A run that takes longer than five minutes is protected by the lock,
+The exact cron line and macOS launchd agent are documented in `README.md`. Five
+minutes is the target interval. A run that takes longer than five minutes is protected by the lock,
 and the next invocation exits until the current one finishes.
 
 ## Security

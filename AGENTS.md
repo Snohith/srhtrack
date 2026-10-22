@@ -4,8 +4,9 @@
 
 - This is a Telegram-only alert service. There is no dashboard, command bot,
   match scraper, or digest/heartbeat.
-- `regular_checks/check_news.py` is the single production entry point. Local
-  cron is the scheduler; do not add a competing GitHub Actions schedule.
+- `regular_checks/check_news.py` is the single production entry point. A local
+  cron/launchd job is the scheduler; do not add a competing GitHub Actions
+  schedule.
 - Collection and Telegram delivery are separate phases. The collector must not
   send messages, and the sender must not download RSS or article pages.
 - `data/squadofsunrisers.xlsx` is the sole roster source. Never rewrite it from

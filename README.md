@@ -19,7 +19,7 @@ truth for players and staff.
 ## How it works
 
 ```
-local cron (every 5 minutes)
+local scheduler, every 5 minutes
         |
         v
 regular_checks/check_news.py
@@ -156,9 +156,9 @@ Example with a checkout in your home folder:
 Notes:
 
 - The interval is five minutes. Each run takes a non-blocking lock; if a slow
-  run is still going, the next cron invocation exits without overlapping work.
+  run is still going, the next invocation exits without overlapping work.
 - Keep `SUNRISERS_DB_PATH` on a persistent local disk. If you move the checkout,
-  update the cron line and the database path.
+  update the scheduler command and the database path.
 - The host must be awake and online. A sleeping laptop misses runs; stories
   older than two hours are skipped rather than replayed as a backlog.
 - Check scheduler output with `tail -f logs/cron.log`. Rotating logs are under
