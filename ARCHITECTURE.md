@@ -115,9 +115,9 @@ Migration-only memory for recent titles from the old dashboard's
 ### `service_state`
 
 One row, `started_at`, written on the first collection run. It never moves, so
-deployment cannot replay the last 24 hours of history. Stories published more
-than one hour before activation are skipped; the one-hour grace still allows a
-fresh deployment to deliver genuinely current news.
+deployment cannot replay history. Stories published more than one hour before
+activation are skipped; the one-hour grace still allows a fresh deployment to
+deliver genuinely current news.
 
 ## Collection and matching
 
@@ -129,12 +129,12 @@ fresh deployment to deliver genuinely current news.
    sweep.
 4. Cleans title/summary HTML.
 5. Canonicalizes and validates the link.
-6. Skips stories older than 24 hours.
+6. Skips stories older than two hours.
 7. Skips stories published more than one hour before activation, so a fresh
-   deployment does not replay the previous day as a burst.
+   deployment does not replay the backlog as a burst.
 8. Runs the roster matcher over title + summary.
-8. Inserts the article and a `pending` delivery.
-9. Returns a `CollectionResult` for logs and tests.
+9. Inserts the article and a `pending` delivery.
+10. Returns a `CollectionResult` for logs and tests.
 
 A feed that returns HTTP 200 but zero entries is treated as failed; a 4xx does
 not get retried in the same sweep. `FETCH_RETRIES` is intentionally one attempt
@@ -163,14 +163,16 @@ workbook. `reload_roster()` re-reads it after `.env` is loaded so
 
 1. Checks `TELEGRAM_ENABLED`, token, and chat id. Missing configuration leaves
    rows `pending` and returns an `unconfigured` reason.
-2. Claims at most one due row at a time, up to 20 per cycle.
-3. Revalidates the link; an unsafe link becomes terminally `failed` without an
+2. Claims at most one due row at a time, up to 10 per cycle.
+3. Drops a claimed article older than two hours as `failed` without an HTTP
+   call, so a wake-up backlog cannot flood Telegram.
+4. Revalidates the link; an unsafe link becomes terminally `failed` without an
    HTTP call.
-4. Formats an escaped HTML message and posts `sendMessage` with a validated link
+5. Formats an escaped HTML message and posts `sendMessage` with a validated link
    preview.
-5. On success, marks `sent`; on a retryable failure, marks `pending` with
+6. On success, marks `sent`; on a retryable failure, marks `pending` with
    backoff; on a permanent 4xx configuration error, marks `failed`.
-6. Stops the loop on a transient outage or rate limit rather than hammering
+7. Stops the loop on a transient outage or rate limit rather than hammering
    Telegram.
 
 Retry delays are `60 * 2^(attempt-1)` seconds, capped at one hour, and raised to

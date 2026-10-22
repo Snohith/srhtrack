@@ -130,11 +130,11 @@ The same actions are available as `make collect`, `make status`,
 
 ---
 
-## Scheduler: local cron with persistent disk
+## Scheduler: local cron or launchd
 
-This project deliberately uses **local cron**, not GitHub Actions. The SQLite
-delivery ledger must live on storage that survives between runs; GitHub Actions
-runners do not provide that.
+This project deliberately uses a **local scheduler**, not GitHub Actions. The
+SQLite delivery ledger must live on storage that survives between runs; GitHub
+Actions runners do not provide that.
 
 Use an absolute path to the checkout and the virtualenv. Create the log folder
 first, then edit your crontab with `crontab -e`:
@@ -159,15 +159,44 @@ Notes:
   run is still going, the next cron invocation exits without overlapping work.
 - Keep `SUNRISERS_DB_PATH` on a persistent local disk. If you move the checkout,
   update the cron line and the database path.
-- The cron machine must be awake and online. A sleeping laptop misses runs; the
-  next wake-up resumes with the same ledger.
-- Check cron output with `tail -f logs/cron.log`. Rotating logs are under
+- The host must be awake and online. A sleeping laptop misses runs; stories
+  older than two hours are skipped rather than replayed as a backlog.
+- Check scheduler output with `tail -f logs/cron.log`. Rotating logs are under
   `logs/rss.log`, `logs/database.log`, and `logs/errors.log`.
 - There are no scheduled ingest workflows left in `.github/workflows/`. Only CI
   remains.
 
-If you prefer a launchd agent on macOS, any agent that runs the same absolute
-command every 300 seconds works; cron is the documented default.
+### macOS: launchd
+
+macOS may reject `crontab` with `Operation not permitted` unless the terminal
+has Full Disk Access. launchd is the tested alternative and runs the same
+absolute command every 300 seconds. Save this as
+`~/Library/LaunchAgents/com.srhtrack.collector.plist`, replacing the paths:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.srhtrack.collector</string>
+  <key>ProgramArguments</key><array>
+    <string>/bin/sh</string><string>-c</string>
+    <string>cd /absolute/path/to/Tracker &amp;&amp; /absolute/path/to/Tracker/venv/bin/python -m regular_checks.check_news &gt;&gt; /absolute/path/to/Tracker/logs/cron.log 2&gt;&amp;1</string>
+  </array>
+  <key>StartInterval</key><integer>300</integer>
+  <key>RunAtLoad</key><false/>
+</dict></plist>
+```
+
+```bash
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.srhtrack.collector.plist
+launchctl kickstart -k gui/$(id -u)/com.srhtrack.collector
+launchctl list | grep srhtrack
+```
+
+To keep a plugged-in Mac awake, install a second launchd agent that runs
+`/usr/bin/caffeinate -s` with `KeepAlive` and `RunAtLoad` set true. `-s` only
+prevents sleep while on AC power. Disable it with
+`launchctl bootout gui/$(id -u)/com.srhtrack.keepawake`.
 
 ---
 
@@ -182,8 +211,9 @@ command every 300 seconds works; cron is the documented default.
   exponential backoff. A 429 `retry_after` is honored.
 - After five failed attempts the alert becomes `failed`. Use
   `--retry-failed` to reset terminal failures intentionally.
-- At most 20 alerts are sent per cycle. Remaining pending alerts wait for the
-  next cycle.
+- At most 10 alerts are sent per cycle. Remaining pending alerts wait for the
+  next cycle. Pending alerts for articles already older than two hours are
+  marked `failed` without sending, so a wake-up backlog cannot flood Telegram.
 - A successful send is marked `sent` and is never sent again. If the process
   crashes after Telegram accepts a message but before SQLite records it, that
   rare window can produce one duplicate retry after 15 minutes. Telegram has no
@@ -191,7 +221,7 @@ command every 300 seconds works; cron is the documented default.
   crash.
 - The first collection writes a one-time activation timestamp. Stories
   published more than one hour before activation are skipped, so a fresh
-  deployment does not replay the previous 24 hours as a burst of alerts.
+  deployment does not replay the backlog as a burst of alerts.
 - There is no heartbeat, no digest, and no empty-cycle message. Silence means
   there was nothing new.
 - Old articles and their delivery rows are pruned after 30 days. Recent legacy
@@ -218,7 +248,7 @@ The matcher accepts:
 - common cricket context words, so `SEC filing` and `Brookfield` do not become
   false positives.
 
-Stories older than 24 hours are skipped. Articles with no safe public link are
+Stories older than two hours are skipped. Articles with no safe public link are
 skipped. The original headline and summary are stored and escaped before being
 placed in Telegram HTML.
 
@@ -292,7 +322,7 @@ production ledger.
 Last run:
 
 ```text
-45 passed
+46 passed
 ```
 
 Coverage includes fresh schema creation, legacy migration, roster read-only
@@ -314,8 +344,9 @@ python -m pytest -q
 - RSS feeds are third-party and can be late, dead, rate-limited, or changed
   without notice. A dead feed is retried with backoff, not scraped by another
   service.
-- The 24-hour age cutoff and five-minute polling window mean a story can be
-  missed if the source never publishes a usable date or removes it quickly.
+- The two-hour age cutoff and five-minute polling window mean a story can be
+  missed if the machine sleeps through it or the source never publishes a
+  usable date.
 - Telegram is the only delivery channel. There is no dashboard, digest,
   heartbeat, command bot, or historical web view.
 - The ledger is local SQLite. A machine that is off, asleep, or offline does not

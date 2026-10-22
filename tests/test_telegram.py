@@ -64,6 +64,24 @@ def _make_due(article_id):
         )
 
 
+def test_stale_pending_article_is_dropped_without_sending(telegram_env, monkeypatch):
+    article_id = save_article(
+        "Pat Cummins stale backlog", "Test Feed", "", "https://example.com/stale-backlog",
+        "", time.time() - 3 * 3600,
+        ["Pat Cummins"], ["Sunrisers Hyderabad"], [],
+    )
+    assert article_id
+    calls = _post_calls(monkeypatch, [])
+
+    stats = phone_alerts.send_pending_alerts()
+
+    assert calls == []
+    assert stats["failed"] == 1
+    delivery = get_delivery(article_id)
+    assert delivery["status"] == "failed"
+    assert "stale" in delivery["last_error"]
+
+
 def test_successful_send_is_marked_sent_and_is_not_resent(telegram_env, monkeypatch):
     article_id = _make_article()
     calls = _post_calls(monkeypatch, [FakeResponse(200, {"ok": True})])

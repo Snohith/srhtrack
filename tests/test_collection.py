@@ -155,8 +155,8 @@ def test_startup_watermark_is_written_once_and_never_moves():
 def test_first_run_skips_pre_activation_history(monkeypatch):
     _poll_with(
         [
-            _entry("Pat Cummins 23 hours old", "https://example.com/old", age_hours=23),
-            _entry("Pat Cummins 3 hours old", "https://example.com/mid", age_hours=3),
+            _entry("Pat Cummins 1.8 hours old", "https://example.com/old", age_hours=1.8),
+            _entry("Pat Cummins 1.5 hours old", "https://example.com/mid", age_hours=1.5),
             _entry("Pat Cummins just now", "https://example.com/new", age_hours=0),
         ],
         monkeypatch,

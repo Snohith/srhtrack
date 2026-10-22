@@ -31,7 +31,7 @@ from saved_stories.story_storage import (
     service_started_at,
 )
 
-MAX_ARTICLE_AGE_HOURS = 24.0
+MAX_ARTICLE_AGE_HOURS = 2.0
 FIRST_RUN_GRACE_SECS = 3600
 FETCH_TIMEOUT_SECS = 8
 FETCH_RETRIES = 1

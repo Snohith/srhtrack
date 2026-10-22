@@ -26,7 +26,8 @@ from saved_stories.story_storage import (
 
 TELEGRAM_TIMEOUT_SECS = 10
 MAX_MESSAGE_CHARS = 4096
-MAX_ALERTS_PER_RUN = 20
+MAX_ALERTS_PER_RUN = 10
+MAX_ALERT_AGE_HOURS = 2.0
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
 
 
@@ -183,6 +184,11 @@ def send_pending_alerts(limit=MAX_ALERTS_PER_RUN):
             break
         stats["claimed"] += 1
         article = claimed[0]
+        published_ts = float(article.get("published_ts") or 0.0)
+        if published_ts and published_ts < time.time() - MAX_ALERT_AGE_HOURS * 3600:
+            mark_delivery_dead(article["id"], "stale article, not sent")
+            stats["failed"] += 1
+            continue
         link = canonicalize_url(article.get("link", ""))
         if not link:
             mark_delivery_dead(article["id"], "unsafe article link")
