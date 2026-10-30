@@ -56,7 +56,7 @@ srh_men = [
     {"Team": "Sunrisers Hyderabad IPL 2026", "Player": "Harshal Patel", "Role": "All-rounder / Pace bowler", "Country": "India", "Notes": ""},
     {"Team": "Sunrisers Hyderabad IPL 2026", "Player": "Jaydev Unadkat", "Role": "Bowler", "Country": "India", "Notes": ""},
     {"Team": "Sunrisers Hyderabad IPL 2026", "Player": "Shivam Mavi", "Role": "Bowler", "Country": "India", "Notes": "Withdrawn (injury)"},
-    {"Team": "Sunrisers Hyderabad IPL 2026", "Player": "Zeeshan Ansari", "Role": "Bowler", "Country": "India", "Notes": ""},
+    {"Team": "Sunrisers Hyderabad IPL 2026", "Player": "T Natarajan", "Role": "Bowler", "Country": "India", "Notes": ""},
     {"Team": "Sunrisers Hyderabad IPL 2026", "Player": "Harsh Dubey", "Role": "All-rounder", "Country": "India", "Notes": ""},
     {"Team": "Sunrisers Hyderabad IPL 2026", "Player": "R Smaran", "Role": "Batter", "Country": "India", "Notes": ""},
     {"Team": "Sunrisers Hyderabad IPL 2026", "Player": "Onkar Tarmale", "Role": "Bowler", "Country": "India", "Notes": ""},
