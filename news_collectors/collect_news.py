@@ -215,6 +215,8 @@ NEWS_WEBSITES = [
     {"name": "BBC Sport The Hundred",       "url": "https://feeds.bbci.co.uk/sport/cricket/the-hundred/rss.xml"},
     {"name": "Sky Sports Feed 12040",       "url": "https://www.skysports.com/rss/12040"},
     {"name": "Yorkshire Post Sport",        "url": "https://www.yorkshirepost.co.uk/rss"},
+    {"name": "Kent CCC Official",           "url": "https://www.kentcricket.co.uk/feed"},
+    {"name": "Durham CCC Official",         "url": "https://durhamcricket.co.uk/feed"},
     {"name": "The Citizen SA",              "url": "https://www.citizen.co.za/feed/"},
     {"name": "CricToday",                   "url": "https://crictoday.com/feed"},
 
@@ -238,9 +240,11 @@ NEWS_WEBSITES = [
     {"name": "Google News: Cricket Australia", "url": "https://news.google.com/rss/search?q=site:cricket.com.au+Australia&hl=en-AU&gl=AU&ceid=AU:en"},
     {"name": "Google News: Fox Sports Aus", "url": "https://news.google.com/rss/search?q=site:foxsports.com.au+cricket+Australia&hl=en-AU&gl=AU&ceid=AU:en"},
     {"name": "NZ Stuff Sport",              "url": "https://www.stuff.co.nz/rss/sport"},
+    {"name": "RNZ Sport NZ",                "url": "https://www.rnz.co.nz/rss/sport.xml"},
     {"name": "Google News: NZ Herald",      "url": "https://news.google.com/rss/search?q=site:nzherald.co.nz+Black+Caps+cricket&hl=en-NZ&gl=NZ&ceid=NZ:en"},
     {"name": "SL ThePapare",                "url": "https://www.thepapare.com/feed"},
     {"name": "SL AdaDerana News",           "url": "https://www.adaderana.lk/rss.php"},
+    {"name": "Sri Lanka Cricket Official",  "url": "https://srilankacricket.lk/feed"},
     {"name": "PK Dawn Sport",               "url": "https://www.dawn.com/feeds/sport"},
     {"name": "Google News: Daily Star BD",  "url": "https://news.google.com/rss/search?q=site:thedailystar.net+sports+cricket+Bangladesh&hl=en-GB&gl=GB&ceid=GB:en"},
     {"name": "Google News: Scotsman Sport", "url": "https://news.google.com/rss/search?q=site:scotsman.com+cricket+Scotland&hl=en-GB&gl=GB&ceid=GB:en"},
@@ -262,6 +266,7 @@ NEWS_WEBSITES = [
 
     # ── SA Depth + Women's Weight (Proteas Women, domestic, women's game) ──
     {"name": "SA HeraldLive",               "url": "https://www.heraldlive.co.za/rss"},
+    {"name": "Cricket South Africa Official", "url": "https://cricket.co.za/feed"},
     {"name": "Google News: Proteas Women",  "url": "https://news.google.com/rss/search?q=Proteas+Women+South+Africa+cricket&hl=en-ZA&gl=ZA&ceid=ZA:en"},
     {"name": "Google News: SA Domestic",    "url": "https://news.google.com/rss/search?q=Warriors+Titans+Lions+Dolphins+CSA+cricket&hl=en-ZA&gl=ZA&ceid=ZA:en"},
     {"name": "Google News: ICC Women",      "url": "https://news.google.com/rss/search?q=site:icc-cricket.com+women+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
@@ -350,6 +355,7 @@ NEWS_WEBSITES = [
     {"name": "Google News: PTI Cricket",     "url": "https://news.google.com/rss/search?q=site:ptinews.com+cricket&hl=en-IN&gl=IN&ceid=IN:en"},
     {"name": "Google News: UNI Cricket",     "url": "https://news.google.com/rss/search?q=site:uniindia.com+cricket&hl=en-IN&gl=IN&ceid=IN:en"},
     {"name": "Google News: Rediff Cricket",  "url": "https://news.google.com/rss/search?q=site:rediff.com+cricket&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "UNI Sports India",             "url": "https://www.uniindia.com/rss/sports"},
     {"name": "The Bridge",                   "url": "https://thebridge.in/feed"},
 
     # ── Telugu & regional depth ───────────────────────────────────────────
