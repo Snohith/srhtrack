@@ -110,7 +110,7 @@ def test_refresh_runs_cycle_and_replies():
         time.sleep(0.05)
     assert calls == [1]
     assert f"Sweeping {bot.FEED_COUNT} feeds" in b.sent[0]
-    assert bot.FEED_COUNT == 275  # audited 30 Oct 2026: 269 + 6 verified direct feeds (RNZ, SLC, CSA, Kent, Durham, UNI)
+    assert bot.FEED_COUNT == 297  # audited 30 Oct 2026: 275 + 22 verified insider-byline lanes
     assert "+3 new stories" in b.sent[1]
 
 

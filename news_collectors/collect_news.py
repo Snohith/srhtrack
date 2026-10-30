@@ -326,6 +326,40 @@ NEWS_WEBSITES = [
     {"name": "Google News: Deivarayan Muthu (ESPNcricinfo)", "url": "https://news.google.com/rss/search?q=%22Deivarayan+Muthu%22&hl=en-IN&gl=IN&ceid=IN:en"},
     {"name": "Google News: Abhishek Purohit (ESPNcricinfo)", "url": "https://news.google.com/rss/search?q=%22Abhishek+Purohit%22+cricket&hl=en-IN&gl=IN&ceid=IN:en"},
 
+    # ── Insider bylines round 2 (verified Oct 2026 by live lane yield) ────
+    # Prioritised where we cannot poll the outlet directly (cricket.com.au,
+    # News Corp, SuperSport, Mid-Day, The Cricketer, Sunday Times SL, NZ
+    # Herald, Geo) or where the writer is the first to break roster news.
+    # ── India / IPL / SRH ────────────────────────────────────────────────
+    {"name": "Google News: Devendra Pandey (Indian Express/IPL)", "url": "https://news.google.com/rss/search?q=%22Devendra+Pandey%22+cricket&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Rasesh Mandani (Mid-Day/BCCI)", "url": "https://news.google.com/rss/search?q=%22Rasesh+Mandani%22+cricket&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: Gaurav Gupta (TOI/IPL trades)", "url": "https://news.google.com/rss/search?q=%22Gaurav+Gupta%22+cricket+%22Times+of+India%22&hl=en-IN&gl=IN&ceid=IN:en"},
+    # ── Australia ────────────────────────────────────────────────────────
+    {"name": "Google News: Louis Cameron (cricket.com.au)", "url": "https://news.google.com/rss/search?q=%22Louis+Cameron%22+cricket&hl=en-AU&gl=AU&ceid=AU:en"},
+    {"name": "Google News: Robert Craddock (News Corp)", "url": "https://news.google.com/rss/search?q=%22Robert+Craddock%22+cricket&hl=en-AU&gl=AU&ceid=AU:en"},
+    {"name": "Google News: Laura Jolly (cricket.com.au women)", "url": "https://news.google.com/rss/search?q=%22Laura+Jolly%22+cricket&hl=en-AU&gl=AU&ceid=AU:en"},
+    # ── South Africa (SEC core) ──────────────────────────────────────────
+    {"name": "Google News: Firdose Moonda (ESPNcricinfo SA)", "url": "https://news.google.com/rss/search?q=%22Firdose+Moonda%22+cricket&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    {"name": "Google News: Telford Vice (Cricbuzz SA)", "url": "https://news.google.com/rss/search?q=%22Telford+Vice%22+cricket&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    {"name": "Google News: Neil Manthorp (SuperSport)", "url": "https://news.google.com/rss/search?q=%22Neil+Manthorp%22+cricket&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    {"name": "Google News: Ken Borland (SA domestic insider)", "url": "https://news.google.com/rss/search?q=%22Ken+Borland%22+cricket&hl=en-ZA&gl=ZA&ceid=ZA:en"},
+    # ── UK / The Hundred / Leeds ─────────────────────────────────────────
+    {"name": "Google News: Will Macpherson (Standard/Telegraph)", "url": "https://news.google.com/rss/search?q=%22Will+Macpherson%22+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Nick Hoult (Telegraph England)", "url": "https://news.google.com/rss/search?q=%22Nick+Hoult%22+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Matt Roller (ESPNcricinfo Hundred)", "url": "https://news.google.com/rss/search?q=%22Matt+Roller%22+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Sam Morshead (The Cricketer)", "url": "https://news.google.com/rss/search?q=%22Sam+Morshead%22+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Graham Hardcastle (Yorkshire/Leeds)", "url": "https://news.google.com/rss/search?q=%22Graham+Hardcastle%22+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    # ── Sri Lanka ────────────────────────────────────────────────────────
+    {"name": "Google News: Andrew Fidel Fernando (ESPNcricinfo SL)", "url": "https://news.google.com/rss/search?q=%22Andrew+Fidel+Fernando%22+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Rex Clementine (Sunday Times SL)", "url": "https://news.google.com/rss/search?q=%22Rex+Clementine%22+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    # ── New Zealand / Bangladesh / Pakistan ──────────────────────────────
+    {"name": "Google News: Dylan Cleaver (NZ Herald)", "url": "https://news.google.com/rss/search?q=%22Dylan+Cleaver%22+cricket&hl=en-NZ&gl=NZ&ceid=NZ:en"},
+    {"name": "Google News: Mohammad Isam (ESPNcricinfo BD)", "url": "https://news.google.com/rss/search?q=%22Mohammad+Isam%22+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Faizan Lakhani (Geo/PCB)", "url": "https://news.google.com/rss/search?q=%22Faizan+Lakhani%22+cricket&hl=en-PK&gl=PK&ceid=PK:en"},
+    # ── Women's game ─────────────────────────────────────────────────────
+    {"name": "Google News: Raf Nicholson (women's cricket)", "url": "https://news.google.com/rss/search?q=%22Raf+Nicholson%22+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+    {"name": "Google News: Annesha Ghosh (women's cricket)", "url": "https://news.google.com/rss/search?q=%22Annesha+Ghosh%22+cricket&hl=en-GB&gl=GB&ceid=GB:en"},
+
     # ── Full-squad player feeds (filtered by roster matcher downstream) ──
     {"name": "Google News: Travis Head",     "url": "https://news.google.com/rss/search?q=%22Travis+Head%22+cricket&hl=en-AU&gl=AU&ceid=AU:en"},
     {"name": "Google News: Nitish Kumar Reddy", "url": "https://news.google.com/rss/search?q=%22Nitish+Kumar+Reddy%22&hl=en-IN&gl=IN&ceid=IN:en"},
