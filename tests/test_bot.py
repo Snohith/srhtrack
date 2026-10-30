@@ -110,7 +110,7 @@ def test_refresh_runs_cycle_and_replies():
         time.sleep(0.05)
     assert calls == [1]
     assert f"Sweeping {bot.FEED_COUNT} feeds" in b.sent[0]
-    assert bot.FEED_COUNT == 268  # audited 17 Oct 2026: 193 baseline + 75 deep-scan lanes
+    assert bot.FEED_COUNT == 269  # audited 30 Oct 2026: 268 + 1 CREX Google News mirror
     assert "+3 new stories" in b.sent[1]
 
 

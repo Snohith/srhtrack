@@ -177,6 +177,7 @@ NEWS_WEBSITES = [
     {"name": "Google News: Yorkshire CCC Site", "url": "https://news.google.com/rss/search?q=site:yorkshireccc.com&hl=en-GB&gl=GB&ceid=GB:en"},
     {"name": "Google News: ESPNcricinfo Site", "url": "https://news.google.com/rss/search?q=site:espncricinfo.com&hl=en-IN&gl=IN&ceid=IN:en"},
     {"name": "Google News: Cricbuzz Site",  "url": "https://news.google.com/rss/search?q=site:cricbuzz.com&hl=en-IN&gl=IN&ceid=IN:en"},
+    {"name": "Google News: CREX Site",      "url": "https://news.google.com/rss/search?q=site:crex.com+cricket&hl=en-IN&gl=IN&ceid=IN:en"},
 
     # ── Player & Coach Topics (filtered by roster matcher downstream) ─────
     {"name": "Google News: Abhishek Sharma", "url": "https://news.google.com/rss/search?q=Abhishek+Sharma+cricket&hl=en-IN&gl=IN&ceid=IN:en"},
