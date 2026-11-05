@@ -9,10 +9,10 @@ gatherUsageStats = false
 
 [theme]
 base = "light"
-primaryColor = "#F26522"
-backgroundColor = "#F8FAFC"
-secondaryBackgroundColor = "#F1F5F9"
-textColor = "#0F172A"
+primaryColor = "#EA580C"
+backgroundColor = "#F5F5F2"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#17191E"
 font = "sans serif"
 
 
