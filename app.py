@@ -151,7 +151,7 @@ _seconds_since_last_check = _seconds_since_last_news_check()
 if _seconds_since_last_check >= HOW_OFTEN_TO_CHECK_NEWS_SECS and not st.session_state["news_check_running"]:
     st.session_state["news_check_running"] = True
     try:
-        with st.spinner(f"Checking {_source_count} feeds..."):
+        with st.spinner(f"Checking {_source_count} news sites…"):
             # Cross-session race guard: two tabs whose fragment timers align
             # would both pass the gate above and check twice (double texts;
             # saved stories skip copies quietly). A short random pause keeps them apart;
@@ -169,7 +169,7 @@ if _seconds_since_last_check >= HOW_OFTEN_TO_CHECK_NEWS_SECS and not st.session_
         st.session_state["news_check_running"] = False
     _seconds_since_last_check = _seconds_since_last_news_check()
 if len(cached_get_recent_news(limit=1)) == 0:
-    with st.spinner(f"Loading the latest stories (checking {_source_count} feeds)..."):
+    with st.spinner(f"Loading the latest stories (checking {_source_count} news sites)…"):
         try:
             _do_one_news_check_and_refresh("bootstrap")
         except Exception:
@@ -208,29 +208,29 @@ st.sidebar.markdown("---")
 st.sidebar.markdown(f"""
 <div class='srh-side-meta'>
     <div class='srh-side-meta-row'>
-        <span class='srh-side-label'>Roster</span>
+        <span class='srh-side-label'>Players</span>
         <span class='srh-side-value'>{_player_count} players · 4 squads</span>
     </div>
     <div class='srh-side-meta-row'>
-        <span class='srh-side-label'>Last refreshed · IST</span>
+        <span class='srh-side-label'>Last checked</span>
         <span class='srh-side-value'>{html_lib.escape(str(st.session_state['last_refreshed']))}</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
 _auto_mins_total = HOW_OFTEN_TO_CHECK_NEWS_SECS // 60
 _auto_secs_remaining = max(0, int(HOW_OFTEN_TO_CHECK_NEWS_SECS - _seconds_since_last_check))
-_auto_mins = _auto_secs_remaining // 60
-_auto_s = _auto_secs_remaining % 60
 if _auto_secs_remaining > 0:
-    st.sidebar.caption(f"Next check in {_auto_mins}m {_auto_s:02d}s · every {_auto_mins_total} min")
+    _mins_left = max(1, -(-_auto_secs_remaining // 60))
+    st.sidebar.caption(f"Next check in about {_mins_left} min · every {_auto_mins_total} minutes")
 else:
     st.sidebar.caption("Checking for new stories now…")
 try:
     from helpers.phone_alerts import are_phone_alerts_ready, what_are_our_phone_settings as _tg_cfg
     if are_phone_alerts_ready():
-        st.sidebar.caption(f"🔔 Telegram alerts on · {str(_tg_cfg()['mode']).replace('_', ' ')}")
+        _alert_mode = "one message per story" if _tg_cfg()["mode"] == "per_article" else "daily digest"
+        st.sidebar.caption(f"🔔 Telegram alerts on · {_alert_mode}")
     else:
-        st.sidebar.caption("🔕 Telegram alerts off — set TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID in .env")
+        st.sidebar.caption("🔕 Telegram alerts off — add your Telegram details in .env to turn them on")
 except Exception:
     pass
 st.sidebar.markdown("---")
@@ -239,13 +239,13 @@ franchise_filter = st.sidebar.selectbox(
     ["All", "Sunrisers Hyderabad", "Sunrisers Eastern Cape", "Sunrisers Leeds Men", "Sunrisers Leeds Women"]
 )
 if st.sidebar.button("Check for new stories", icon=":material/refresh:", use_container_width=True, type="primary"):
-    with st.spinner(f"Checking {_source_count} global sources..."):
+    with st.spinner(f"Checking {_source_count} news sites…"):
         result = _do_one_news_check_and_refresh("manual")
         inserted = getattr(result, "inserted", int(result))
         failed = getattr(result, "failed_feeds", [])
     st.session_state["refresh_notice"] = {
         "ok": f"Saved {inserted} new stories." if inserted else "Everything is up to date.",
-        "warn": f"{len(failed)} sources were unavailable." if failed else "",
+        "warn": f"{len(failed)} news sites didn't respond, so their stories may be missing." if failed else "",
     }
     st.rerun()
 _refresh_notice = st.session_state.pop("refresh_notice", None)
@@ -253,13 +253,13 @@ if _refresh_notice:
     st.sidebar.success(_refresh_notice["ok"])
     if _refresh_notice.get("warn"):
         st.sidebar.warning(_refresh_notice["warn"])
-with st.sidebar.expander("Squads at a glance", expanded=False):
+with st.sidebar.expander("All squads", expanded=False):
     for fkey, fdata in PLAYERS_BY_TEAM.items():
         fname = fdata.get("franchise_name", fkey)
         p_list = fdata.get("players", [])
         coach = next((p["name"] for p in p_list if "coach" in p.get("role", "").lower() or "vettori" in p["name"].lower() or "birrell" in p["name"].lower()), None)
         captain = next((p["name"] for p in p_list if p.get("captain")), None)
-        st.markdown(f"**{fname}**: `{len(p_list)} members`")
+        st.markdown(f"**{fname}**: `{len(p_list)} in squad`")
         if coach:
             st.caption(f"Coach · **{coach}**")
         if captain:
@@ -303,12 +303,12 @@ live_count = len(cached_get_recent_news(limit=150))
 st.html(show_numbers_at_top(_source_count, _player_count, live_count))
 tab_news, tab_schedule, tab_squads = st.tabs([
     f"Stories ({live_count})",
-    "Matchday",
+    "Matches",
     f"Squads ({_player_count})",
 ])
 with tab_news:
     st.html("<h2 class='sr-only'>Latest stories</h2>")
-    st.html("<p class='srh-section-sub'>Fresh stories about our players, newest first.</p>")
+    st.html("<p class='srh-section-sub'>The latest news about our players, newest first.</p>")
     search_query = st.text_input(
         "Search stories",
         placeholder="Player, team or keyword",
@@ -350,11 +350,11 @@ with tab_news:
             st.html(
                 show_empty_state(
                     "All quiet for now",
-                    "No player updates in the last 24 hours. Use Check for new stories in the sidebar for a full sweep.",
+                    "No player updates in the last 24 hours. Check for new stories in the sidebar to look again.",
                 )
             )
 with tab_schedule:
-    st.html("<h2 class='sr-only'>Matchday fixtures</h2>")
+    st.html("<h2 class='sr-only'>Matches</h2>")
     base_schedule = [s for s in matchday_fixtures if _fixture_live_status(s) in ["LIVE", "UPCOMING"]]
     live_now = sum(1 for s in base_schedule if _fixture_live_status(s) == "LIVE")
     next_match_date = base_schedule[0]["date_str"] if base_schedule else "N/A"
@@ -363,23 +363,23 @@ with tab_schedule:
     with col_info:
         st.html(
             f"<p class='srh-section-sub'>"
-            f"Live from <a href='{WHERE_TO_FIND_MATCHES_ONLINE}' target='_blank' rel='noopener noreferrer'>crex.com/schedule</a> · "
-            f"today through the next 4 days. "
-            f"Every squad checked against the roster — Sunrisers fixtures only, live first.</p>"
+            f"Live from <a href='{WHERE_TO_FIND_MATCHES_ONLINE}' target='_blank' rel='noopener noreferrer'>crex.com/schedule</a>, "
+            f"today and the next four days. Every squad is checked against our players, "
+            f"so you only see Sunrisers matches — live ones first.</p>"
         )
     with col_btn:
-        if st.button("Refresh fixtures", icon=":material/event_repeat:", use_container_width=True):
+        if st.button("Update fixtures", icon=":material/event_repeat:", use_container_width=True):
             forget_saved_matches()
             cached_get_matchday_fixtures.clear()
             st.rerun()
     st.html(
         show_stat_cards([
-            (len(base_schedule), "Fixtures listed"),
+            (len(base_schedule), "Fixtures"),
             (live_now, "Live now"),
-            (active_leagues, "Leagues tracked"),
+            (active_leagues, "Competitions"),
         ])
     )
-    st.caption(f"Next fixture · **{next_match_date}** · refreshes every 15 min")
+    st.caption(f"Next up · **{next_match_date}** · updated every 15 minutes")
     if franchise_filter != "All":
         franchise_key_map = {
             "Sunrisers Hyderabad": "SRH",
@@ -422,25 +422,25 @@ with tab_schedule:
     else:
         st.html(
             show_empty_state(
-                "No fixtures found",
-                f"No upcoming Sunrisers fixtures for {franchise_filter} right now. Refresh fixtures to re-check the live schedule.",
+                "No matches found",
+                f"No upcoming Sunrisers matches for {franchise_filter} right now. Try Update fixtures to check again.",
             )
         )
 with tab_squads:
     st.html("<h2 class='sr-only'>Squads</h2>")
-    st.html("<p class='srh-section-sub'>Active rosters, staff and national representation across the Sunrisers network.</p>")
+    st.html("<p class='srh-section-sub'>Players, coaches and nationalities across all four Sunrisers teams.</p>")
 
     if franchise_filter in ("All", "Sunrisers Hyderabad"):
-        st.html("<h2 class='srh-date-group'>Ownership & business · Sun Group</h2>")
+        st.html("<h2 class='srh-date-group'>Ownership and business · Sun Group</h2>")
         st.html("""
         <div class='srh-stat-grid'>
             <div class='srh-stat is-info'>
                 <div class='srh-stat-num'>Kalanithi Maran</div>
-                <div class='srh-stat-lbl'>Founder & Chairman, Sun Group</div>
+                <div class='srh-stat-lbl'>Founder and Chairman, Sun Group</div>
             </div>
             <div class='srh-stat is-info'>
                 <div class='srh-stat-num'>Kavya Maran</div>
-                <div class='srh-stat-lbl'>CEO — SRH & Sunrisers Eastern Cape</div>
+                <div class='srh-stat-lbl'>CEO of SRH and Sunrisers Eastern Cape</div>
             </div>
             <div class='srh-stat is-info'>
                 <div class='srh-stat-num'>Sun TV Network Ltd</div>
@@ -467,21 +467,21 @@ with tab_squads:
             or any(_k in f"{_n.get('title', '')} {_n.get('summary', '')}".lower() for _k in _biz_keywords)
         ][:8]
         if _biz_news:
-            st.html(f"<h3 class='srh-note-title'>Ownership & business stories · {len(_biz_news)}</h3>")
+            st.html(f"<h3 class='srh-note-title'>Ownership and business stories · {len(_biz_news)}</h3>")
             for _bn in _biz_news:
                 st.html(show_story_card(_bn))
         else:
-            st.caption("No ownership or business stories in the last 24 hours — exchange filings and business wires are checked with every news round.")
+            st.caption("No ownership or business stories in the last 24 hours — we check filings and business news every round.")
 
     col_sq_f, col_sq_role, col_sq_search = st.columns([1.5, 1.2, 2])
     with col_sq_f:
-        squad_team_options = ["All Franchises"] + [fdata["franchise_name"] for fdata in PLAYERS_BY_TEAM.values()]
+        squad_team_options = ["All teams"] + [fdata["franchise_name"] for fdata in PLAYERS_BY_TEAM.values()]
         def_idx = squad_team_options.index(franchise_filter) if franchise_filter in squad_team_options else 0
         squad_team_filter = st.selectbox("Team", squad_team_options, index=def_idx, key="squad_team_sel")
     with col_sq_role:
         squad_role_filter = st.selectbox(
             "Role",
-            ["All Roles", "Head Coach", "Captains & Leaders", "Wicket-keepers", "Batters", "All-rounders", "Bowlers", "Overseas Players"],
+            ["All roles", "Head coaches", "Captains and leaders", "Wicketkeepers", "Batters", "All-rounders", "Bowlers", "Overseas players"],
             key="squad_role_sel"
         )
     with col_sq_search:
@@ -495,7 +495,7 @@ with tab_squads:
     filtered_members = []
     for fkey, fdata in PLAYERS_BY_TEAM.items():
         fname = fdata["franchise_name"]
-        if squad_team_filter != "All Franchises" and squad_team_filter != fname:
+        if squad_team_filter != "All teams" and squad_team_filter != fname:
             continue
         for p in fdata["players"]:
             filtered_members.append({**p, "franchise": fname, "league": fdata["league"]})
@@ -507,11 +507,11 @@ with tab_squads:
             if q in p["name"].lower() or q in p["role"].lower() or q in p["country"].lower() or q in p["franchise"].lower()
         ]
 
-    if squad_role_filter == "Head Coach":
+    if squad_role_filter == "Head coaches":
         filtered_members = [p for p in filtered_members if "coach" in p["role"].lower() or "vettori" in p["name"].lower() or "birrell" in p["name"].lower()]
-    elif squad_role_filter == "Captains & Leaders":
+    elif squad_role_filter == "Captains and leaders":
         filtered_members = [p for p in filtered_members if p.get("captain") or "(c)" in p["name"].lower() or "captain" in p["role"].lower()]
-    elif squad_role_filter == "Wicket-keepers":
+    elif squad_role_filter == "Wicketkeepers":
         filtered_members = [p for p in filtered_members if "(wk)" in p["name"].lower() or "wicket-keeper" in p["role"].lower()]
     elif squad_role_filter == "Batters":
         filtered_members = [p for p in filtered_members if "batter" in p["role"].lower() and "wicket-keeper" not in p["role"].lower()]
@@ -519,7 +519,7 @@ with tab_squads:
         filtered_members = [p for p in filtered_members if "all-rounder" in p["role"].lower()]
     elif squad_role_filter == "Bowlers":
         filtered_members = [p for p in filtered_members if "bowler" in p["role"].lower() and "all-rounder" not in p["role"].lower()]
-    elif squad_role_filter == "Overseas Players":
+    elif squad_role_filter == "Overseas players":
         def _is_os(p):
             c = p.get("country", "")
             f = p.get("franchise", "")
@@ -537,15 +537,15 @@ with tab_squads:
 
     st.html(
         show_stat_cards([
-            (total_found, "Members shown"),
+            (total_found, "Squad members"),
             (coach_count, "Coaches"),
             (cap_count, "Captains"),
-            (distinct_countries, "Nations"),
+            (distinct_countries, "Countries"),
         ])
     )
 
     if filtered_members:
-        if squad_team_filter == "All Franchises":
+        if squad_team_filter == "All teams":
             teams_in_results = {}
             for p in filtered_members:
                 teams_in_results.setdefault(p["franchise"], []).append(p)
@@ -557,7 +557,7 @@ with tab_squads:
     else:
         st.html(
             show_empty_state(
-                "No squad members found",
-                "No squad members match these filters. Try a different team, role or search term.",
+                "No players found",
+                "No players match these filters. Try a different team, role or search term.",
             )
         )

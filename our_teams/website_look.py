@@ -1153,12 +1153,12 @@ def how_long_ago(pub_ts):
     if diff < 60:
         return "Just now"
     if diff < 3600:
-        return f"{int(diff / 60)}m ago"
+        return f"{int(diff / 60)} min ago"
     if diff < 86400:
         hrs = int(diff / 3600)
         mins = int((diff % 3600) / 60)
-        return f"{hrs}h {mins}m ago" if mins else f"{hrs}h ago"
-    return "1d+ ago"
+        return f"{hrs} hr {mins} min ago" if mins else f"{hrs} hr ago"
+    return "Over a day ago"
 def is_this_story_fresh(pub_ts, hours=2):
     """Returns True if article published within last N hours."""
     if not pub_ts or pub_ts <= 0:
@@ -1180,11 +1180,11 @@ def show_top_part(player_count, franchise_count=4):
     <div class='srh-brand-header'>
         <div>
             <h1 class='srh-brand-title'>Every Sunrisers story, <span class='highlight'>one place.</span></h1>
-            <p class='srh-brand-subtitle'>Tracking {player_count} players across {franchise_count} Sunrisers squads — live news, fixtures and rosters.</p>
+            <p class='srh-brand-subtitle'>All the latest news, fixtures and squads for {player_count} Sunrisers players across {franchise_count} teams.</p>
         </div>
         <div class='srh-live-badge'>
             <span class='srh-live-pulse-dot' aria-hidden='true'></span>
-            <span><strong>Live</strong> · updates every 15 min</span>
+            <span>News checked every 15 minutes</span>
         </div>
     </div>
     """
@@ -1198,18 +1198,18 @@ def show_next_match_big_box(next_fixture, status="UPCOMING"):
     league = html_lib.escape(next_fixture.get("league", ""))
     date_str = html_lib.escape(next_fixture.get("date_str", ""))
     match_time = html_lib.escape(next_fixture.get("time", ""))
-    venue = html_lib.escape(next_fixture.get("venue", "TBD"))
-    broadcast = html_lib.escape(next_fixture.get("broadcast", "Check local listings"))
+    venue = html_lib.escape(next_fixture.get("venue", "Venue to be confirmed"))
+    broadcast = html_lib.escape(next_fixture.get("broadcast", "Check your local listings"))
     if status == "LIVE":
         card_class = "hero-fixture-card hero-fixture-card-live"
-        tag_html = f"<div class='hero-fixture-tag hero-fixture-tag-live'>Matchday live · {league}</div>"
+        tag_html = f"<div class='hero-fixture-tag hero-fixture-tag-live'>Live now · {league}</div>"
         val_html = "<div class='hero-countdown-val hero-countdown-val-live' aria-live='polite'>Live now</div>"
         lbl_html = "<div class='hero-countdown-lbl'>In progress</div>"
     elif status == "COMPLETED":
         card_class = "hero-fixture-card"
         tag_html = f"<div class='hero-fixture-tag'>Result · {league}</div>"
-        val_html = "<div class='hero-countdown-val'>Full time</div>"
-        lbl_html = "<div class='hero-countdown-lbl'>Completed</div>"
+        val_html = "<div class='hero-countdown-val'>Match ended</div>"
+        lbl_html = "<div class='hero-countdown-lbl'>Result</div>"
     else:
         card_class = "hero-fixture-card"
         tag_html = f"<div class='hero-fixture-tag'>Up next · {league}</div>"
@@ -1222,7 +1222,7 @@ def show_next_match_big_box(next_fixture, status="UPCOMING"):
         link_html = (
             f"<a href='{link_attr}' target='_blank' rel='noopener noreferrer' "
             f"class='srh-crex-link'>"
-            f"Squad &amp; live score on Crex <span aria-hidden='true'>↗</span></a>"
+            f"Squad and live score on Crex <span aria-hidden='true'>↗</span></a>"
         )
     return f"""
     <div class='{card_class}'>
@@ -1245,10 +1245,10 @@ def show_next_match_big_box(next_fixture, status="UPCOMING"):
 def show_numbers_at_top(source_count, player_count, live_count):
     """Renders the global coverage strip above the tabs."""
     return f"""
-    <div class='telemetry-strip' role='list' aria-label='Coverage at a glance'>
+    <div class='telemetry-strip' role='list' aria-label='At a glance'>
         <div class='telemetry-metric-pill' role='listitem'>
             <span class='telemetry-metric-num'>{source_count}</span>
-            <span class='telemetry-metric-lbl'>Sources</span>
+            <span class='telemetry-metric-lbl'>News sites</span>
         </div>
         <div class='telemetry-metric-pill' role='listitem'>
             <span class='telemetry-metric-num'>{player_count}</span>
@@ -1256,7 +1256,7 @@ def show_numbers_at_top(source_count, player_count, live_count):
         </div>
         <div class='telemetry-metric-pill' role='listitem'>
             <span class='telemetry-metric-num'>4</span>
-            <span class='telemetry-metric-lbl'>Franchises</span>
+            <span class='telemetry-metric-lbl'>Teams</span>
         </div>
         <div class='telemetry-metric-pill' role='listitem'>
             <span class='telemetry-metric-num'>{live_count}</span>
@@ -1379,7 +1379,7 @@ def show_match_card(item, status="UPCOMING"):
         status_html = "<span class='status-pill status-pill-live'>Live now</span>"
         card_extra_class = " broadcast-match-card-live"
     elif status == "COMPLETED":
-        status_html = "<span class='status-pill status-pill-completed'>Completed</span>"
+        status_html = "<span class='status-pill status-pill-completed'>Final</span>"
         card_extra_class = ""
     else:
         status_html = "<span class='status-pill status-pill-upcoming'>Upcoming</span>"
@@ -1404,7 +1404,7 @@ def show_match_card(item, status="UPCOMING"):
         link_html = (
             f"<a href='{link_attr}' target='_blank' rel='noopener noreferrer' "
             f"class='srh-crex-link'>"
-            f"Squad &amp; live score on Crex <span aria-hidden='true'>↗</span></a>"
+            f"Squad and live score on Crex <span aria-hidden='true'>↗</span></a>"
         )
     franchise_html = ""
     if item.get("franchises"):
@@ -1414,7 +1414,7 @@ def show_match_card(item, status="UPCOMING"):
         )
         franchise_html = f"<div class='match-franchises'>{chips}</div>"
     players_html = (
-        f"<div class='match-players'><strong>Sunrisers in squad:</strong> {players}</div>"
+        f"<div class='match-players'><strong>Sunrisers players:</strong> {players}</div>"
         if players else ""
     )
     meta_html = (
@@ -1451,7 +1451,7 @@ COUNTRY_FLAGS = {
 def show_player_card(member, franchise_name=None):
     """Renders an official squad member card."""
     name = html_lib.escape(member.get("name", ""))
-    role = html_lib.escape(member.get("role", "Squad Member"))
+    role = html_lib.escape(member.get("role", "Player"))
     country = html_lib.escape(member.get("country", ""))
     notes = html_lib.escape(member.get("notes", "")) if member.get("notes") else ""
     is_captain = bool(member.get("captain", False)) or "(c)" in name.lower() or "captain" in role.lower()
