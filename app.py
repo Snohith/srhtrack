@@ -35,6 +35,7 @@ from our_teams.website_look import (
     show_numbers_at_top, show_big_story,
     show_story_card, show_pulse_panel,
     show_match_card,
+    show_match_cards,
     show_player_grid, show_stat_cards, show_empty_state,
     find_tiny_website_icon, find_good_link_for_story, how_long_ago,
     read_match_date_and_time, is_match_live_now_or_later
@@ -208,8 +209,8 @@ st.sidebar.markdown("---")
 st.sidebar.markdown(f"""
 <div class='srh-side-meta'>
     <div class='srh-side-meta-row'>
-        <span class='srh-side-label'>Players</span>
-        <span class='srh-side-value'>{_player_count} players · 4 squads</span>
+        <span class='srh-side-label'>Squad</span>
+        <span class='srh-side-value'>{_player_count} players · 4 teams</span>
     </div>
     <div class='srh-side-meta-row'>
         <span class='srh-side-label'>Last checked</span>
@@ -221,7 +222,7 @@ _auto_mins_total = HOW_OFTEN_TO_CHECK_NEWS_SECS // 60
 _auto_secs_remaining = max(0, int(HOW_OFTEN_TO_CHECK_NEWS_SECS - _seconds_since_last_check))
 if _auto_secs_remaining > 0:
     _mins_left = max(1, -(-_auto_secs_remaining // 60))
-    st.sidebar.caption(f"Next check in about {_mins_left} min · every {_auto_mins_total} minutes")
+    st.sidebar.caption(f"Next check in about {_mins_left} min")
 else:
     st.sidebar.caption("Checking for new stories now…")
 try:
@@ -235,7 +236,7 @@ except Exception:
     pass
 st.sidebar.markdown("---")
 franchise_filter = st.sidebar.selectbox(
-    "Filter by squad",
+    "Filter by team",
     ["All", "Sunrisers Hyderabad", "Sunrisers Eastern Cape", "Sunrisers Leeds Men", "Sunrisers Leeds Women"]
 )
 if st.sidebar.button("Check for new stories", icon=":material/refresh:", use_container_width=True, type="primary"):
@@ -313,6 +314,7 @@ with tab_news:
         "Search stories",
         placeholder="Player, team or keyword",
         icon=":material/search:",
+        key="story_search",
     )
     if search_query.strip():
         news_list = cached_search_news(search_query.strip())
@@ -328,7 +330,7 @@ with tab_news:
         )
     if franchise_filter != "All":
         st.html(
-            f"<div class='srh-active-filter'><span>Squad</span>{html_lib.escape(franchise_filter)}</div>"
+            f"<div class='srh-active-filter'><span>Team</span>{html_lib.escape(franchise_filter)}</div>"
         )
     if news_list:
         col_main, col_pulse = st.columns([2.2, 1], gap="large")
@@ -358,7 +360,7 @@ with tab_schedule:
     base_schedule = [s for s in matchday_fixtures if _fixture_live_status(s) in ["LIVE", "UPCOMING"]]
     live_now = sum(1 for s in base_schedule if _fixture_live_status(s) == "LIVE")
     next_match_date = base_schedule[0]["date_str"] if base_schedule else "N/A"
-    active_leagues = len({s["league"] for s in base_schedule})
+    active_days = len({s["date_str"] for s in base_schedule})
     col_info, col_btn = st.columns([3, 1], vertical_alignment="center")
     with col_info:
         st.html(
@@ -376,7 +378,7 @@ with tab_schedule:
         show_stat_cards([
             (len(base_schedule), "Fixtures"),
             (live_now, "Live now"),
-            (active_leagues, "Competitions"),
+            (active_days, "Match days"),
         ])
     )
     st.caption(f"Next up · **{next_match_date}** · updated every 15 minutes")
@@ -416,9 +418,7 @@ with tab_schedule:
             grouped_dates.setdefault(item["date_str"], []).append(item)
         for date_str, items in grouped_dates.items():
             st.html(f"<h2 class='srh-date-group'>{html_lib.escape(date_str)}</h2>")
-            for item in items:
-                status = _fixture_live_status(item)
-                st.html(show_match_card(item, status=status))
+            st.html(show_match_cards(items, [_fixture_live_status(item) for item in items]))
     else:
         st.html(
             show_empty_state(
@@ -428,50 +428,7 @@ with tab_schedule:
         )
 with tab_squads:
     st.html("<h2 class='sr-only'>Squads</h2>")
-    st.html("<p class='srh-section-sub'>Players, coaches and nationalities across all four Sunrisers teams.</p>")
-
-    if franchise_filter in ("All", "Sunrisers Hyderabad"):
-        st.html("<h2 class='srh-date-group'>Ownership and business · Sun Group</h2>")
-        st.html("""
-        <div class='srh-stat-grid'>
-            <div class='srh-stat is-info'>
-                <div class='srh-stat-num'>Kalanithi Maran</div>
-                <div class='srh-stat-lbl'>Founder and Chairman, Sun Group</div>
-            </div>
-            <div class='srh-stat is-info'>
-                <div class='srh-stat-num'>Kavya Maran</div>
-                <div class='srh-stat-lbl'>CEO of SRH and Sunrisers Eastern Cape</div>
-            </div>
-            <div class='srh-stat is-info'>
-                <div class='srh-stat-num'>Sun TV Network Ltd</div>
-                <div class='srh-stat-lbl'>NSE: SUNTVNET / BSE: 532733</div>
-            </div>
-        </div>
-        <div class='srh-section-sub'>
-            <a href='https://www.suntv.in/financial-information.html' target='_blank' rel='noopener noreferrer'>Sun TV Investor Relations</a> ·
-            <a href='https://www.bseindia.com/' target='_blank' rel='noopener noreferrer'>BSE Filings</a> ·
-            <a href='https://www.nseindia.com/' target='_blank' rel='noopener noreferrer'>NSE Filings</a> ·
-            <a href='https://find-and-update.company-information.service.gov.uk/search?q=Sunrisers+Leeds' target='_blank' rel='noopener noreferrer'>Companies House</a> ·
-            <a href='https://en.wikipedia.org/wiki/Sun_Group' target='_blank' rel='noopener noreferrer'>Sun Group</a>
-        </div>
-        """)
-        try:
-            _biz_pool = cached_get_recent_news(limit=150)
-        except Exception:
-            _biz_pool = []
-        _biz_keywords = ("kavya maran", "kalanithi", "sun tv", "sun group", "acquisition", "stake",
-                         "valuation", "rebrand", "filing", "companies house", "investor")
-        _biz_news = [
-            _n for _n in _biz_pool
-            if _n.get("player_name") in ("Kavya Maran", "Kalanithi Maran")
-            or any(_k in f"{_n.get('title', '')} {_n.get('summary', '')}".lower() for _k in _biz_keywords)
-        ][:8]
-        if _biz_news:
-            st.html(f"<h3 class='srh-note-title'>Ownership and business stories · {len(_biz_news)}</h3>")
-            for _bn in _biz_news:
-                st.html(show_story_card(_bn))
-        else:
-            st.caption("No ownership or business stories in the last 24 hours — we check filings and business news every round.")
+    st.html("<p class='srh-section-sub'>Players and coaches from all four Sunrisers teams, with their home countries.</p>")
 
     col_sq_f, col_sq_role, col_sq_search = st.columns([1.5, 1.2, 2])
     with col_sq_f:
@@ -550,7 +507,10 @@ with tab_squads:
             for p in filtered_members:
                 teams_in_results.setdefault(p["franchise"], []).append(p)
             for tname, plist in teams_in_results.items():
-                st.html(f"<h2 class='srh-date-group'>{html_lib.escape(tname)} · {len(plist)}</h2>")
+                st.html(
+                    f"<h2 class='srh-date-group'>{html_lib.escape(tname)} · "
+                    f"{len(plist)} {'player' if len(plist) == 1 else 'players'}</h2>"
+                )
                 st.html(show_player_grid(plist, franchise_name=tname))
         else:
             st.html(show_player_grid(filtered_members, franchise_name=squad_team_filter))
@@ -561,3 +521,46 @@ with tab_squads:
                 "No players match these filters. Try a different team, role or search term.",
             )
         )
+
+    if franchise_filter in ("All", "Sunrisers Hyderabad"):
+        st.html("<h2 class='srh-date-group'>Ownership and business · Sun Group</h2>")
+        st.html("""
+        <div class='srh-stat-grid'>
+            <div class='srh-stat is-info'>
+                <div class='srh-stat-num'>Kalanithi Maran</div>
+                <div class='srh-stat-lbl'>Founder and Chairman, Sun Group</div>
+            </div>
+            <div class='srh-stat is-info'>
+                <div class='srh-stat-num'>Kavya Maran</div>
+                <div class='srh-stat-lbl'>CEO of SRH and Sunrisers Eastern Cape</div>
+            </div>
+            <div class='srh-stat is-info'>
+                <div class='srh-stat-num'>Sun TV Network Ltd</div>
+                <div class='srh-stat-lbl'>NSE: SUNTVNET / BSE: 532733</div>
+            </div>
+        </div>
+        <div class='srh-section-sub'>
+            <a href='https://www.suntv.in/financial-information.html' target='_blank' rel='noopener noreferrer'>Sun TV Investor Relations</a> ·
+            <a href='https://www.bseindia.com/' target='_blank' rel='noopener noreferrer'>BSE Filings</a> ·
+            <a href='https://www.nseindia.com/' target='_blank' rel='noopener noreferrer'>NSE Filings</a> ·
+            <a href='https://find-and-update.company-information.service.gov.uk/search?q=Sunrisers+Leeds' target='_blank' rel='noopener noreferrer'>Companies House</a> ·
+            <a href='https://en.wikipedia.org/wiki/Sun_Group' target='_blank' rel='noopener noreferrer'>Sun Group</a>
+        </div>
+        """)
+        try:
+            _biz_pool = cached_get_recent_news(limit=150)
+        except Exception:
+            _biz_pool = []
+        _biz_keywords = ("kavya maran", "kalanithi", "sun tv", "sun group", "acquisition", "stake",
+                         "valuation", "rebrand", "filing", "companies house", "investor")
+        _biz_news = [
+            _n for _n in _biz_pool
+            if _n.get("player_name") in ("Kavya Maran", "Kalanithi Maran")
+            or any(_k in f"{_n.get('title', '')} {_n.get('summary', '')}".lower() for _k in _biz_keywords)
+        ][:8]
+        if _biz_news:
+            st.html(f"<h3 class='srh-note-title'>Business stories · {len(_biz_news)}</h3>")
+            for _bn in _biz_news:
+                st.html(show_story_card(_bn))
+        else:
+            st.caption("No business stories in the last 24 hours — we check filings and business news every round.")

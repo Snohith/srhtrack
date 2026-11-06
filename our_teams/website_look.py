@@ -239,7 +239,7 @@ def get_website_style():
         font-size: 0.9375rem;
         line-height: 1.6;
         margin: 0.55rem 0 0;
-        max-width: 58ch;
+        max-width: 70ch;
     }
     .srh-live-badge {
         display: inline-flex;
@@ -410,6 +410,8 @@ def get_website_style():
         padding: 0.6rem 0.8rem !important;
     }
     .stTextInput input::placeholder { color: var(--sr-faint) !important; opacity: 1; }
+    .st-key-story_search,
+    [data-testid="stTextInput"]:has(input[aria-label="Search stories"]) { max-width: 30rem; }
     .stSelectbox div[data-baseweb="select"] > div {
         min-height: 44px;
         background: var(--sr-surface) !important;
@@ -815,11 +817,13 @@ def get_website_style():
         margin-left: auto;
         padding-left: 0.75rem;
         border-left: 1px solid var(--sr-line);
-        color: var(--sr-accent-ink);
-        font-weight: 650;
+        color: var(--sr-muted);
+        font-weight: 600;
         font-size: 0.8125rem;
         white-space: nowrap;
     }
+    .featured-story-footer .link-action { color: var(--sr-accent-ink); }
+    a.telemetry-card-link:hover .link-action { color: var(--sr-accent-ink); }
     .source-fav-icon {
         width: 16px;
         height: 16px;
@@ -878,7 +882,10 @@ def get_website_style():
         font-variant-numeric: tabular-nums;
     }
     .pulse-panel a.pulse-headline-dark {
-        display: block;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
         font-size: 0.875rem;
         color: var(--sr-body) !important;
         font-weight: 550;
@@ -897,6 +904,13 @@ def get_website_style():
         box-shadow: var(--sr-shadow-xs);
         transition: border-color 0.18s var(--sr-ease), box-shadow 0.18s var(--sr-ease);
     }
+    .match-card-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 0.5rem;
+    }
+    .match-card-grid .broadcast-match-card { height: 100%; margin-bottom: 0; }
     .broadcast-match-card:hover { border-color: #D6D3CB; box-shadow: var(--sr-shadow-sm); }
     .broadcast-match-card-live {
         border-color: #F1C4C0;
@@ -1083,6 +1097,7 @@ def get_website_style():
         [data-testid="stColumn"]:has(.pulse-panel) { display: none !important; }
         .srh-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .srh-card-grid { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+        .match-card-grid { grid-template-columns: 1fr; }
         .featured-story-card { padding: 1.25rem; }
         .link-action { margin-left: 0; padding-left: 0; border-left: 0; }
     }
@@ -1099,11 +1114,11 @@ def get_website_style():
         .srh-card-grid { grid-template-columns: 1fr; }
         .stTabs [data-baseweb="tab-list"] { gap: 1.1rem; }
         .stTabs [data-baseweb="tab"] { font-size: 0.875rem; }
+        .st-key-story_search,
+        [data-testid="stTextInput"]:has(input[aria-label="Search stories"]) { max-width: 100%; }
         h2.featured-story-title { font-size: 1.15rem; }
         .featured-story-desc { -webkit-line-clamp: 4; }
-        .featured-story-footer .published-tag,
         .featured-story-footer .meta-dot,
-        .telemetry-card-footer .published-tag,
         .telemetry-card-footer .meta-dot { display: none; }
         .hero-fixture-card { margin-top: 1rem; }
         .hero-fixture-details { font-size: 0.78rem; }
@@ -1143,8 +1158,8 @@ def guess_which_league(title, summary):
     elif any(k in text for k in ["ipl", "indian premier league", "sunrisers hyderabad"]):
         return "IPL"
     elif any(k in text for k in ["t20i", "odi", "test", "india tour", "world cup", "wtc"]):
-        return "International Cricket"
-    return "Global Cricket"
+        return "International cricket"
+    return "World cricket"
 def how_long_ago(pub_ts):
     """Formats timestamp into relative human readable time string."""
     if not pub_ts or pub_ts <= 0:
@@ -1155,9 +1170,7 @@ def how_long_ago(pub_ts):
     if diff < 3600:
         return f"{int(diff / 60)} min ago"
     if diff < 86400:
-        hrs = int(diff / 3600)
-        mins = int((diff % 3600) / 60)
-        return f"{hrs} hr {mins} min ago" if mins else f"{hrs} hr ago"
+        return f"{int(diff / 3600)} hr ago"
     return "Over a day ago"
 def is_this_story_fresh(pub_ts, hours=2):
     """Returns True if article published within last N hours."""
@@ -1180,7 +1193,7 @@ def show_top_part(player_count, franchise_count=4):
     <div class='srh-brand-header'>
         <div>
             <h1 class='srh-brand-title'>Every Sunrisers story, <span class='highlight'>one place.</span></h1>
-            <p class='srh-brand-subtitle'>All the latest news, fixtures and squads for {player_count} Sunrisers players across {franchise_count} teams.</p>
+            <p class='srh-brand-subtitle'>All the latest news, fixtures and squads for {player_count} Sunrisers players across all {franchise_count} teams.</p>
         </div>
         <div class='srh-live-badge'>
             <span class='srh-live-pulse-dot' aria-hidden='true'></span>
@@ -1204,12 +1217,12 @@ def show_next_match_big_box(next_fixture, status="UPCOMING"):
         card_class = "hero-fixture-card hero-fixture-card-live"
         tag_html = f"<div class='hero-fixture-tag hero-fixture-tag-live'>Live now · {league}</div>"
         val_html = "<div class='hero-countdown-val hero-countdown-val-live' aria-live='polite'>Live now</div>"
-        lbl_html = "<div class='hero-countdown-lbl'>In progress</div>"
+        lbl_html = f"<div class='hero-countdown-lbl'>{date_str}</div>"
     elif status == "COMPLETED":
         card_class = "hero-fixture-card"
         tag_html = f"<div class='hero-fixture-tag'>Result · {league}</div>"
         val_html = "<div class='hero-countdown-val'>Match ended</div>"
-        lbl_html = "<div class='hero-countdown-lbl'>Result</div>"
+        lbl_html = f"<div class='hero-countdown-lbl'>{date_str}</div>"
     else:
         card_class = "hero-fixture-card"
         tag_html = f"<div class='hero-fixture-tag'>Up next · {league}</div>"
@@ -1230,7 +1243,6 @@ def show_next_match_big_box(next_fixture, status="UPCOMING"):
             {tag_html}
             <h2 class='hero-fixture-vs'>{squad} vs {vs}</h2>
             <div class='hero-fixture-details'>
-                <span><strong>{date_str}</strong> · {match_time}</span>
                 <span>{venue}</span>
                 <span>{broadcast}</span>
             </div>
@@ -1295,9 +1307,8 @@ def show_big_story(n):
         f"<h2 class='featured-story-title'>{clean_title}</h2>"
         f"<div class='featured-story-desc'>{clean_summary}</div>"
         f"<div class='featured-story-footer'>"
-        f"<span class='time-tag'>{ago}</span>"
+        f"<span class='time-tag' title='{pub_at}'>{ago}</span>"
         f"<span class='meta-dot' aria-hidden='true'>·</span>"
-        f"<span class='published-tag'>{pub_at}</span>"
         f"<span class='source-tag'>{fav_html}{source}</span>"
         f"<span class='link-action'>Read story <span aria-hidden='true'>↗</span></span>"
         f"</div>"
@@ -1331,9 +1342,8 @@ def show_story_card(n):
         f"<h3 class='telemetry-card-title'>{clean_title}</h3>"
         f"<div class='telemetry-card-desc'>{clean_summary}</div>"
         f"<div class='telemetry-card-footer'>"
-        f"<span class='time-tag'>{ago}</span>"
+        f"<span class='time-tag' title='{pub_at}'>{ago}</span>"
         f"<span class='meta-dot' aria-hidden='true'>·</span>"
-        f"<span class='published-tag'>{pub_at}</span>"
         f"<span class='source-tag'>{fav_html}{source}</span>"
         f"<span class='link-action'>Read story <span aria-hidden='true'>↗</span></span>"
         f"</div>"
@@ -1347,7 +1357,7 @@ def show_small_timeline_story(n):
     pub_ts = n.get("pub_timestamp", 0)
     ago = how_long_ago(pub_ts)
     raw_title = str(n.get("title", "")).replace("\n", " ").strip()
-    headline = html_lib.escape(raw_title[:65] + ("..." if len(raw_title) > 65 else ""))
+    headline = html_lib.escape(raw_title)
     player_name = html_lib.escape(str(n.get("player_name", "")).strip())
     return (
         f"<li class='pulse-item-dark'>"
@@ -1368,11 +1378,12 @@ def show_pulse_panel(news_list):
         "</div>"
     )
 
-def show_match_card(item, status="UPCOMING"):
+def show_match_card(item, status="UPCOMING", show_date=True):
     """Renders a fixture in the matchday card format.
 
     Live Crex fixtures carry `link`, `srh_players` and `franchises`; static
-    legacy fixtures omit them and still render cleanly.
+    legacy fixtures omit them and still render cleanly. `show_date=False`
+    drops the date when the cards already sit under a date heading.
     """
     status = item.get("status", status) or status
     if status == "LIVE":
@@ -1421,6 +1432,11 @@ def show_match_card(item, status="UPCOMING"):
         f"<div class='match-meta'>{meta_html}</div>"
         if meta_html else ""
     )
+    when_html = (
+        f"<div class='match-meta'><strong>{date_str}</strong> · {match_time}</div>"
+        if show_date else
+        f"<div class='match-meta'><strong>{match_time}</strong></div>"
+    )
     return (
         f"<div class='broadcast-match-card{card_extra_class}'>"
         f"<div class='broadcast-match-header'>"
@@ -1428,13 +1444,22 @@ def show_match_card(item, status="UPCOMING"):
         f"<span class='match-league'>{squad}</span>"
         f"</div>"
         f"<h3 class='match-versus'>{squad} vs {vs}</h3>"
-        f"<div class='match-meta'><strong>{date_str}</strong> · {match_time}</div>"
+        f"{when_html}"
         f"{meta_html}"
         f"{players_html}"
         f"{franchise_html}"
         f"{link_html}"
         f"</div>"
     )
+
+def show_match_cards(items, statuses=None):
+    """Renders a date group of fixtures in a responsive two-column grid."""
+    statuses = statuses or [None] * len(items)
+    cards = "".join(
+        show_match_card(item, status=status, show_date=False)
+        for item, status in zip(items, statuses)
+    )
+    return f"<div class='match-card-grid'>{cards}</div>"
 
 COUNTRY_FLAGS = {
     "India": "🇮🇳",

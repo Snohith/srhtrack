@@ -6,6 +6,7 @@ from our_teams.website_look import (
     show_stat_cards,
     show_empty_state,
     show_pulse_panel,
+    show_match_cards,
 )
 
 
@@ -47,3 +48,17 @@ def test_player_and_stat_helpers_escape_text():
     assert show_stat_cards([("<x>", "Label")]).count("&lt;x&gt;") == 1
     empty = show_empty_state("<Title>", "<Message>")
     assert "&lt;Title&gt;" in empty and "role='status'" in empty
+
+
+def test_match_grid_drops_repeated_date_inside_cards():
+    fixtures = [
+        {"team1": "A", "team2": "B", "squad": "A", "vs": "B",
+         "date_str": "November 06, 2026", "time": "07:30 PM IST", "league": "IPL"},
+        {"team1": "C", "team2": "D", "squad": "C", "vs": "D",
+         "date_str": "November 06, 2026", "time": "08:00 PM IST", "league": "IPL"},
+    ]
+    html = show_match_cards(fixtures, ["UPCOMING", "UPCOMING"])
+    assert html.startswith("<div class='match-card-grid'>")
+    assert html.count("<div class='broadcast-match-card") == 2
+    assert "November 06, 2026" not in html
+    assert "07:30 PM IST" in html and "08:00 PM IST" in html
